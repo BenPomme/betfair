@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Betfair Arb — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0c0f14;
+      --surface: #151a22;
+      --border: #252b36;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --profit: #3fb950;
+      --loss: #f85149;
+      --accent: #58a6ff;
+      --scan: #d29922;
+      --warn: #d29922;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+    .layout {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 1.5rem;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .header-left { display: flex; align-items: center; gap: 1rem; }
+    h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }
+    .paper-badge {
+      background: rgba(210, 153, 34, 0.2);
+      color: var(--warn);
+      padding: 0.25rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+    .status-pill.running { border-color: var(--profit); color: var(--profit); }
+    .status-pill.stopped { color: var(--muted); }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .status-pill.running .status-dot { animation: pulse 1.5s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{ opacity:1 } 50%{ opacity:0.4 } }
+    .btn {
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 0.55rem 1.25rem;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.2s;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-start {
+      background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(63, 185, 80, 0.35);
+    }
+    .btn-start:hover { box-shadow: 0 4px 14px rgba(63, 185, 80, 0.45); }
+    .btn-start:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-stop {
+      background: var(--surface);
+      color: var(--loss);
+      border: 1px solid var(--loss);
+    }
+    .btn-stop:hover { background: rgba(248, 81, 73, 0.1); }
+    .btn-stop:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* Stats grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+    @media (max-width: 1100px) { .stats-grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 600px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+    }
+    .stat-card h2 {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+    }
+    .stat-card .value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.35rem;
+      font-weight: 500;
+    }
+    .stat-card .sub {
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-top: 0.25rem;
+    }
+    .profit { color: var(--profit); }
+    .loss { color: var(--loss); }
+    .neutral { color: var(--text); }
+    .accent { color: var(--accent); }
+
+    /* Panels */
+    .panels {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+    @media (max-width: 900px) { .panels { grid-template-columns: 1fr; } }
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem;
+    }
+    .panel h2 {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+    }
+    .panel-full {
+      grid-column: 1 / -1;
+    }
+
+    /* Scanner stats */
+    .scanner-row {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.75rem;
+    }
+    .scanner-stat {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+    }
+    .scanner-stat .label { color: var(--muted); font-size: 0.7rem; }
+
+    /* Breakdown table */
+    .breakdown-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+    }
+    .breakdown-table th {
+      text-align: left;
+      padding: 0.4rem 0.6rem;
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid var(--border);
+    }
+    .breakdown-table td {
+      padding: 0.35rem 0.6rem;
+      border-bottom: 1px solid var(--border);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Risk bars */
+    .risk-row {
+      margin-bottom: 0.75rem;
+    }
+    .risk-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      margin-bottom: 0.3rem;
+    }
+    .risk-label .name { color: var(--muted); }
+    .risk-bar-bg {
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .risk-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+    .risk-bar-fill.ok { background: var(--profit); }
+    .risk-bar-fill.warning { background: var(--warn); }
+    .risk-bar-fill.danger { background: var(--loss); }
+    .circuit-breaker {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 0.3rem 0.6rem;
+      border-radius: 6px;
+    }
+    .circuit-breaker.ok { background: rgba(63,185,80,0.15); color: var(--profit); }
+    .circuit-breaker.tripped { background: rgba(248,81,73,0.15); color: var(--loss); }
+
+    /* Config panel */
+    .config-toggle {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-family: inherit;
+      font-size: 0.75rem;
+      padding: 0.3rem 0.6rem;
+      border-radius: 6px;
+      cursor: pointer;
+      float: right;
+      margin-top: -2rem;
+    }
+    .config-toggle:hover { color: var(--text); border-color: var(--accent); }
+    .config-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 0.5rem;
+      font-size: 0.8rem;
+    }
+    .config-item .key { color: var(--muted); font-size: 0.7rem; }
+    .config-item .val { font-family: 'JetBrains Mono', monospace; }
+
+    /* Trades table */
+    .trades-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+    }
+    .trades-table th {
+      text-align: left;
+      padding: 0.5rem 0.6rem;
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid var(--border);
+    }
+    .trades-table td {
+      padding: 0.5rem 0.6rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .trades-table tr:hover { background: rgba(255,255,255,0.02); }
+    .trades-table .mono { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; }
+
+    /* Balance chart */
+    #balanceChart {
+      width: 100%;
+      height: 120px;
+      display: block;
+    }
+
+    /* Feed */
+    .feed {
+      height: 260px;
+      overflow-y: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+    }
+    .feed-item {
+      padding: 0.35rem 0;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .feed-item .tag {
+      flex-shrink: 0;
+      padding: 0.12rem 0.35rem;
+      border-radius: 4px;
+      font-size: 0.65rem;
+      font-weight: 600;
+    }
+    .feed-item .tag.scan { background: rgba(210, 153, 34, 0.2); color: var(--scan); }
+    .feed-item .tag.opportunity { background: rgba(88, 166, 255, 0.2); color: var(--accent); }
+    .feed-item .tag.trade { background: rgba(63, 185, 80, 0.2); color: var(--profit); }
+
+    .feed-filters {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .feed-filter-btn {
+      background: var(--border);
+      border: none;
+      color: var(--muted);
+      font-family: inherit;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .feed-filter-btn.active { background: var(--accent); color: #fff; }
+
+    .error-msg {
+      background: rgba(248, 81, 73, 0.15);
+      border: 1px solid var(--loss);
+      color: var(--loss);
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+    }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <!-- Header -->
+    <header>
+      <div class="header-left">
+        <h1>Betfair Arbitrage</h1>
+        <span id="paperBadge" class="paper-badge">Paper Trading</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+        <span id="statusPill" class="status-pill stopped"><span class="status-dot"></span><span>Stopped</span></span>
+        <button id="btnStart" class="btn btn-start">Start</button>
+        <button id="btnStop" class="btn btn-stop" disabled>Stop</button>
+      </div>
+    </header>
+
+    <div id="errorBox" class="error-msg hidden"></div>
+
+    <!-- 6 Stat Cards -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <h2>Balance</h2>
+        <div id="balance" class="value neutral">&mdash;</div>
+        <div class="sub" id="balanceSub"></div>
+      </div>
+      <div class="stat-card">
+        <h2>Daily P&L</h2>
+        <div id="dailyPnl" class="value neutral">&mdash;</div>
+      </div>
+      <div class="stat-card">
+        <h2>Markets</h2>
+        <div id="marketCount" class="value accent">0</div>
+        <div class="sub" id="marketsSub"></div>
+      </div>
+      <div class="stat-card">
+        <h2>Opportunities</h2>
+        <div id="oppsFound" class="value accent">0</div>
+        <div class="sub" id="oppsSub"></div>
+      </div>
+      <div class="stat-card">
+        <h2>Hit Rate</h2>
+        <div id="hitRate" class="value neutral">0%</div>
+        <div class="sub" id="hitRateSub"></div>
+      </div>
+      <div class="stat-card">
+        <h2>Uptime</h2>
+        <div id="uptime" class="value neutral">&mdash;</div>
+        <div class="sub" id="scanRate"></div>
+      </div>
+    </div>
+
+    <!-- Scanner + Risk panels -->
+    <div class="panels">
+      <div class="panel">
+        <h2>Scanner Performance</h2>
+        <div class="scanner-row">
+          <div class="scanner-stat">
+            <div class="label">Total Scans</div>
+            <div id="totalScans">0</div>
+          </div>
+          <div class="scanner-stat">
+            <div class="label">Scans/min</div>
+            <div id="scansPerMin">0</div>
+          </div>
+          <div class="scanner-stat">
+            <div class="label">Best Overround</div>
+            <div id="bestOverround">&mdash;</div>
+          </div>
+          <div class="scanner-stat">
+            <div class="label">Avg Profit/Trade</div>
+            <div id="avgProfit">&mdash;</div>
+          </div>
+          <div class="scanner-stat">
+            <div class="label">Back-Back</div>
+            <div id="backBackCount">0</div>
+          </div>
+          <div class="scanner-stat">
+            <div class="label">Lay-Lay</div>
+            <div id="layLayCount">0</div>
+          </div>
+          <div class="scanner-stat">
+            <div class="label">Cross-Market</div>
+            <div id="crossMarketCount">0</div>
+          </div>
+        </div>
+        <h2 style="margin-top:0.75rem">Market Breakdown</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
+          <div>
+            <table class="breakdown-table">
+              <thead><tr><th>Market Type</th><th>#</th></tr></thead>
+              <tbody id="sportBreakdown"></tbody>
+            </table>
+          </div>
+          <div>
+            <table class="breakdown-table">
+              <thead><tr><th>Country</th><th>#</th></tr></thead>
+              <tbody id="countryBreakdown"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Risk</h2>
+        <div class="risk-row">
+          <div class="risk-label">
+            <span class="name">Daily Loss Limit</span>
+            <span id="lossLimitLabel">0 / 50 EUR</span>
+          </div>
+          <div class="risk-bar-bg">
+            <div id="lossLimitBar" class="risk-bar-fill ok" style="width:0%"></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:1.5rem;margin-bottom:0.75rem;font-size:0.85rem;">
+          <div><span style="color:var(--muted)">Open bets:</span> <span id="openBets" style="font-family:'JetBrains Mono',monospace">0</span></div>
+          <div><span style="color:var(--muted)">Current stake:</span> <span id="effectiveStake" style="font-family:'JetBrains Mono',monospace">&mdash;</span></div>
+        </div>
+        <div>
+          <span style="color:var(--muted);font-size:0.75rem;">Circuit Breaker:</span>
+          <span id="circuitBreaker" class="circuit-breaker ok">OK</span>
+        </div>
+
+        <h2 style="margin-top:1.25rem">Balance History</h2>
+        <canvas id="balanceChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Config panel (collapsible) -->
+    <div class="panel panel-full" style="margin-bottom:1.25rem">
+      <h2>Configuration</h2>
+      <button class="config-toggle" id="configToggle">Show</button>
+      <div id="configBody" class="config-grid hidden"></div>
+    </div>
+
+    <!-- Trades + Feed -->
+    <div class="panels">
+      <div class="panel" style="overflow:auto">
+        <h2>Trades</h2>
+        <table class="trades-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Type</th>
+              <th>Event</th>
+              <th>Selections</th>
+              <th>Stake</th>
+              <th>Net Profit</th>
+              <th>ROI</th>
+            </tr>
+          </thead>
+          <tbody id="tradesBody"></tbody>
+        </table>
+      </div>
+
+      <div class="panel">
+        <h2>Live Activity</h2>
+        <div class="feed-filters">
+          <button class="feed-filter-btn active" data-kind="all">All</button>
+          <button class="feed-filter-btn" data-kind="opportunity">Opps</button>
+          <button class="feed-filter-btn" data-kind="trade">Trades</button>
+        </div>
+        <div id="feed" class="feed"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const btnStart = $('btnStart');
+    const btnStop = $('btnStop');
+    const statusPill = $('statusPill');
+    const errorBox = $('errorBox');
+
+    let feedFilter = 'all';
+    let lastTradeCount = 0;
+
+    const bipCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playBip() {
+      const osc = bipCtx.createOscillator();
+      const gain = bipCtx.createGain();
+      osc.connect(gain);
+      gain.connect(bipCtx.destination);
+      osc.frequency.value = 880;
+      osc.type = 'sine';
+      gain.gain.value = 0.3;
+      osc.start();
+      gain.gain.exponentialRampToValueAtTime(0.001, bipCtx.currentTime + 0.15);
+      osc.stop(bipCtx.currentTime + 0.15);
+    }
+
+    function setRunning(running) {
+      statusPill.className = 'status-pill ' + (running ? 'running' : 'stopped');
+      statusPill.querySelector('span:last-child').textContent = running ? 'Running' : 'Stopped';
+      btnStart.disabled = running;
+      btnStop.disabled = !running;
+    }
+
+    function fmtEur(n) {
+      if (n == null) return '\u2014';
+      const x = Number(n);
+      return (x >= 0 ? '+' : '') + x.toFixed(2) + ' \u20ac';
+    }
+
+    function fmtTime(ts) {
+      if (!ts) return '\u2014';
+      const d = new Date(ts);
+      return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+
+    function fmtUptime(sec) {
+      if (!sec || sec <= 0) return '\u2014';
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = Math.floor(sec % 60);
+      if (h > 0) return h + 'h ' + m + 'm';
+      if (m > 0) return m + 'm ' + s + 's';
+      return s + 's';
+    }
+
+    function escapeHtml(s) {
+      const div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    function pnlClass(n) {
+      if (n == null) return 'neutral';
+      return Number(n) >= 0 ? 'profit' : 'loss';
+    }
+
+    function drawBalanceChart(history) {
+      const canvas = $('balanceChart');
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, w, h);
+
+      if (!history || history.length < 2) {
+        ctx.fillStyle = '#8b949e';
+        ctx.font = '12px JetBrains Mono, monospace';
+        ctx.fillText('No balance history yet', w / 2 - 70, h / 2);
+        return;
+      }
+
+      const values = history.map(p => p[1]);
+      const minV = Math.min(...values) * 0.999;
+      const maxV = Math.max(...values) * 1.001;
+      const range = maxV - minV || 1;
+      const padY = 10;
+      const padX = 5;
+
+      ctx.beginPath();
+      ctx.strokeStyle = '#58a6ff';
+      ctx.lineWidth = 1.5;
+      for (let i = 0; i < values.length; i++) {
+        const x = padX + (i / (values.length - 1)) * (w - 2 * padX);
+        const y = padY + (1 - (values[i] - minV) / range) * (h - 2 * padY);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      // Fill area
+      const lastX = padX + (w - 2 * padX);
+      const bottomY = h - padY;
+      ctx.lineTo(lastX, bottomY);
+      ctx.lineTo(padX, bottomY);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(88, 166, 255, 0.08)';
+      ctx.fill();
+    }
+
+    function renderState(s) {
+      setRunning(s.running);
+
+      // Paper badge
+      if (s.config && !s.config.paper_trading) {
+        $('paperBadge').textContent = 'LIVE';
+        $('paperBadge').style.background = 'rgba(248,81,73,0.2)';
+        $('paperBadge').style.color = 'var(--loss)';
+      }
+
+      // Balance
+      $('balance').textContent = fmtEur(s.balance_eur);
+      $('balance').className = 'value ' + pnlClass(s.balance_eur);
+      const initBal = s.config ? s.config.initial_balance : null;
+      if (initBal != null && s.balance_eur != null) {
+        const diff = s.balance_eur - initBal;
+        $('balanceSub').textContent = (diff >= 0 ? '+' : '') + diff.toFixed(2) + ' from start';
+      }
+
+      // P&L
+      $('dailyPnl').textContent = fmtEur(s.daily_pnl_eur);
+      $('dailyPnl').className = 'value ' + pnlClass(s.daily_pnl_eur);
+
+      // Markets
+      $('marketCount').textContent = s.market_count ?? 0;
+      const mb = s.market_breakdown;
+      if (mb && mb.by_country) {
+        const countries = Object.keys(mb.by_country).filter(c => c && c !== 'Global');
+        $('marketsSub').textContent = countries.length + ' countries, ' + Object.keys(mb.by_sport || {}).length + ' types';
+      }
+
+      // Scan stats
+      const ss = s.scan_stats || {};
+      $('totalScans').textContent = (ss.total_scans || 0).toLocaleString();
+      $('scansPerMin').textContent = ss.scan_rate_per_min || 0;
+      $('bestOverround').textContent = ss.best_overround != null ? ss.best_overround.toFixed(4) : '\u2014';
+      $('oppsFound').textContent = ss.opportunities_found || 0;
+      $('backBackCount').textContent = ss.back_back_found || 0;
+      $('layLayCount').textContent = ss.lay_lay_found || 0;
+      $('crossMarketCount').textContent = ss.cross_market_found || 0;
+
+      // Session
+      const sess = s.session || {};
+      $('uptime').textContent = fmtUptime(sess.uptime_seconds);
+      $('scanRate').textContent = (ss.scan_rate_per_min || 0) + ' scans/min';
+      $('hitRate').textContent = sess.hit_rate != null ? (sess.hit_rate).toFixed(2) + '%' : '0%';
+      $('hitRateSub').textContent = (sess.trade_count || 0) + ' trades';
+      $('avgProfit').textContent = sess.avg_profit != null ? sess.avg_profit.toFixed(4) + ' \u20ac' : '\u2014';
+      $('oppsSub').textContent = 'of ' + (ss.total_scans || 0).toLocaleString() + ' scans';
+
+      // Market breakdown
+      if (mb) {
+        $('sportBreakdown').innerHTML = Object.entries(mb.by_sport || {})
+          .sort((a, b) => b[1] - a[1])
+          .map(([k, v]) => '<tr><td>' + escapeHtml(k) + '</td><td>' + v + '</td></tr>')
+          .join('') || '<tr><td colspan="2" style="color:var(--muted)">No markets</td></tr>';
+        $('countryBreakdown').innerHTML = Object.entries(mb.by_country || {})
+          .sort((a, b) => b[1] - a[1])
+          .map(([k, v]) => '<tr><td>' + escapeHtml(k || 'Global') + '</td><td>' + v + '</td></tr>')
+          .join('') || '<tr><td colspan="2" style="color:var(--muted)">No markets</td></tr>';
+      }
+
+      // Risk
+      const risk = s.risk || {};
+      const lossUsed = risk.daily_loss_used || 0;
+      const lossLimit = risk.daily_loss_limit || 50;
+      const lossPct = Math.min((lossUsed / lossLimit) * 100, 100);
+      $('lossLimitLabel').textContent = lossUsed.toFixed(2) + ' / ' + lossLimit.toFixed(0) + ' EUR';
+      $('lossLimitBar').style.width = lossPct + '%';
+      $('lossLimitBar').className = 'risk-bar-fill ' + (lossPct < 50 ? 'ok' : lossPct < 80 ? 'warning' : 'danger');
+      $('openBets').textContent = risk.open_bets || 0;
+      $('effectiveStake').textContent = s.effective_stake != null ? s.effective_stake.toFixed(2) + ' \u20ac' : '\u2014';
+
+      if (risk.circuit_breaker) {
+        $('circuitBreaker').className = 'circuit-breaker tripped';
+        $('circuitBreaker').textContent = 'TRIPPED (' + (risk.consecutive_failures || 0) + '/' + (risk.circuit_breaker_threshold || 3) + ')';
+      } else {
+        $('circuitBreaker').className = 'circuit-breaker ok';
+        $('circuitBreaker').textContent = 'OK' + (risk.consecutive_failures ? ' (' + risk.consecutive_failures + '/' + (risk.circuit_breaker_threshold || 3) + ')' : '');
+      }
+
+      // Error
+      if (s.error) {
+        errorBox.classList.remove('hidden');
+        errorBox.textContent = s.error;
+      } else {
+        errorBox.classList.add('hidden');
+      }
+
+      // Config
+      if (s.config) {
+        const c = s.config;
+        const items = [
+          ['Mode', c.paper_trading ? 'Paper' : 'LIVE'],
+          ['MBR', (c.mbr * 100).toFixed(1) + '%'],
+          ['Discount', (c.discount_rate * 100).toFixed(1) + '%'],
+          ['Min Profit', c.min_profit + ' \u20ac'],
+          ['Min Liquidity', c.min_liquidity + ' \u20ac'],
+          ['Max Stake', c.max_stake + ' \u20ac'],
+          ['Loss Limit', c.daily_loss_limit + ' \u20ac'],
+          ['Sports', c.sports],
+          ['Countries', c.countries],
+          ['Max Markets', c.max_markets],
+          ['In-Play', c.include_in_play ? 'Yes' : 'No'],
+          ['Initial Balance', c.initial_balance + ' \u20ac'],
+          ['Stake Fraction', ((c.stake_fraction || 0.1) * 100).toFixed(0) + '%'],
+        ];
+        $('configBody').innerHTML = items.map(([k, v]) =>
+          '<div class="config-item"><div class="key">' + k + '</div><div class="val">' + escapeHtml(String(v)) + '</div></div>'
+        ).join('');
+      }
+
+      // Balance chart
+      drawBalanceChart(s.balance_history);
+
+      // Trades table
+      const tradeCount = (s.trades || []).length;
+      if (tradeCount > lastTradeCount && lastTradeCount > 0) playBip();
+      lastTradeCount = tradeCount;
+      const trades = (s.trades || []).slice().reverse().slice(0, 30);
+      $('tradesBody').innerHTML = trades.map(t => {
+        const cls = t.net_profit_eur >= 0 ? 'profit' : 'loss';
+        const arbType = t.arb_type || 'back_back';
+        const typeBadge = arbType === 'cross_market'
+          ? '<span style="color:var(--scan);font-weight:600;font-size:0.7rem">CROSS</span>'
+          : arbType === 'lay_lay'
+          ? '<span style="color:var(--accent);font-weight:600;font-size:0.7rem">LAY</span>'
+          : '<span style="color:var(--profit);font-weight:600;font-size:0.7rem">BACK</span>';
+        const sels = (t.selections || []).map(sel => {
+          const price = sel.back_price != null ? sel.back_price : sel.lay_price;
+          const label = sel.back_price != null ? 'B' : 'L';
+          return escapeHtml(sel.name) + ' ' + label + '@' + price + ' (' + sel.stake_eur + '\u20ac)';
+        }).join('<br>');
+        const roi = t.net_roi_pct != null ? (t.net_roi_pct * 100).toFixed(2) + '%' : '\u2014';
+        return '<tr>' +
+          '<td class="mono">' + fmtTime(t.ts) + '</td>' +
+          '<td>' + typeBadge + '</td>' +
+          '<td>' + escapeHtml(t.event || t.market_id || '') + '</td>' +
+          '<td style="font-size:0.75rem">' + (sels || '\u2014') + '</td>' +
+          '<td class="mono">' + (t.total_stake_eur != null ? t.total_stake_eur.toFixed(2) + '\u20ac' : '\u2014') + '</td>' +
+          '<td class="mono ' + cls + '">' + fmtEur(t.net_profit_eur) + '</td>' +
+          '<td class="mono">' + roi + '</td>' +
+          '</tr>';
+      }).join('') || '<tr><td colspan="7" style="color:var(--muted)">No trades yet</td></tr>';
+
+      // Activity feed
+      const events = (s.events || []).slice().reverse();
+      const filtered = feedFilter === 'all' ? events.slice(0, 100) : events.filter(e => e.kind === feedFilter).slice(0, 100);
+      $('feed').innerHTML = filtered.map(e => {
+        const d = e.data || {};
+        let text = d.event_name || d.market_id || '';
+        if (d.arb_type) text += ' [' + (d.arb_type === 'cross_market' ? 'CROSS' : d.arb_type === 'lay_lay' ? 'LAY' : 'BACK') + ']';
+        if (d.net_profit_eur != null) text += ' \u00b7 ' + fmtEur(d.net_profit_eur);
+        if (d.overround != null && e.kind === 'opportunity') text += ' \u00b7 OR: ' + Number(d.overround).toFixed(4);
+        return '<div class="feed-item"><span class="tag ' + e.kind + '">' + e.kind + '</span>' + escapeHtml(text) + '</div>';
+      }).join('');
+    }
+
+    // Feed filter buttons
+    document.querySelectorAll('.feed-filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.feed-filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        feedFilter = btn.dataset.kind;
+      });
+    });
+
+    // Config toggle
+    $('configToggle').addEventListener('click', () => {
+      const body = $('configBody');
+      const isHidden = body.classList.contains('hidden');
+      body.classList.toggle('hidden');
+      $('configToggle').textContent = isHidden ? 'Hide' : 'Show';
+    });
+
+    async function fetchState() {
+      try {
+        const r = await fetch('/api/state');
+        const s = await r.json();
+        renderState(s);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    btnStart.addEventListener('click', async () => {
+      try {
+        const r = await fetch('/api/start', { method: 'POST' });
+        const j = await r.json();
+        if (j.ok) fetchState();
+        else if (j.error) { errorBox.classList.remove('hidden'); errorBox.textContent = j.error; }
+      } catch (e) {
+        errorBox.classList.remove('hidden');
+        errorBox.textContent = e.message;
+      }
+    });
+
+    btnStop.addEventListener('click', async () => {
+      try {
+        await fetch('/api/stop', { method: 'POST' });
+        fetchState();
+      } catch (e) {
+        console.error(e);
+      }
+    });
+
+    fetchState();
+    setInterval(fetchState, 2000);
+  </script>
+</body>
+</html>

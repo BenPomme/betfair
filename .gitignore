@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+logs/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# Betfair client cert private key (never commit)
+certs/*.key
+certs/*.pem
+.DS_Store
+monitoring/reports/*.json

@@ -1,0 +1,17 @@
+[ req ]
+distinguished_name = dn
+prompt = no
+
+[ dn ]
+C = ES
+ST = Madrid
+L = Madrid
+O = BetfairAPI
+OU = Automation
+CN = Betfair API Client
+
+[ ssl_client ]
+basicConstraints = CA:FALSE
+nsCertType = client
+keyUsage = digitalSignature, keyEncipherment
+extendedKeyUsage = clientAuth
