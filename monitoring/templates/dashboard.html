@@ -286,6 +286,10 @@
       <div class="chart-wrap"><canvas id="chartFundingFeatures"></canvas></div>
     </div>
   </div>
+  <div class="card" style="margin-bottom:.75rem">
+    <h2>Binance Net P&L Progression</h2>
+    <div class="chart-wrap"><canvas id="chartFundingPnl"></canvas></div>
+  </div>
 
   <!-- ML Online Learning Status -->
   <div class="card" style="margin-bottom:.75rem">
@@ -918,7 +922,45 @@ const fundRateChart=new Chart($('chartFundingRates'),{type:'bar',data:{labels:[]
 
 const fundFeatureChart=new Chart($('chartFundingFeatures'),{type:'bar',data:{labels:[],datasets:[{data:[],backgroundColor:[]}]},options:{...CO,indexAxis:'y',scales:{x:{display:true},y:{grid:{display:false},ticks:{font:{size:9}}}}}});
 
+const fundPnlChart=new Chart($('chartFundingPnl'),{
+  type:'line',
+  data:{
+    labels:[],
+    datasets:[
+      {label:'Realized Net P&L',data:[],borderColor:'rgba(59,130,246,1)',backgroundColor:'rgba(59,130,246,.15)',fill:true,tension:.25,pointRadius:0,borderWidth:2},
+      {label:'Projected Next Settlement P&L',data:[],borderColor:'rgba(34,197,94,1)',backgroundColor:'rgba(34,197,94,.05)',fill:false,tension:.25,pointRadius:0,borderWidth:2,borderDash:[6,4]},
+    ],
+  },
+  options:{
+    ...CO,
+    interaction:{mode:'index',intersect:false},
+    scales:{
+      x:{ticks:{maxRotation:0,font:{size:9}}},
+      y:{ticks:{callback:v=>fmtUsd(Number(v),2)}},
+    },
+  },
+});
+
 let mlMetricsLoaded=false;
+
+function renderFundingPnlHistory(history){
+  const rows=(history||[]).slice(-180);
+  if(!rows.length){
+    fundPnlChart.data.labels=[];
+    fundPnlChart.data.datasets[0].data=[];
+    fundPnlChart.data.datasets[1].data=[];
+    fundPnlChart.update('none');
+    return;
+  }
+  fundPnlChart.data.labels=rows.map(h=>{
+    const d=new Date(Number(h.ts||0)*1000);
+    if(Number.isNaN(d.getTime()))return '';
+    return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  });
+  fundPnlChart.data.datasets[0].data=rows.map(h=>Number(h.realized_net_pnl_usd||0));
+  fundPnlChart.data.datasets[1].data=rows.map(h=>Number(h.projected_next_settlement_pnl_usd||0));
+  fundPnlChart.update('none');
+}
 
 function renderFunding(fs){
   // Status
@@ -968,6 +1010,7 @@ function renderFunding(fs){
   $('fkWsMsg').textContent=fs.ws_messages||0;
   $('fkScans').textContent=fs.scan_count||0;
   $('fkTrades').textContent=fs.trade_count||0;
+  renderFundingPnlHistory(fs.pnl_history||[]);
 
   // Positions table
   const positions=fs.positions||[];

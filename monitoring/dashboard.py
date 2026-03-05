@@ -196,6 +196,31 @@ def api_prediction_experiments(limit: int = 200):
 # === FUNDING MODULE ENDPOINTS ===
 
 _funding_engine = None
+_funding_pnl_history = []
+_FUNDING_PNL_HISTORY_MAX = 2000
+
+
+def _append_funding_pnl_snapshot(state: dict) -> None:
+    if not state:
+        return
+    snapshot = {
+        "ts": time.time(),
+        "realized_net_pnl_usd": float(state.get("realized_net_pnl_usd", 0.0) or 0.0),
+        "projected_next_settlement_pnl_usd": float(state.get("projected_next_settlement_pnl_usd", 0.0) or 0.0),
+        "total_funding_collected": float(state.get("total_funding_collected", 0.0) or 0.0),
+        "total_fees_paid": float(state.get("total_fees_paid", 0.0) or 0.0),
+    }
+    if _funding_pnl_history:
+        prev = _funding_pnl_history[-1]
+        if (
+            abs(prev.get("realized_net_pnl_usd", 0.0) - snapshot["realized_net_pnl_usd"]) < 1e-12
+            and abs(prev.get("projected_next_settlement_pnl_usd", 0.0) - snapshot["projected_next_settlement_pnl_usd"]) < 1e-12
+            and snapshot["ts"] - float(prev.get("ts", 0.0)) < 2.0
+        ):
+            return
+    _funding_pnl_history.append(snapshot)
+    if len(_funding_pnl_history) > _FUNDING_PNL_HISTORY_MAX:
+        del _funding_pnl_history[:-_FUNDING_PNL_HISTORY_MAX]
 
 
 def set_funding_engine(engine) -> None:
@@ -212,8 +237,12 @@ def api_funding_state():
                 "cache_size": 0, "watchlist_size": 0, "scan_count": 0,
                 "opportunity_count": 0, "trade_count": 0, "open_hedges": 0,
                 "total_exposure": 0, "total_funding_collected": 0,
-                "total_fees_paid": 0, "trading_halted": False, "positions": []}
-    return _funding_engine.get_state()
+                "total_fees_paid": 0, "trading_halted": False, "positions": [],
+                "pnl_history": _funding_pnl_history[-300:]}
+    state = _funding_engine.get_state()
+    _append_funding_pnl_snapshot(state)
+    state["pnl_history"] = _funding_pnl_history[-300:]
+    return state
 
 
 @app.get("/api/funding/positions")
