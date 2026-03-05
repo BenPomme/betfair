@@ -4,14 +4,14 @@ Orchestrates: watchlist → WebSocket → scan → entry/exit → funding tracki
 """
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
 import config
 from funding.core import opportunity_scanner, risk_manager
-from funding.core.schemas import FundingOpportunity, FundingSnapshot, HedgePosition
+from funding.core.schemas import DirectionalSide, FundingOpportunity, FundingSnapshot, HedgePosition
 from funding.data.binance_futures_client import BinanceFuturesClient
 from funding.data.binance_spot_client import BinanceSpotClient
 from funding.data.market_data_stream import MarketDataStream
@@ -850,6 +850,50 @@ class FundingEngine:
         pm = executor.get_position_manager()
         open_positions = pm.open_positions()
         all_positions = pm.all_positions()
+        snapshots = self._price_cache.get_all_snapshots()
+        now_utc = datetime.now(timezone.utc)
+
+        # Upcoming 8h funding settlement timing in UTC.
+        settlement_hours = sorted(list(SETTLEMENT_HOURS))
+        next_settlement = None
+        for h in settlement_hours:
+            candidate = now_utc.replace(hour=h, minute=0, second=0, microsecond=0)
+            if candidate > now_utc:
+                next_settlement = candidate
+                break
+        if next_settlement is None:
+            next_settlement = (now_utc.replace(hour=settlement_hours[0], minute=0, second=0, microsecond=0)
+                               .replace(day=now_utc.day) + timedelta(days=1))
+        minutes_to_settlement = max(0.0, (next_settlement - now_utc).total_seconds() / 60.0)
+
+        # Enrich hedge positions with live funding-rate context.
+        enriched_open_positions: List[Dict[str, object]] = []
+        est_next_funding_total = Decimal("0")
+        est_next_symbols_covered = 0
+        for p in open_positions:
+            row = p.to_dict()
+            row["current_notional"] = str(p.notional_value())
+            row["estimated_next_funding"] = None
+            row["current_funding_rate"] = None
+            snap = snapshots.get(p.symbol)
+            if snap is not None:
+                notional = p.quantity_perp * snap.mark_price
+                est_next = (notional * snap.funding_rate).quantize(Decimal("0.0001"))
+                est_next_funding_total += est_next
+                est_next_symbols_covered += 1
+                row["current_mark_price"] = str(snap.mark_price)
+                row["current_funding_rate"] = str(snap.funding_rate)
+                row["annualized_yield"] = str((snap.funding_rate * Decimal("3") * Decimal("365")))
+                row["current_notional"] = str(notional)
+                row["estimated_next_funding"] = str(est_next)
+                row["next_funding_time"] = snap.next_funding_time.isoformat()
+                row["funding_rate_source"] = "live_cache"
+            else:
+                row["funding_rate_source"] = "missing_cache"
+            if p.entry_time is not None:
+                held_h = max(0.0, (now_utc - p.entry_time).total_seconds() / 3600.0)
+                row["hold_hours"] = round(held_h, 3)
+            enriched_open_positions.append(row)
 
         # --- Collector states ---
         liquidation_state = (
@@ -879,22 +923,43 @@ class FundingEngine:
         if self._directional_executor is not None:
             dpm = self._directional_executor.position_manager
             open_directional = dpm.open_positions()
-            current_snaps = self._price_cache.get_all_snapshots()
-            now_utc = datetime.now(timezone.utc)
+            current_snaps = snapshots
             for p in open_directional:
                 row = p.to_dict()
                 snap = current_snaps.get(p.symbol)
                 current_price = snap.mark_price if snap is not None else p.entry_price
                 try:
                     row["current_price"] = str(current_price)
-                    row["unrealized_pnl"] = str(p.unrealized_pnl(current_price))
+                    upnl = p.unrealized_pnl(current_price)
+                    row["unrealized_pnl"] = str(upnl)
+                    notional = p.entry_price * p.quantity if p.entry_price > 0 else Decimal("0")
+                    row["notional_usd"] = str(notional)
+                    row["unrealized_pnl_pct"] = (
+                        str((upnl / notional * Decimal("100")) if notional > 0 else Decimal("0"))
+                    )
                 except Exception:
                     row["current_price"] = str(p.entry_price)
                     row["unrealized_pnl"] = "0"
+                    row["notional_usd"] = "0"
+                    row["unrealized_pnl_pct"] = "0"
                 if p.entry_time is not None:
                     row["hold_hours"] = round(max(0.0, (now_utc - p.entry_time).total_seconds() / 3600.0), 3)
                 else:
                     row["hold_hours"] = 0.0
+                try:
+                    max_hold_h = float(config.CONTRARIAN_MAX_HOLD_HOURS)
+                    row["hours_to_max_hold"] = round(max(0.0, max_hold_h - float(row["hold_hours"])), 3)
+                except Exception:
+                    row["hours_to_max_hold"] = None
+                if p.stop_loss > Decimal("0") and p.take_profit > Decimal("0") and current_price > Decimal("0"):
+                    if p.side is DirectionalSide.LONG:
+                        stop_buffer = ((current_price - p.stop_loss) / current_price) * Decimal("100")
+                        tp_buffer = ((p.take_profit - current_price) / current_price) * Decimal("100")
+                    else:
+                        stop_buffer = ((p.stop_loss - current_price) / current_price) * Decimal("100")
+                        tp_buffer = ((current_price - p.take_profit) / current_price) * Decimal("100")
+                    row["stop_buffer_pct"] = str(stop_buffer)
+                    row["tp_buffer_pct"] = str(tp_buffer)
                 directional_positions.append(row)
 
             # Win rate: closed positions with positive PnL / total closed
@@ -994,7 +1059,12 @@ class FundingEngine:
                 sum(p.trading_fees_paid for p in all_positions)
             ),
             "trading_halted": risk_manager.trading_halted,
-            "positions": [p.to_dict() for p in open_positions],
+            "next_settlement_utc": next_settlement.isoformat(),
+            "minutes_to_next_settlement": round(minutes_to_settlement, 2),
+            "estimated_next_funding_total": float(est_next_funding_total),
+            "estimated_next_funding_symbols_covered": est_next_symbols_covered,
+            "estimated_next_funding_symbols_total": len(open_positions),
+            "positions": enriched_open_positions,
             "online_learner": self._online_learner.get_state(),
             "contrarian_learner": (
                 self._contrarian_learner.get_state()

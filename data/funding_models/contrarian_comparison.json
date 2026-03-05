@@ -1,45 +1,45 @@
 {
   "xgboost": {
     "trained": true,
-    "direction_accuracy": 0.5403283369022127,
-    "auc": 0.5075580735729499,
-    "sharpe_simulated": 0.9830669789788985,
-    "profit_factor": 1.0981313720944048,
+    "direction_accuracy": 0.5392248062015503,
+    "auc": 0.534993928528781,
+    "sharpe_simulated": 1.3855250551976324,
+    "profit_factor": 1.1280132807466885,
     "metrics": {
-      "accuracy": 0.5403283369022127,
-      "auc": 0.5075580735729499,
-      "precision": 0.48877805486284287,
-      "recall": 0.1532447224394058,
-      "f1": 0.23333333333333334,
-      "sharpe_simulated": 0.9830669789788985,
-      "threshold": 0.5837185929648241,
-      "n_trades_per_week": 3.01,
-      "test_size": 2802.0,
+      "accuracy": 0.5392248062015503,
+      "auc": 0.534993928528781,
+      "precision": 0.48060344827586204,
+      "recall": 0.15190735694822888,
+      "f1": 0.2308488612836439,
+      "sharpe_simulated": 1.3855250551976324,
+      "threshold": 0.6083417085427136,
+      "n_trades_per_week": 3.02,
+      "test_size": 3225.0,
       "feature_count": 29.0,
-      "positive_rate_test": 0.4564596716630978,
+      "positive_rate_test": 0.4551937984496124,
       "top_features_classifier": {
-        "funding_dispersion": 0.08132277429103851,
-        "day_of_week": 0.0795784667134285,
-        "taker_buy_ratio": 0.0743274912238121,
-        "hour_of_day": 0.06345610320568085,
-        "price_return_72h": 0.05675206333398819,
-        "taker_imbalance_3": 0.056221749633550644,
-        "price_return_24h": 0.05564068630337715,
-        "is_weekend": 0.055331360548734665,
-        "consecutive_extreme_positive": 0.054970633238554,
-        "price_return_8h": 0.05118165537714958
+        "taker_buy_ratio": 0.07369470596313477,
+        "funding_dispersion": 0.07006725668907166,
+        "day_of_week": 0.0690028965473175,
+        "hour_of_day": 0.0647016167640686,
+        "taker_imbalance_3": 0.06248386576771736,
+        "price_return_24h": 0.05724063888192177,
+        "price_return_72h": 0.056673165410757065,
+        "price_return_8h": 0.05564418435096741,
+        "funding_zscore_30": 0.05365731939673424,
+        "price_volatility_24h": 0.052881840616464615
       },
       "top_features_regressor": {
-        "funding_zscore_30": 0.0,
-        "funding_percentile_30": 0.0,
-        "consecutive_extreme_positive": 0.0,
-        "consecutive_extreme_negative": 0.0,
-        "funding_rate_abs": 0.0,
-        "rate_lag_1": 0.0,
-        "rate_lag_2": 0.0,
-        "rate_lag_3": 0.0,
-        "ls_ratio": 0.0,
-        "ls_ratio_momentum_3": 0.0
+        "funding_rate_abs": 0.17375212907791138,
+        "funding_zscore_30": 0.11783042550086975,
+        "price_volatility_24h": 0.11685163527727127,
+        "price_return_72h": 0.10088934004306793,
+        "consecutive_extreme_negative": 0.09519308060407639,
+        "price_return_8h": 0.08631192892789841,
+        "taker_buy_ratio": 0.08126980066299438,
+        "price_return_24h": 0.07876694202423096,
+        "funding_dispersion": 0.07637941092252731,
+        "funding_percentile_30": 0.0727553591132164
       }
     },
     "error": null
@@ -60,7 +60,7 @@
     "sharpe_simulated": -999.0,
     "profit_factor": 0.0,
     "metrics": {},
-    "error": "Length of values (533332) does not match length of index (84770)"
+    "error": "Length of values (485382) does not match length of index (86502)"
   },
   "selected": "xgboost"
 }

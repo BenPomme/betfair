@@ -67,16 +67,16 @@
       "symbol": "PHAUSDT",
       "side": "LONG",
       "entry_price": "0.04723628",
-      "exit_price": "0",
+      "exit_price": "0.04568000",
       "quantity": "10585.08417682",
       "leverage": 2,
       "margin_type": "ISOLATED",
       "stop_loss": "0.04605537",
       "take_profit": "0.05018856",
       "entry_time": "2026-03-05T15:07:59.255338+00:00",
-      "exit_time": null,
-      "status": "OPEN",
-      "realized_pnl": "0",
+      "exit_time": "2026-03-05T15:50:06.562611+00:00",
+      "status": "STOPPED",
+      "realized_pnl": "-16.47",
       "trading_fees_paid": "0",
       "signal": {
         "symbol": "PHAUSDT",
@@ -92,7 +92,38 @@
         "regime": null,
         "timestamp": "2026-03-05T15:07:57.898407+00:00"
       }
+    },
+    {
+      "id": "fefe8b5e-b206-4d53-aaf7-64474216567d",
+      "symbol": "PHAUSDT",
+      "side": "LONG",
+      "entry_price": "0.04571816",
+      "exit_price": "0",
+      "quantity": "10936.57312543",
+      "leverage": 2,
+      "margin_type": "ISOLATED",
+      "stop_loss": "0.04457521",
+      "take_profit": "0.04857554",
+      "entry_time": "2026-03-05T15:51:13.590492+00:00",
+      "exit_time": null,
+      "status": "OPEN",
+      "realized_pnl": "0",
+      "trading_fees_paid": "0",
+      "signal": {
+        "symbol": "PHAUSDT",
+        "direction": "LONG",
+        "confidence": 0.99,
+        "predicted_return_24h": 0.0508164465534241,
+        "predicted_return_72h": 0.07622466983013615,
+        "model_name": "ContrarianBaselineModel",
+        "funding_rate": "-0.00562131",
+        "mark_price": "0.04571816",
+        "long_short_ratio": null,
+        "fear_greed": 22,
+        "regime": null,
+        "timestamp": "2026-03-05T15:51:13.127263+00:00"
+      }
     }
   ],
-  "last_updated": "2026-03-05T15:31:18.052515+00:00"
+  "last_updated": "2026-03-05T15:51:13.600413+00:00"
 }

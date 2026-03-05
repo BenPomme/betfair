@@ -333,6 +333,8 @@ class DirectionalExecutor:
                 quantity=position.quantity,
             )
         except Exception as exc:
+            if self._should_fallback_to_sim(exc):
+                return self._close_position_simulated(position, reason=reason, current_price=current_price)
             logger.error(
                 "Closing market order failed for %s: %s — position left in CLOSING state",
                 symbol, exc,

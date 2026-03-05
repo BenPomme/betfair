@@ -316,7 +316,7 @@
     <div class="card" style="overflow:auto">
       <h2>Open Positions</h2>
       <table>
-        <thead><tr><th>Symbol</th><th>Entry</th><th>Size</th><th>Funding</th><th>Fees</th><th>Status</th></tr></thead>
+        <thead><tr><th>Symbol</th><th>Opened</th><th>Notional</th><th>Rate / Next Est</th><th>Fees</th><th>Status</th></tr></thead>
         <tbody id="fPositionsBody"></tbody>
       </table>
     </div>
@@ -561,6 +561,29 @@ function esc(s){
     .replaceAll('>','&gt;')
     .replaceAll('"','&quot;')
     .replaceAll("'","&#39;");
+}
+
+function fmtUsd(v,d=2){
+  const n=Number(v);
+  const x=Number.isFinite(n)?n:0;
+  return '$'+x.toFixed(d);
+}
+
+function fmtPct(v,d=2){
+  const n=Number(v);
+  const x=Number.isFinite(n)?n:0;
+  return x.toFixed(d)+'%';
+}
+
+function fmtPrice(v){
+  const raw=Number(v);
+  const x=Number.isFinite(raw)?raw:0;
+  const n=Math.abs(x);
+  if(n>=1000)return x.toFixed(2);
+  if(n>=1)return x.toFixed(4);
+  if(n>=0.1)return x.toFixed(5);
+  if(n>=0.01)return x.toFixed(6);
+  return x.toFixed(8);
 }
 
 // ── Render State ──
@@ -922,11 +945,19 @@ function renderFunding(fs){
   const netPnl=fs.total_funding_collected-fs.total_fees_paid;
   $('fkHedges').textContent=fs.open_hedges||0;
   $('fkHedgesSub').textContent=fs.positions?.length?fs.positions.map(p=>p.symbol).join(', '):'';
-  $('fkFunding').textContent='$'+(fs.total_funding_collected||0).toFixed(2);
-  $('fkFees').textContent='$'+(fs.total_fees_paid||0).toFixed(2);
-  $('fkPnl').textContent='$'+netPnl.toFixed(2);
+  $('fkFunding').textContent=fmtUsd(fs.total_funding_collected||0);
+  const estNext=Number(fs.estimated_next_funding_total||0);
+  const nextSet=(fs.next_settlement_utc||'').substring(11,19);
+  const minsToSet=Number(fs.minutes_to_next_settlement||0);
+  const covered=Number(fs.estimated_next_funding_symbols_covered||0);
+  const totalSyms=Number(fs.estimated_next_funding_symbols_total||0);
+  $('fkFundingSub').textContent='est next: '+fmtUsd(estNext,4)+' @ '+(nextSet||'—')+' UTC ('+minsToSet.toFixed(0)+'m) • coverage '+covered+'/'+totalSyms;
+  $('fkFees').textContent=fmtUsd(fs.total_fees_paid||0);
+  $('fkPnl').textContent=fmtUsd(netPnl);
   $('fkPnl').className='val '+(netPnl>0?'g':netPnl<0?'r':'');
-  $('fkExposure').textContent='$'+(fs.total_exposure||0).toFixed(0);
+  $('fkPnlSub').textContent='Realized funding - fees (unsettled funding excluded)';
+  $('fkExposure').textContent=fmtUsd(fs.total_exposure||0,0);
+  $('fkExposureSub').textContent='open notional across hedge legs';
   $('fkOpps').textContent=fs.opportunity_count||0;
   $('fkSymbols').textContent=fs.watchlist_size||0;
   $('fkSymbolsSub').textContent='Cache: '+(fs.cache_size||0);
@@ -938,13 +969,19 @@ function renderFunding(fs){
   const positions=fs.positions||[];
   $('fPositionsBody').innerHTML=positions.map(p=>{
     const fc=Number(p.funding_collected||0);
+    const notional=Number(p.current_notional||0);
+    const hasRate=p.current_funding_rate!=null;
+    const currRate=Number(hasRate?p.current_funding_rate:0);
+    const hasNext=p.estimated_next_funding!=null;
+    const nextEst=Number(hasNext?p.estimated_next_funding:0);
+    const held=Number(p.hold_hours||0);
     return `<tr>
       <td style="color:var(--text)">${p.symbol}</td>
-      <td style="color:var(--text3)">${(p.entry_time||'').substring(0,16)}</td>
-      <td>$${Number(p.quantity_perp||0).toFixed(4)}</td>
-      <td class="${fc>=0?'g':'r'}">$${fc.toFixed(4)}</td>
-      <td class="r">$${Number(p.trading_fees_paid||0).toFixed(4)}</td>
-      <td>${p.status||'—'}</td>
+      <td style="color:var(--text3)">${(p.entry_time||'').substring(0,16)}<div style="font-size:.62rem;color:var(--text3)">held ${held.toFixed(2)}h</div></td>
+      <td style="font-family:var(--mono)">${fmtUsd(notional,2)}</td>
+      <td class="${hasRate?(currRate>=0?'g':'r'):''}" style="font-family:var(--mono)">${hasRate?fmtPct(currRate*100,4):'n/a'}<div style="font-size:.62rem;color:var(--text3)">next ${hasNext?fmtUsd(nextEst,4):'n/a'} (${p.funding_rate_source==='live_cache'?'live':'pending'})</div></td>
+      <td class="r">${fmtUsd(Number(p.trading_fees_paid||0),4)}</td>
+      <td>${p.status||'—'}<div style="font-size:.62rem;color:${fc>=0?'var(--green)':'var(--red)'}">collected ${fmtUsd(fc,4)}</div></td>
     </tr>`;
   }).join('')||(positions.length===0?'<tr><td colspan="6" style="color:var(--text3);text-align:center">No open positions</td></tr>':'');
 }
@@ -1144,7 +1181,7 @@ function renderContrarian(data){
   $('ctSignalsSub').textContent='last 24h';
   $('ctTrades').textContent=trades;
   $('ctTrades').className='val '+(trades>0?'g':'');
-  $('ctTradesSub').textContent='';
+  $('ctTradesSub').textContent='auto-close: stop / take-profit / max-hold';
   $('ctWinRate').textContent=wr.toFixed(1)+'%';
   $('ctWinRate').className='val '+(wr>=50?'g':wr>=40?'a':'r');
   $('ctWinRateSub').textContent=data.wins!=null?data.wins+' wins / '+data.losses+' losses':'';
@@ -1170,17 +1207,22 @@ function renderContrarian(data){
   $('ctPositionsBody').innerHTML=positions.length?positions.map(p=>{
     const side=p.side||'';
     const upnl=Number(p.unrealized_pnl||0);
+    const upnlPct=Number(p.unrealized_pnl_pct||0);
+    const notional=Number(p.notional_usd||0);
     const holdH=Number(p.hold_hours||0);
+    const slBuf=Number(p.stop_buffer_pct||0);
+    const tpBuf=Number(p.tp_buffer_pct||0);
+    const toMax=Number(p.hours_to_max_hold||0);
     return `<tr>
-      <td style="color:var(--text)">${esc(p.symbol||'—')}</td>
+      <td style="color:var(--text)">${esc(p.symbol||'—')}<div style="font-size:.62rem;color:var(--text3)">notional ${fmtUsd(notional,2)}</div></td>
       <td style="color:${side==='LONG'?'var(--green)':side==='SHORT'?'var(--red)':'var(--text3)'};font-weight:600">${esc(side)}</td>
-      <td style="font-family:var(--mono)">${Number(p.entry_price||0).toFixed(4)}</td>
-      <td style="font-family:var(--mono)">${Number(p.current_price||0).toFixed(4)}</td>
-      <td class="${upnl>=0?'g':'r'}" style="font-family:var(--mono)">$${upnl.toFixed(4)}</td>
-      <td style="font-family:var(--mono);color:var(--red)">${p.stop_loss!=null?Number(p.stop_loss).toFixed(4):'—'}</td>
-      <td style="font-family:var(--mono);color:var(--green)">${p.take_profit!=null?Number(p.take_profit).toFixed(4):'—'}</td>
+      <td style="font-family:var(--mono)">${fmtPrice(p.entry_price||0)}</td>
+      <td style="font-family:var(--mono)">${fmtPrice(p.current_price||0)}</td>
+      <td class="${upnl>=0?'g':'r'}" style="font-family:var(--mono)">${fmtUsd(upnl,4)}<div style="font-size:.62rem;color:var(--text3)">${fmtPct(upnlPct,2)}</div></td>
+      <td style="font-family:var(--mono);color:var(--red)">${p.stop_loss!=null?fmtPrice(p.stop_loss):'—'}<div style="font-size:.62rem;color:var(--text3)">buffer ${fmtPct(slBuf,2)}</div></td>
+      <td style="font-family:var(--mono);color:var(--green)">${p.take_profit!=null?fmtPrice(p.take_profit):'—'}<div style="font-size:.62rem;color:var(--text3)">buffer ${fmtPct(tpBuf,2)}</div></td>
       <td style="color:var(--text3)">${holdH>0?holdH.toFixed(1)+'h':'—'}</td>
-      <td>${esc(p.status||'—')}</td>
+      <td>${esc(p.status||'—')}<div style="font-size:.62rem;color:var(--text3)">max-hold in ${toMax.toFixed(1)}h</div></td>
     </tr>`;
   }).join(''):'<tr><td colspan="9" style="color:var(--text3);text-align:center">No open positions</td></tr>';
 }
