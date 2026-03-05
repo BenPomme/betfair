@@ -1,48 +1,12 @@
 {
   "xgboost": {
-    "trained": true,
-    "direction_accuracy": 0.5392248062015503,
-    "auc": 0.534993928528781,
-    "sharpe_simulated": 1.3855250551976324,
-    "profit_factor": 1.1280132807466885,
-    "metrics": {
-      "accuracy": 0.5392248062015503,
-      "auc": 0.534993928528781,
-      "precision": 0.48060344827586204,
-      "recall": 0.15190735694822888,
-      "f1": 0.2308488612836439,
-      "sharpe_simulated": 1.3855250551976324,
-      "threshold": 0.6083417085427136,
-      "n_trades_per_week": 3.02,
-      "test_size": 3225.0,
-      "feature_count": 29.0,
-      "positive_rate_test": 0.4551937984496124,
-      "top_features_classifier": {
-        "taker_buy_ratio": 0.07369470596313477,
-        "funding_dispersion": 0.07006725668907166,
-        "day_of_week": 0.0690028965473175,
-        "hour_of_day": 0.0647016167640686,
-        "taker_imbalance_3": 0.06248386576771736,
-        "price_return_24h": 0.05724063888192177,
-        "price_return_72h": 0.056673165410757065,
-        "price_return_8h": 0.05564418435096741,
-        "funding_zscore_30": 0.05365731939673424,
-        "price_volatility_24h": 0.052881840616464615
-      },
-      "top_features_regressor": {
-        "funding_rate_abs": 0.17375212907791138,
-        "funding_zscore_30": 0.11783042550086975,
-        "price_volatility_24h": 0.11685163527727127,
-        "price_return_72h": 0.10088934004306793,
-        "consecutive_extreme_negative": 0.09519308060407639,
-        "price_return_8h": 0.08631192892789841,
-        "taker_buy_ratio": 0.08126980066299438,
-        "price_return_24h": 0.07876694202423096,
-        "funding_dispersion": 0.07637941092252731,
-        "funding_percentile_30": 0.0727553591132164
-      }
-    },
-    "error": null
+    "trained": false,
+    "direction_accuracy": 0.0,
+    "auc": 0.0,
+    "sharpe_simulated": -999.0,
+    "profit_factor": 0.0,
+    "metrics": {},
+    "error": "[17:19:48] /Users/runner/work/xgboost/xgboost/src/data/data.cc:514: Check failed: valid: Label contains NaN, infinity or a value too large.\nStack trace:\n  [bt] (0) 1   libxgboost.dylib                    0x0000000126a68428 dmlc::LogMessageFatal::~LogMessageFatal() + 124\n  [bt] (1) 2   libxgboost.dylib                    0x0000000126bc6450 xgboost::MetaInfo::SetInfoFromHost(xgboost::Context const&, xgboost::StringView, xgboost::Json) + 2776\n  [bt] (2) 3   libxgboost.dylib                    0x0000000126bc57ec xgboost::MetaInfo::SetInfo(xgboost::Context const&, xgboost::StringView, xgboost::StringView) + 464\n  [bt] (3) 4   libxgboost.dylib                    0x0000000126a7fa60 XGDMatrixSetInfoFromInterface + 228\n  [bt] (4) 5   libffi.dylib                        0x000000019e04a050 ffi_call_SYSV + 80\n  [bt] (5) 6   libffi.dylib                        0x000000019e053604 ffi_call_int + 1220\n  [bt] (6) 7   _ctypes.cpython-39-darwin.so        0x00000001072632e4 PyInit__ctypes + 25736\n  [bt] (7) 8   _ctypes.cpython-39-darwin.so        0x000000010725bbe0 _ctypes.cpython-39-darwin.so + 15328\n  [bt] (8) 9   Python3                             0x0000000100b7136c _PyObject_MakeTpCall + 356\n\n"
   },
   "tft": {
     "trained": false,
@@ -60,7 +24,7 @@
     "sharpe_simulated": -999.0,
     "profit_factor": 0.0,
     "metrics": {},
-    "error": "Length of values (485382) does not match length of index (86502)"
+    "error": "Length of values (10658868) does not match length of index (407162)"
   },
-  "selected": "xgboost"
+  "selected": "fallback"
 }
