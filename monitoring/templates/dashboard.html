@@ -125,6 +125,22 @@
   <!-- Health -->
   <div class="health" id="healthRow"></div>
 
+  <!-- Live Readiness -->
+  <div class="grid2">
+    <div class="card">
+      <h2>Live Trading Readiness</h2>
+      <div id="lrOverall" style="font-family:var(--mono);font-size:1rem;margin-bottom:.4rem">—</div>
+      <div id="lrSummary" style="font-size:.72rem;color:var(--text2)"></div>
+    </div>
+    <div class="card">
+      <h2>Activation Checklist</h2>
+      <table>
+        <thead><tr><th>System</th><th>Validated</th><th>Can Switch</th><th>Score</th><th>Blockers</th></tr></thead>
+        <tbody id="lrBody"></tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- KPIs -->
   <div class="kpi">
     <div class="k"><div class="lbl">Balance</div><div class="val" id="kBalance">—</div><div class="sub" id="kBalanceSub"></div></div>
@@ -786,6 +802,50 @@ function render(s){
   $('cfgPanel').innerHTML=Object.entries(cfg).map(([k,v])=>`<div>${k}: <span style="color:var(--text)">${v}</span></div>`).join('');
 }
 
+function renderLiveReadiness(data){
+  const canActivate=Boolean(data?.can_activate_live_now);
+  const validated=Boolean(data?.validation_ready);
+  const score=Number(data?.score_pct||0);
+  const confidence=String(data?.confidence||'low').toUpperCase();
+  const blockers=Array.isArray(data?.blockers)?data.blockers:[];
+
+  $('lrOverall').innerHTML=
+    `<span class="${canActivate?'g':'r'}">${canActivate?'READY TO ACTIVATE LIVE':'NOT READY FOR LIVE'}</span>`+
+    ` <span style="color:var(--text3);font-size:.78rem">score ${score.toFixed(1)} (${confidence})</span>`;
+  $('lrSummary').textContent=(data?.activation_message||'')+(validated&&!canActivate?' (already live mode on one or more systems)':'');
+
+  const systems=[
+    ['Betfair',data?.betfair||{}],
+    ['Binance',data?.binance||{}],
+  ];
+  $('lrBody').innerHTML=systems.map(([name,s])=>{
+    const val=Boolean(s.validation_ready);
+    const sw=Boolean(s.can_switch_to_live_now);
+    const b=Array.isArray(s.blockers)?s.blockers:[];
+    return `<tr>
+      <td style="color:var(--text)">${name}</td>
+      <td class="${val?'g':'r'}">${val?'PASS':'FAIL'}</td>
+      <td class="${sw?'g':'r'}">${sw?'YES':'NO'}</td>
+      <td>${Number(s.score_pct||0).toFixed(1)}</td>
+      <td style="color:var(--text3);max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(b.join(', '))}">${esc((b.slice(0,3).join(', ')||'none'))}</td>
+    </tr>`;
+  }).join('');
+
+  if(!systems.length){
+    $('lrBody').innerHTML='<tr><td colspan="5" style="color:var(--text3);text-align:center">No readiness data available</td></tr>';
+  }else if(blockers.length===0 && !canActivate){
+    // no-op; handled by already-live informational message
+  }
+}
+
+async function fetchLiveReadiness(){
+  try{
+    const r=await fetch('/api/live-readiness');
+    const data=await r.json();
+    renderLiveReadiness(data);
+  }catch(e){console.error('live readiness',e);}
+}
+
 // ── Analytics fetch (every 10s) ──
 async function fetchAnalytics(){
   try{
@@ -908,6 +968,8 @@ btnStop.addEventListener('click',async()=>{
 
 fetchState();
 setInterval(fetchState,2000);
+fetchLiveReadiness();
+setInterval(fetchLiveReadiness,5000);
 fetchAnalytics();
 setInterval(fetchAnalytics,10000);
 

@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 
 from monitoring.engine import TradingEngine
+from monitoring.live_readiness import evaluate_live_trading_readiness
 
 _engine = TradingEngine()
 _template_path = Path(__file__).parent / "templates" / "dashboard.html"
@@ -59,7 +60,9 @@ def api_stop():
 
 @app.get("/api/state")
 def api_state():
-    return get_engine().get_state()
+    state = get_engine().get_state()
+    state["live_readiness"] = evaluate_live_trading_readiness(state, _funding_state_snapshot())
+    return state
 
 
 @app.get("/api/model-history")
@@ -265,6 +268,40 @@ def api_funding_rates():
 
 _funding_task = None
 _funding_loop = None  # The event loop running in the funding thread
+
+
+def _funding_state_snapshot() -> dict:
+    if _funding_engine is None:
+        return {
+            "running": False,
+            "mode": str(getattr(config, "FUNDING_MODE", "paper")),
+            "ws_connected": False,
+            "trading_halted": False,
+            "online_learner": {},
+            "contrarian_learner": {},
+            "realized_roi_pct": 0.0,
+        }
+    try:
+        return _funding_engine.get_state()
+    except Exception as exc:
+        return {
+            "running": False,
+            "mode": str(getattr(config, "FUNDING_MODE", "paper")),
+            "ws_connected": False,
+            "trading_halted": True,
+            "online_learner": {},
+            "contrarian_learner": {},
+            "realized_roi_pct": 0.0,
+            "error": str(exc),
+        }
+
+
+@app.get("/api/live-readiness")
+def api_live_readiness():
+    """Readiness signal for switching both Betfair and Binance from paper to live."""
+    betfair_state = get_engine().get_state()
+    funding_state = _funding_state_snapshot()
+    return evaluate_live_trading_readiness(betfair_state, funding_state)
 
 
 def _stop_funding_engine(timeout: float = 10.0) -> bool:

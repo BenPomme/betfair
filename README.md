@@ -91,6 +91,7 @@ The dashboard also shows:
 - **System Status** (explicit PAPER/LIVE mode + feed/prediction/architect/risk health).
 - **Model Artifacts** (scoring/fill model present + last modified).
 - **Performance Gates** (latest baseline vs ML report, pass/fail and lift metrics).
+- **Live Trading Readiness** (Betfair + Binance validation checklist and explicit blockers before switching from paper to live).
 - **Opportunity Funnel** and decision split (EXECUTE/DEFER/SKIP).
 
 ### Stop/Resume behavior (state persistence)
