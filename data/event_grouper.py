@@ -27,20 +27,31 @@ def group_by_event(market_metadata: Dict[str, Dict[str, str]]) -> Dict[str, List
 def get_cross_market_pairs(
     event_markets: List[str],
     market_metadata: Dict[str, Dict[str, str]],
-) -> List[Tuple[str, str]]:
+    include_experimental: bool = False,
+) -> List[Tuple[str, str, str]]:
     """
-    Find (MATCH_ODDS_market_id, DRAW_NO_BET_market_id) pairs within a single event.
+    Find cross-market pairs within a single event.
 
     Args:
         event_markets: list of market_ids belonging to the same event.
         market_metadata: full metadata dict to look up market_type.
 
     Returns:
-        List of (mo_market_id, dnb_market_id) tuples. May return multiple pairs
-        if the event has multiple MATCH_ODDS or DNB markets.
+        List of (market_id_a, market_id_b, pair_type).
+
+        Stable pair types:
+        - mo_dnb
+
+        Experimental pair types (only when include_experimental=True):
+        - mo_ou25
+        - mo_btts
+        - cs_mo
     """
     mo_ids: List[str] = []
     dnb_ids: List[str] = []
+    ou25_ids: List[str] = []
+    btts_ids: List[str] = []
+    cs_ids: List[str] = []
 
     for mid in event_markets:
         meta = market_metadata.get(mid, {})
@@ -49,9 +60,26 @@ def get_cross_market_pairs(
             mo_ids.append(mid)
         elif mt == "DRAW_NO_BET":
             dnb_ids.append(mid)
+        elif mt == "OVER_UNDER_25":
+            ou25_ids.append(mid)
+        elif mt == "BOTH_TEAMS_TO_SCORE":
+            btts_ids.append(mid)
+        elif mt == "CORRECT_SCORE":
+            cs_ids.append(mid)
 
-    pairs: List[Tuple[str, str]] = []
+    pairs: List[Tuple[str, str, str]] = []
     for mo_id in mo_ids:
         for dnb_id in dnb_ids:
-            pairs.append((mo_id, dnb_id))
+            pairs.append((mo_id, dnb_id, "mo_dnb"))
+
+    if include_experimental:
+        for mo_id in mo_ids:
+            for ou25_id in ou25_ids:
+                pairs.append((mo_id, ou25_id, "mo_ou25"))
+        for mo_id in mo_ids:
+            for btts_id in btts_ids:
+                pairs.append((mo_id, btts_id, "mo_btts"))
+        for cs_id in cs_ids:
+            for mo_id in mo_ids:
+                pairs.append((cs_id, mo_id, "cs_mo"))
     return pairs

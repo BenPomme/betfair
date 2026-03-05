@@ -3,8 +3,10 @@ REST client for Betfair market/event metadata. Can filter by sport/country or us
 Includes discover_markets() for broad multi-sport scanning.
 """
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any, Tuple
 
+import config
 # Optional: use betfairlightweight when available
 try:
     import betfairlightweight
@@ -125,21 +127,28 @@ def discover_markets(
         - runner_names maps market_id -> {selection_id -> runner_name}
     """
     BATCH_SIZE = 200  # Max per API call with projections before TOO_MUCH_DATA
+    max_hours_ahead = max(1, int(getattr(config, "SCAN_MAX_HOURS_AHEAD", 12)))
+    allowed_market_types = [
+        x.strip()
+        for x in str(getattr(config, "SCAN_MARKET_TYPES", "")).split(",")
+        if x.strip()
+    ]
+    now_utc = datetime.now(timezone.utc)
+    latest_start = now_utc + timedelta(hours=max_hours_ahead)
+    # Keep room for in-play so we do not saturate with static pre-match markets.
+    min_in_play = max(0, int(getattr(config, "SCAN_MIN_INPLAY_MARKETS", 0))) if include_in_play else 0
+    min_in_play = min(min_in_play, max_total)
 
     seen_ids: set = set()
     market_ids: List[str] = []
     metadata: Dict[str, Dict[str, str]] = {}
     runner_names: Dict[str, Dict[str, str]] = {}
 
-    def _extract_and_add(markets: List[dict]) -> None:
+    def _extract_and_add(markets: List[dict], allow_past_start: bool = False) -> None:
         for m in markets:
             mid = str(m.get("market_id", ""))
             if not mid or mid in seen_ids:
                 continue
-            if len(market_ids) >= max_total:
-                return
-            seen_ids.add(mid)
-            market_ids.append(mid)
 
             ev = m.get("event")
             country = ""
@@ -154,13 +163,31 @@ def discover_markets(
                     country = getattr(ev, "country_code", "") or ""
                     event_name = getattr(ev, "name", "") or ""
                     event_id = str(getattr(ev, "id", "") or "")
+            if event_name and "test" in event_name.strip().lower():
+                continue
 
             desc = m.get("_description")
             market_type = ""
             if desc is not None:
                 market_type = getattr(desc, "market_type", "") or ""
+            if allowed_market_types and market_type and market_type not in allowed_market_types:
+                continue
 
             mst = m.get("market_start_time")
+            if isinstance(mst, datetime):
+                if mst.tzinfo is None:
+                    mst = mst.replace(tzinfo=timezone.utc)
+                # Pre-match discovery should not keep markets that are already in the past.
+                # A small grace window avoids dropping markets with slight clock skew.
+                if not allow_past_start and mst < (now_utc - timedelta(minutes=3)):
+                    continue
+                if mst > latest_start:
+                    continue
+
+            if len(market_ids) >= max_total:
+                return
+            seen_ids.add(mid)
+            market_ids.append(mid)
             # Extract runner names for this market
             runners = m.get("runners", []) or []
             rn: Dict[str, str] = {}
@@ -184,15 +211,18 @@ def discover_markets(
                 "runner_count": len(m.get("runners", [])),
             }
 
+    pre_match_target = max(0, max_total - min_in_play)
+
     # Fetch 1: pre-match (all sports, all countries, no filters)
     try:
         pre_match_raw = get_market_catalogue(
             client=client,
             all_sports=True,
-            max_results=min(max_total, BATCH_SIZE),
+            max_results=min(max(pre_match_target, 1), BATCH_SIZE),
             in_play_only=False,
+            market_type_codes=allowed_market_types or None,
         )
-        _extract_and_add(pre_match_raw)
+        _extract_and_add(pre_match_raw, allow_past_start=False)
         logger.info("discover_markets: %d pre-match markets", len(pre_match_raw))
     except Exception as e:
         logger.warning("discover_markets pre-match fetch failed: %s", e)
@@ -200,16 +230,52 @@ def discover_markets(
     # Fetch 2: in-play (separate call since in_play_only is a different filter)
     if include_in_play and len(market_ids) < max_total:
         try:
+            in_play_slots = max(min_in_play, max_total - len(market_ids))
             in_play_raw = get_market_catalogue(
                 client=client,
                 all_sports=True,
-                max_results=min(max_total - len(market_ids), BATCH_SIZE),
+                max_results=min(max(in_play_slots, 1), BATCH_SIZE),
                 in_play_only=True,
+                market_type_codes=allowed_market_types or None,
             )
-            _extract_and_add(in_play_raw)
+            _extract_and_add(in_play_raw, allow_past_start=True)
             logger.info("discover_markets: %d in-play markets", len(in_play_raw))
         except Exception as e:
             logger.warning("discover_markets in-play fetch failed: %s", e)
+
+    # Fallback: if strict filters produced no markets, retry broader discovery.
+    if not market_ids:
+        logger.warning(
+            "discover_markets: strict filters returned 0 markets; retrying with broad filters"
+        )
+        allowed_market_types = []
+        latest_start = datetime.now(timezone.utc) + timedelta(hours=72)
+        try:
+            pre_match_raw = get_market_catalogue(
+                client=client,
+                all_sports=True,
+                max_results=min(max_total, BATCH_SIZE),
+                in_play_only=False,
+                market_type_codes=None,
+            )
+            _extract_and_add(pre_match_raw, allow_past_start=False)
+            logger.info("discover_markets fallback: %d pre-match markets", len(pre_match_raw))
+        except Exception as e:
+            logger.warning("discover_markets fallback pre-match failed: %s", e)
+
+        if include_in_play and len(market_ids) < max_total:
+            try:
+                in_play_raw = get_market_catalogue(
+                    client=client,
+                    all_sports=True,
+                    max_results=min(max_total - len(market_ids), BATCH_SIZE),
+                    in_play_only=True,
+                    market_type_codes=None,
+                )
+                _extract_and_add(in_play_raw, allow_past_start=True)
+                logger.info("discover_markets fallback: %d in-play markets", len(in_play_raw))
+            except Exception as e:
+                logger.warning("discover_markets fallback in-play failed: %s", e)
 
     logger.info("discover_markets: %d total markets, %d countries",
                 len(market_ids), len(set(m.get("country", "") for m in metadata.values())))

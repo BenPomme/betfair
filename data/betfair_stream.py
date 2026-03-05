@@ -43,6 +43,7 @@ def _market_book_to_snapshot(market_id: str, market_book: Any) -> Optional[Price
             name=name,
             best_back_price=best_price,
             available_to_back=available,
+            runner_status=str(getattr(runner, "status", "UNKNOWN") or "UNKNOWN"),
         ))
     if not selections:
         return None
@@ -50,6 +51,7 @@ def _market_book_to_snapshot(market_id: str, market_book: Any) -> Optional[Price
         market_id=market_id,
         selections=tuple(selections),
         timestamp=datetime.now(timezone.utc),
+        market_status=str(getattr(market_book, "status", "OPEN") or "OPEN"),
     )
 
 

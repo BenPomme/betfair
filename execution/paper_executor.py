@@ -6,8 +6,9 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import List, Optional, Any
 import json
+from pathlib import Path
 
-from core.types import Opportunity
+from core.types import Opportunity, ScoredOpportunity
 from core import commission as commission_module
 import config
 
@@ -27,9 +28,10 @@ def _tick_worse_lay(price: Decimal) -> Decimal:
 
 def _realistic_net_profit(opportunity: Opportunity) -> Decimal:
     """Net profit if all legs fill at 1 tick worse than best."""
-    if opportunity.arb_type == "lay_lay":
+    arb_type = str(getattr(opportunity, "arb_type", ""))
+    if arb_type == "lay_lay":
         return _realistic_net_profit_lay(opportunity)
-    if opportunity.arb_type == "cross_market":
+    if arb_type.startswith("cross"):
         return _realistic_net_profit_cross_market(opportunity)
     prices_worse = [_tick_worse_back(Decimal(str(s["back_price"]))) for s in opportunity.selections]
     total_stake = opportunity.total_stake_eur
@@ -46,12 +48,16 @@ def _realistic_net_profit(opportunity: Opportunity) -> Decimal:
 
 def _realistic_net_profit_cross_market(opportunity: Opportunity) -> Decimal:
     """Net profit for cross-market if all legs fill at 1 tick worse."""
+    if not opportunity.selections:
+        return Decimal("0")
     sel = opportunity.selections[0]
     direction = sel.get("direction", "")
 
     # 3-leg trade: back MO + lay DNB + back Draw hedge
     if direction == "back_mo_lay_dnb" and len(opportunity.selections) == 2:
         draw_sel = opportunity.selections[1]
+        if sel.get("back_price") is None or sel.get("lay_price") is None or draw_sel.get("back_price") is None:
+            return opportunity.net_profit_eur
         back_worse = _tick_worse_back(Decimal(str(sel["back_price"])))
         lay_worse = _tick_worse_lay(Decimal(str(sel["lay_price"])))
         draw_worse = _tick_worse_back(Decimal(str(draw_sel["back_price"])))
@@ -68,6 +74,11 @@ def _realistic_net_profit_cross_market(opportunity: Opportunity) -> Decimal:
         return result["net_profit"]
 
     # 2-leg trade: back DNB + lay MO (direction 2, draw is best scenario)
+    # Generic cross families (e.g. mo_ou25 / mo_btts) may be all-back or all-lay
+    # baskets; there is no simple one-tick-worse transformation yet.
+    if sel.get("back_price") is None or sel.get("lay_price") is None:
+        return opportunity.net_profit_eur
+
     back_worse = _tick_worse_back(Decimal(str(sel["back_price"])))
     lay_worse = _tick_worse_lay(Decimal(str(sel["lay_price"])))
     result = commission_module.evaluate_back_lay_arb(
@@ -97,7 +108,7 @@ def _realistic_net_profit_lay(opportunity: Opportunity) -> Decimal:
     return result["min_net_profit"]
 
 
-def _log_entry(opportunity: Opportunity) -> dict:
+def _log_entry(opportunity: Opportunity, scored: Optional[ScoredOpportunity] = None) -> dict:
     """Build paper log entry matching brief schema."""
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     market_start_str = None
@@ -108,7 +119,7 @@ def _log_entry(opportunity: Opportunity) -> dict:
             market_start_str = str(opportunity.market_start)
 
     is_lay = opportunity.arb_type == "lay_lay"
-    is_cross = opportunity.arb_type == "cross_market"
+    is_cross = str(opportunity.arb_type).startswith("cross")
 
     selections_log = []
     for s in opportunity.selections:
@@ -149,6 +160,14 @@ def _log_entry(opportunity: Opportunity) -> dict:
         **liquidity_dict,
         "fill_simulated_optimistic": True,
         "fill_simulated_realistic_net": float(realistic_net),
+        "scored_decision": scored.decision if scored else None,
+        "score_model_version": scored.model_version if scored else None,
+        "score_fill_prob": float(scored.fill_prob) if scored else None,
+        "score_edge": float(scored.edge_score) if scored else None,
+        "expected_net_profit_eur": float(scored.expected_net_profit_eur) if scored else None,
+        "score_stake_multiplier": float(scored.stake_multiplier) if scored else None,
+        "order_policy": scored.order_policy if scored else "best",
+        "ttl_seconds": scored.ttl_seconds if scored else 0,
     }
     return entry
 
@@ -156,27 +175,90 @@ def _log_entry(opportunity: Opportunity) -> dict:
 class PaperExecutor:
     """Logs opportunities and tracks virtual P&L."""
 
-    def __init__(self, initial_balance_eur: Optional[Decimal] = None):
+    def __init__(
+        self,
+        initial_balance_eur: Optional[Decimal] = None,
+        state_path: Optional[str] = None,
+        trades_log_path: Optional[str] = None,
+    ):
         self._balance = initial_balance_eur or Decimal("0")
         self._log: List[dict] = []
         self._open_bets = 0
+        self._initial_balance = self._balance
+        self._state_path = Path(state_path) if state_path else None
+        self._trades_log_path = Path(trades_log_path) if trades_log_path else None
+        self._daily_pnl = Decimal("0")
+        self._daily_date = datetime.now(timezone.utc).date().isoformat()
+        self._cumulative_pnl = Decimal("0")
+        if self._state_path is not None:
+            self._load_state()
 
-    def log(self, opportunity: Opportunity) -> dict:
+    def _roll_day_if_needed(self) -> None:
+        today = datetime.now(timezone.utc).date().isoformat()
+        if self._daily_date != today:
+            self._daily_date = today
+            self._daily_pnl = Decimal("0")
+
+    def _append_trade_log(self, entry: dict) -> None:
+        if self._trades_log_path is None:
+            return
+        self._trades_log_path.parent.mkdir(parents=True, exist_ok=True)
+        with self._trades_log_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, separators=(",", ":")) + "\n")
+
+    def _load_state(self) -> None:
+        if self._state_path is None or not self._state_path.exists():
+            return
+        try:
+            raw = json.loads(self._state_path.read_text(encoding="utf-8"))
+            self._balance = Decimal(str(raw.get("balance_eur", self._balance)))
+            self._open_bets = int(raw.get("open_bets", 0))
+            self._daily_date = str(raw.get("daily_date", self._daily_date))
+            self._daily_pnl = Decimal(str(raw.get("daily_pnl_eur", "0")))
+            self._cumulative_pnl = Decimal(str(raw.get("cumulative_pnl_eur", "0")))
+            logs = raw.get("log_tail", [])
+            if isinstance(logs, list):
+                self._log = logs[-500:]
+        except Exception:
+            # If state is corrupt, keep running from defaults.
+            pass
+
+    def _save_state(self) -> None:
+        if self._state_path is None:
+            return
+        payload = {
+            "balance_eur": float(self._balance),
+            "open_bets": self._open_bets,
+            "daily_date": self._daily_date,
+            "daily_pnl_eur": float(self._daily_pnl),
+            "cumulative_pnl_eur": float(self._cumulative_pnl),
+            "log_tail": self._log[-500:],
+        }
+        self._state_path.parent.mkdir(parents=True, exist_ok=True)
+        self._state_path.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+
+    def log(self, opportunity: Opportunity, scored: Optional[ScoredOpportunity] = None) -> dict:
         """
         Log the opportunity with full schema; simulate fill at best and 1 tick worse.
         Returns the log entry dict.
         """
-        entry = _log_entry(opportunity)
+        entry = _log_entry(opportunity, scored=scored)
+        self._roll_day_if_needed()
         self._log.append(entry)
         self._balance -= opportunity.total_stake_eur
         self._balance += opportunity.total_stake_eur + opportunity.net_profit_eur
         self._open_bets += 1
+        self._daily_pnl += opportunity.net_profit_eur
+        self._cumulative_pnl += opportunity.net_profit_eur
+        self._append_trade_log(entry)
+        self._save_state()
         return entry
 
     def register_settlement(self, net_pnl_eur: Decimal) -> None:
         """When a simulated bet settles (for optional outcome_at_settlement flow)."""
         self._open_bets = max(0, self._open_bets - 1)
         # P&L already applied in log(); no double-count
+        self._save_state()
 
     @property
     def balance(self) -> Decimal:
@@ -188,3 +270,12 @@ class PaperExecutor:
 
     def get_log_as_json(self) -> str:
         return json.dumps(self._log, indent=2)
+
+    @property
+    def open_bets(self) -> int:
+        return self._open_bets
+
+    @property
+    def daily_pnl(self) -> Decimal:
+        self._roll_day_if_needed()
+        return self._daily_pnl

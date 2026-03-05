@@ -7,3 +7,20 @@ httpx>=0.26.0
 python-dotenv>=1.0.0
 psycopg2-binary>=2.9.9
 pytest>=7.4.0
+
+# Funding module (Binance)
+binance-futures-connector>=4.1.0
+binance-connector>=3.12.0
+lightgbm>=4.0.0
+optuna>=3.5.0
+scikit-learn>=1.4.0
+xgboost>=2.0.0
+numpy>=1.24.0
+pandas>=2.0.0
+websockets>=12.0
+
+# ML strategy models (optional — graceful degradation if absent)
+# torch>=2.0.0
+# pytorch-forecasting>=1.0.0
+# pytorch-lightning>=2.0.0
+hmmlearn>=0.3.0

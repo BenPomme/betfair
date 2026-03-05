@@ -7,7 +7,7 @@ import logging
 from typing import Any, Optional
 
 import config
-from core.types import Opportunity
+from core.types import Opportunity, ScoredOpportunity
 from execution.paper_executor import PaperExecutor
 
 logger = logging.getLogger(__name__)
@@ -38,6 +38,7 @@ def _get_live_executor():
 def execute_opportunity(
     opportunity: Opportunity,
     paper_executor: Optional[PaperExecutor] = None,
+    scored: Optional[ScoredOpportunity] = None,
 ) -> Optional[dict]:
     """
     Execute an opportunity: paper path logs and simulates; live path places orders.
@@ -52,7 +53,7 @@ def execute_opportunity(
             if _default_paper_executor is None:
                 _default_paper_executor = PaperExecutor(initial_balance_eur=config.INITIAL_BALANCE_EUR)
             paper_executor = _default_paper_executor
-        return paper_executor.log(opportunity)
+        return paper_executor.log(opportunity, scored=scored)
     else:
         if trading_halted:
             logger.warning("Trading halted after %s consecutive failures; not placing", CIRCUIT_BREAKER_THRESHOLD)

@@ -20,9 +20,10 @@ except ImportError:
 
 if __name__ == "__main__":
     import uvicorn
+    reload_enabled = os.getenv("DASHBOARD_RELOAD", "false").lower() == "true"
     uvicorn.run(
         "monitoring.dashboard:app",
         host="0.0.0.0",
         port=8000,
-        reload=True,
+        reload=reload_enabled,
     )

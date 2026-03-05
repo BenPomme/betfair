@@ -237,6 +237,34 @@ TELEGRAM_CHAT_ID=your_chat_id
 [ ] PAPER_TRADING=false only set after all above checked
 ```
 
+---
+
+## Funding Module
+
+- All funding code lives in `funding/` directory
+- Follow same patterns as betfair modules (fee calc, paper executor, risk manager)
+- OPUS-required files: `fee_calculator.py`, `opportunity_scanner.py`, `risk_manager.py`, `executor.py`
+- All money math uses `decimal.Decimal` — no floats
+- All prices stored as Decimal, funding rates as Decimal (8 decimal places)
+- Two separate API clients: futures (UMFutures) and spot (Spot) — they use different base URLs and keys
+- Testnet URLs: futures=https://testnet.binancefuture.com, spot=https://testnet.binance.vision
+- Funding settlement at 00:00, 08:00, 16:00 UTC — timing-critical for entry/exit
+- Both legs (spot + perp) must execute together — if one fails, unwind the other immediately
+- `FUNDING_MODE` env var controls paper/live (separate from Betfair `PAPER_TRADING`)
+- See PLAN-FUNDING.md for full context and prompting guide
+
+| Task | Tier |
+|---|---|
+| `funding/core/fee_calculator.py` | **3** |
+| `funding/core/opportunity_scanner.py` | **3** |
+| `funding/core/risk_manager.py` | **3** |
+| `funding/execution/executor.py` | **3** |
+| `funding/execution/hedge_executor.py` (Phase 3) | **3** |
+| `funding/execution/exit_manager.py` (Phase 3) | **3** |
+| `funding/data/*` | 2 |
+| `funding/strategy/*` | 2 |
+| Dashboard HTML/endpoints | 1 |
+
 
 <claude-mem-context>
 # Recent Activity

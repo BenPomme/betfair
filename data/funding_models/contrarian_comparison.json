@@ -1,0 +1,21 @@
+{
+  "xgboost": {
+    "trained": false,
+    "direction_accuracy": 0.0,
+    "auc": 0.0,
+    "sharpe_simulated": -999.0,
+    "profit_factor": 0.0,
+    "metrics": {},
+    "error": "[14:36:15] /Users/runner/work/xgboost/xgboost/src/data/data.cc:514: Check failed: valid: Label contains NaN, infinity or a value too large.\nStack trace:\n  [bt] (0) 1   libxgboost.dylib                    0x000000012f43c428 dmlc::LogMessageFatal::~LogMessageFatal() + 124\n  [bt] (1) 2   libxgboost.dylib                    0x000000012f59a450 xgboost::MetaInfo::SetInfoFromHost(xgboost::Context const&, xgboost::StringView, xgboost::Json) + 2776\n  [bt] (2) 3   libxgboost.dylib                    0x000000012f5997ec xgboost::MetaInfo::SetInfo(xgboost::Context const&, xgboost::StringView, xgboost::StringView) + 464\n  [bt] (3) 4   libxgboost.dylib                    0x000000012f453a60 XGDMatrixSetInfoFromInterface + 228\n  [bt] (4) 5   libffi.dylib                        0x000000019e04a050 ffi_call_SYSV + 80\n  [bt] (5) 6   libffi.dylib                        0x000000019e053604 ffi_call_int + 1220\n  [bt] (6) 7   _ctypes.cpython-39-darwin.so        0x00000001097cb2e4 PyInit__ctypes + 25736\n  [bt] (7) 8   _ctypes.cpython-39-darwin.so        0x00000001097c3be0 _ctypes.cpython-39-darwin.so + 15328\n  [bt] (8) 9   Python3                             0x0000000102b6136c _PyObject_MakeTpCall + 356\n\n"
+  },
+  "tft": {
+    "trained": false,
+    "direction_accuracy": 0.0,
+    "auc": 0.0,
+    "sharpe_simulated": -999.0,
+    "profit_factor": 0.0,
+    "metrics": {},
+    "error": "torch / pytorch_lightning / pytorch_forecasting not installed \u2014 skipping TFT training."
+  },
+  "selected": null
+}

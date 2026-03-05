@@ -255,7 +255,15 @@ class TestEventGrouper:
         }
         pairs = get_cross_market_pairs(["1.100", "1.101", "1.102"], metadata)
         assert len(pairs) == 1
-        assert pairs[0] == ("1.100", "1.101")
+        assert ("1.100", "1.101", "mo_dnb") in pairs
+        assert ("1.100", "1.102", "mo_ou25") not in pairs
+
+        experimental_pairs = get_cross_market_pairs(
+            ["1.100", "1.101", "1.102"],
+            metadata,
+            include_experimental=True,
+        )
+        assert ("1.100", "1.102", "mo_ou25") in experimental_pairs
 
     def test_no_pairs_without_dnb(self):
         metadata = {
@@ -263,7 +271,7 @@ class TestEventGrouper:
             "1.102": {"event_id": "EVT1", "market_type": "OVER_UNDER_25"},
         }
         pairs = get_cross_market_pairs(["1.100", "1.102"], metadata)
-        assert len(pairs) == 0
+        assert pairs == []
 
 
 # ── cross_market_scanner tests ──────────────────────────────────────────

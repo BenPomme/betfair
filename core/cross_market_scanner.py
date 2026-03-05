@@ -5,7 +5,7 @@ related markets on the SAME event (e.g. MATCH_ODDS vs DRAW_NO_BET).
 Tier 3 — financially critical. All arithmetic uses Decimal.
 """
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, Optional, Sequence, Tuple
 
 import config
 from core.types import PriceSnapshot, Opportunity
@@ -157,6 +157,220 @@ def scan_cross_market(
                         )
 
     return best_opp
+
+
+def _find_selection(snapshot: PriceSnapshot, keywords: Sequence[str]) -> Optional[Any]:
+    """Return the first selection whose lowercase name contains all keywords."""
+    for sel in snapshot.selections:
+        name = sel.name.strip().lower()
+        if all(k in name for k in keywords):
+            return sel
+    return None
+
+
+def _build_multi_market_opportunity(
+    market_ids: Tuple[str, str],
+    event_name: str,
+    market_start: Any,
+    arb_type: str,
+    mode: str,
+    entries: Sequence[dict],
+    result: dict,
+    overround: Decimal,
+) -> Opportunity:
+    """Build Opportunity object for multi-market overround opportunities."""
+    if mode == "back":
+        stakes = result["stakes"]
+        prices = [e["back_price"] for e in entries]
+        net_profits = result["net_profits"]
+        worst_idx = net_profits.index(min(net_profits))
+        gross_profit = stakes[worst_idx] * prices[worst_idx] - result["actual_total_stake"]
+        net_profit = result["min_net_profit"]
+        commission_eur = max(Decimal("0"), gross_profit - net_profit)
+        selections = tuple(
+            {
+                "selection_id": e["selection_id"],
+                "name": e["name"],
+                "back_price": float(e["back_price"]),
+                "stake_eur": float(stakes[idx]),
+                "liquidity_eur": float(e["back_liquidity"]),
+                "back_market_id": e["market_id"],
+                "direction": "back",
+            }
+            for idx, e in enumerate(entries)
+        )
+        total_stake = result["actual_total_stake"]
+        liquidity = tuple(e["back_liquidity"] for e in entries)
+    else:
+        stakes = result["stakes"]
+        lay_prices = [e["lay_price"] for e in entries]
+        net_profits = result["net_profits"]
+        worst_idx = net_profits.index(min(net_profits))
+        gross_profit = result["total_collected"] - stakes[worst_idx] * lay_prices[worst_idx]
+        net_profit = result["min_net_profit"]
+        commission_eur = max(Decimal("0"), gross_profit - net_profit)
+        selections = tuple(
+            {
+                "selection_id": e["selection_id"],
+                "name": e["name"],
+                "lay_price": float(e["lay_price"]),
+                "stake_eur": float(stakes[idx]),
+                "liability_eur": float(result["liabilities"][idx]),
+                "liquidity_eur": float(e["lay_liquidity"]),
+                "lay_market_id": e["market_id"],
+                "direction": "lay",
+            }
+            for idx, e in enumerate(entries)
+        )
+        total_stake = result["total_collected"]
+        liquidity = tuple(e["lay_liquidity"] for e in entries)
+
+    return Opportunity(
+        market_id=f"{market_ids[0]}+{market_ids[1]}",
+        event_name=event_name,
+        market_start=market_start,
+        arb_type=arb_type,
+        selections=selections,
+        total_stake_eur=total_stake,
+        overround_raw=overround,
+        gross_profit_eur=gross_profit,
+        commission_eur=commission_eur,
+        net_profit_eur=net_profit,
+        net_roi_pct=result["roi"],
+        liquidity_by_selection=liquidity,
+    )
+
+
+def _scan_multi_market_overround(
+    entries: Sequence[dict],
+    market_ids: Tuple[str, str],
+    event_name: str,
+    market_start: Any,
+    arb_type: str,
+    min_net_profit_eur: Decimal,
+    min_liquidity_eur: Decimal,
+    max_stake_eur: Decimal,
+    mbr: Decimal,
+    discount_rate: Decimal,
+) -> Optional[Opportunity]:
+    """Shared implementation for MO+OU25 and MO+BTTS overround checks."""
+    back_opp: Optional[Opportunity] = None
+    lay_opp: Optional[Opportunity] = None
+
+    back_prices = [e["back_price"] for e in entries]
+    back_liqs = [e["back_liquidity"] for e in entries]
+    if all(p > Decimal("0") for p in back_prices) and all(liq >= min_liquidity_eur for liq in back_liqs):
+        overround_back = sum(Decimal("1") / p for p in back_prices)
+        if overround_back < Decimal("1"):
+            back_result = commission_module.evaluate_back_back_arb(
+                prices=back_prices,
+                total_stake=max_stake_eur,
+                mbr=mbr,
+                discount=discount_rate,
+            )
+            if (
+                back_result is not None
+                and back_result["min_net_profit"] >= min_net_profit_eur
+                and all(stake <= liq for stake, liq in zip(back_result["stakes"], back_liqs))
+            ):
+                back_opp = _build_multi_market_opportunity(
+                    market_ids=market_ids,
+                    event_name=event_name,
+                    market_start=market_start,
+                    arb_type=arb_type,
+                    mode="back",
+                    entries=entries,
+                    result=back_result,
+                    overround=overround_back,
+                )
+
+    lay_prices = [e["lay_price"] for e in entries]
+    lay_liqs = [e["lay_liquidity"] for e in entries]
+    if all(p > Decimal("0") for p in lay_prices) and all(liq >= min_liquidity_eur for liq in lay_liqs):
+        overround_lay = sum(Decimal("1") / p for p in lay_prices)
+        if overround_lay > Decimal("1"):
+            lay_result = commission_module.evaluate_lay_lay_arb(
+                lay_prices=lay_prices,
+                total_liability=max_stake_eur,
+                mbr=mbr,
+                discount=discount_rate,
+            )
+            if (
+                lay_result is not None
+                and lay_result["min_net_profit"] >= min_net_profit_eur
+                and all(stake <= liq for stake, liq in zip(lay_result["stakes"], lay_liqs))
+            ):
+                lay_opp = _build_multi_market_opportunity(
+                    market_ids=market_ids,
+                    event_name=event_name,
+                    market_start=market_start,
+                    arb_type=arb_type,
+                    mode="lay",
+                    entries=entries,
+                    result=lay_result,
+                    overround=overround_lay,
+                )
+
+    if back_opp and lay_opp:
+        return back_opp if back_opp.net_profit_eur >= lay_opp.net_profit_eur else lay_opp
+    return back_opp or lay_opp
+
+
+def scan_cross_market_ou25(
+    mo_snapshot: PriceSnapshot,
+    ou25_snapshot: PriceSnapshot,
+    event_name: str = "",
+    market_start: Any = None,
+    min_net_profit_eur: Optional[Decimal] = None,
+    min_liquidity_eur: Optional[Decimal] = None,
+    max_stake_eur: Optional[Decimal] = None,
+    mbr: Optional[Decimal] = None,
+    discount_rate: Optional[Decimal] = None,
+) -> Optional[Opportunity]:
+    """
+    Disabled: MO + O/U 2.5 cannot be priced as a simple mutually-exclusive
+    overround basket with the current arithmetic.
+    """
+    return None
+
+
+def scan_cross_market_btts(
+    mo_snapshot: PriceSnapshot,
+    btts_snapshot: PriceSnapshot,
+    event_name: str = "",
+    market_start: Any = None,
+    min_net_profit_eur: Optional[Decimal] = None,
+    min_liquidity_eur: Optional[Decimal] = None,
+    max_stake_eur: Optional[Decimal] = None,
+    mbr: Optional[Decimal] = None,
+    discount_rate: Optional[Decimal] = None,
+) -> Optional[Opportunity]:
+    """
+    Disabled: MO + BTTS cannot be priced as a simple mutually-exclusive
+    overround basket with the current arithmetic.
+    """
+    return None
+
+
+def scan_cross_market_cs_mo(
+    cs_snapshot: PriceSnapshot,
+    mo_snapshot: PriceSnapshot,
+    event_name: str = "",
+    market_start: Any = None,
+    min_net_profit_eur: Optional[Decimal] = None,
+    min_liquidity_eur: Optional[Decimal] = None,
+    max_stake_eur: Optional[Decimal] = None,
+    mbr: Optional[Decimal] = None,
+    discount_rate: Optional[Decimal] = None,
+) -> Optional[Opportunity]:
+    """
+    CORRECT_SCORE vs MATCH_ODDS placeholder scanner.
+
+    Correct-score baskets require multi-leg dutching over many outcomes and are not
+    directly executable in the current order path. Keep this as a no-op until a
+    dedicated basket executor is implemented.
+    """
+    return None
 
 
 def _build_opportunity_3leg(

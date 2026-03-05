@@ -4,10 +4,12 @@ Allows the main loop to run without the streaming API (no stream activation requ
 """
 import asyncio
 import logging
+import time
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Callable, Dict, List, Optional
 
+import config
 from core.types import PriceSnapshot, SelectionPrice
 
 logger = logging.getLogger(__name__)
@@ -30,15 +32,20 @@ def _market_book_to_snapshot(market_id: str, market_book: Any, runner_name_map: 
     """
     if not market_book or not getattr(market_book, "runners", None):
         return None
-    # Only include active runners (status ACTIVE)
-    active_runners = [
-        r for r in market_book.runners
-        if getattr(r, "status", "ACTIVE") == "ACTIVE"
-    ]
-    if not active_runners:
+    market_status = str(getattr(market_book, "status", "OPEN") or "OPEN")
+    # For settlement-aware consumers we must keep runners on CLOSED markets
+    # (statuses WINNER/LOSER are required for final outcome labels).
+    if market_status == "CLOSED":
+        selected_runners = list(market_book.runners)
+    else:
+        selected_runners = [
+            r for r in market_book.runners
+            if getattr(r, "status", "ACTIVE") == "ACTIVE"
+        ]
+    if not selected_runners:
         return None
     selections = []
-    for runner in active_runners:
+    for runner in selected_runners:
         selection_id = str(getattr(runner, "selection_id", ""))
         name = getattr(runner, "runner_name", "") or ""
         if not name and runner_name_map:
@@ -59,6 +66,7 @@ def _market_book_to_snapshot(market_id: str, market_book: Any, runner_name_map: 
             available_to_back=available,
             best_lay_price=best_lay_price,
             available_to_lay=available_lay,
+            runner_status=str(getattr(runner, "status", "UNKNOWN") or "UNKNOWN"),
         ))
     if not selections:
         return None
@@ -66,6 +74,7 @@ def _market_book_to_snapshot(market_id: str, market_book: Any, runner_name_map: 
         market_id=market_id,
         selections=tuple(selections),
         timestamp=datetime.now(timezone.utc),
+        market_status=market_status,
     )
 
 
@@ -76,6 +85,8 @@ async def run_price_poller(
     interval_seconds: float = 2.0,
     is_running: Callable[[], bool] = lambda: True,
     runner_names: Optional[Dict[str, Dict[str, str]]] = None,
+    on_metrics: Optional[Callable[[Dict[str, Any]], None]] = None,
+    extra_market_ids_provider: Optional[Callable[[], List[str]]] = None,
 ) -> None:
     """
     Loop: every interval_seconds call list_market_book for market_ids, convert to
@@ -84,16 +95,17 @@ async def run_price_poller(
     if not HAS_BETFAIR or not market_ids:
         return
 
-    # Betfair API returns TOO_MUCH_DATA if too many markets in one call.
-    # Batch into chunks of BATCH_SIZE to stay within limits.
-    BATCH_SIZE = 5
-    batches = [market_ids[i:i + BATCH_SIZE] for i in range(0, len(market_ids), BATCH_SIZE)]
-
-    CONCURRENT_BATCHES = 5
+    # Throughput is heavily impacted by batch and concurrency sizes.
+    # We default higher than legacy values and degrade only when API rejects a batch.
+    # Betfair market-data weight limit: sum(weight) * marketIds <= 200.
+    # For EX_BEST_OFFERS weight=5, safe marketIds/request <= 40.
+    BATCH_SIZE = min(40, max(1, int(getattr(config, "POLLER_BATCH_SIZE", 20))))
+    CONCURRENT_BATCHES = max(1, int(getattr(config, "POLLER_CONCURRENT_BATCHES", 8)))
+    REQUEST_TIMEOUT_SECONDS = float(getattr(config, "POLLER_REQUEST_TIMEOUT_SECONDS", 12.0))
     semaphore = asyncio.Semaphore(CONCURRENT_BATCHES)
     loop = asyncio.get_event_loop()
 
-    async def _fetch_batch(batch: List[str]) -> None:
+    async def _fetch_batch(batch: List[str], metrics: Dict[str, Any]) -> None:
         """Fetch a single batch with semaphore-bounded concurrency."""
         async with semaphore:
             if not is_running():
@@ -108,16 +120,29 @@ async def run_price_poller(
                     )
                 result = await asyncio.wait_for(
                     loop.run_in_executor(None, _fetch),
-                    timeout=30.0,
+                    timeout=REQUEST_TIMEOUT_SECONDS,
                 )
             except asyncio.TimeoutError:
                 logger.warning("list_market_book timed out for batch %s", batch)
+                metrics["timeouts"] += 1
                 return
             except Exception as e:
+                msg = str(e)
+                # Adaptive split: if a batch is too large, split and retry recursively.
+                if (
+                    len(batch) > 1
+                    and ("TOO_MUCH_DATA" in msg or "INVALID_INPUT_DATA" in msg)
+                ):
+                    mid = len(batch) // 2
+                    await _fetch_batch(batch[:mid], metrics)
+                    await _fetch_batch(batch[mid:], metrics)
+                    return
                 logger.exception("list_market_book failed: %s", e)
+                metrics["errors"] += 1
                 return
 
             books_list = result if isinstance(result, list) else []
+            metrics["books_received"] += len(books_list)
             for book in books_list:
                 mid = str(getattr(book, "market_id", ""))
                 if not mid:
@@ -126,7 +151,36 @@ async def run_price_poller(
                 snapshot = _market_book_to_snapshot(mid, book, rn_map)
                 if snapshot:
                     price_cache.set_prices(snapshot)
+                    metrics["snapshots_set"] += 1
 
     while is_running():
-        await asyncio.gather(*[_fetch_batch(batch) for batch in batches])
+        cycle_start = time.time()
+        base_ids = list(market_ids)
+        extra_ids: List[str] = []
+        if extra_market_ids_provider is not None:
+            try:
+                extra_ids = [m for m in (extra_market_ids_provider() or []) if m]
+            except Exception:
+                extra_ids = []
+        all_market_ids = list(dict.fromkeys(base_ids + extra_ids))
+        batches = [all_market_ids[i:i + BATCH_SIZE] for i in range(0, len(all_market_ids), BATCH_SIZE)]
+        metrics: Dict[str, Any] = {
+            "requested_markets_base": len(base_ids),
+            "requested_markets_extra": len(extra_ids),
+            "requested_markets_total": len(all_market_ids),
+            "batch_size": BATCH_SIZE,
+            "concurrent_batches": CONCURRENT_BATCHES,
+            "batches_total": len(batches),
+            "books_received": 0,
+            "snapshots_set": 0,
+            "timeouts": 0,
+            "errors": 0,
+        }
+        await asyncio.gather(*[_fetch_batch(batch, metrics) for batch in batches])
+        metrics["cycle_duration_sec"] = round(time.time() - cycle_start, 4)
+        if on_metrics is not None:
+            try:
+                on_metrics(metrics)
+            except Exception:
+                pass
         await asyncio.sleep(interval_seconds)

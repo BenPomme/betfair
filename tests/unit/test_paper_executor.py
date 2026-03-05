@@ -64,3 +64,24 @@ def test_paper_executor_virtual_ledger():
     exec.log(opp)
     assert len(exec.log_entries) == 2
     assert exec.balance == Decimal("1000") + opp.net_profit_eur + opp.net_profit_eur
+
+
+def test_paper_executor_persists_state(tmp_path):
+    opp = _make_opportunity()
+    state_path = tmp_path / "paper_state.json"
+    trades_path = tmp_path / "paper_trades.jsonl"
+    exec1 = PaperExecutor(
+        initial_balance_eur=Decimal("1000"),
+        state_path=str(state_path),
+        trades_log_path=str(trades_path),
+    )
+    exec1.log(opp)
+    assert state_path.exists()
+
+    exec2 = PaperExecutor(
+        initial_balance_eur=Decimal("1000"),
+        state_path=str(state_path),
+        trades_log_path=str(trades_path),
+    )
+    assert exec2.balance == Decimal("1000") + opp.net_profit_eur
+    assert len(exec2.log_entries) == 1

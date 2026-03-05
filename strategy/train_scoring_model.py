@@ -1,0 +1,177 @@
+"""
+Train scoring linear model from candidate logger JSONL data.
+
+Usage:
+  python -m strategy.train_scoring_model --input-dir data/candidates --output data/models/scoring_linear_v2.json
+"""
+from __future__ import annotations
+
+import argparse
+import glob
+import json
+import math
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, List, Tuple
+
+
+FEATURE_MAP = {
+    "roi": "net_roi_pct",
+    "profit": "net_profit_eur",
+    "depth": "overround_back",
+    "spread": "overround_lay",
+    "volatility": "fill_prob",
+    "edge_score": "edge_score",
+}
+
+EXCLUDE_REASONS = {"no_arb_after_filters", "stale_or_missing_snapshot"}
+
+
+@dataclass
+class Example:
+    x: Dict[str, float]
+    y: int
+
+
+def _sigmoid(z: float) -> float:
+    if z >= 0:
+        ez = math.exp(-z)
+        return 1.0 / (1.0 + ez)
+    ez = math.exp(z)
+    return ez / (1.0 + ez)
+
+
+def _load_records(input_dir: str) -> List[dict]:
+    files = sorted(glob.glob(str(Path(input_dir) / "*.jsonl")))
+    records: List[dict] = []
+    for fp in files:
+        with open(fp, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    records.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    return records
+
+
+def _build_examples(records: List[dict]) -> List[Example]:
+    out: List[Example] = []
+    for r in records:
+        if r.get("reason") in EXCLUDE_REASONS:
+            continue
+        if "executed" not in r:
+            continue
+        x = {}
+        missing = False
+        for k_out, k_in in FEATURE_MAP.items():
+            if k_in not in r:
+                missing = True
+                break
+            x[k_out] = float(r[k_in])
+        if missing:
+            continue
+        y = 1 if bool(r.get("executed")) else 0
+        out.append(Example(x=x, y=y))
+    return out
+
+
+def _train_sgd(examples: List[Example], epochs: int = 12, lr: float = 0.03, l2: float = 1e-4) -> Dict[str, float]:
+    weights = {k: 0.0 for k in FEATURE_MAP.keys()}
+    bias = 0.0
+    for _ in range(max(1, epochs)):
+        for ex in examples:
+            z = bias
+            for k, v in ex.x.items():
+                z += weights[k] * v
+            p = _sigmoid(z)
+            err = p - ex.y
+            bias -= lr * err
+            for k, v in ex.x.items():
+                grad = err * v + l2 * weights[k]
+                weights[k] -= lr * grad
+    return {"bias": bias, **weights}
+
+
+def _predict(model: Dict[str, float], x: Dict[str, float]) -> float:
+    z = float(model.get("bias", 0.0))
+    for k, v in x.items():
+        z += float(model.get(k, 0.0)) * v
+    return _sigmoid(z)
+
+
+def _evaluate(model: Dict[str, float], examples: List[Example]) -> Tuple[float, float, Dict[str, int]]:
+    if not examples:
+        return 0.0, 0.0, {"tp": 0, "fp": 0, "tn": 0, "fn": 0}
+    correct = 0
+    brier = 0.0
+    cm = {"tp": 0, "fp": 0, "tn": 0, "fn": 0}
+    for ex in examples:
+        p = _predict(model, ex.x)
+        pred = 1 if p >= 0.5 else 0
+        if pred == ex.y:
+            correct += 1
+        brier += (p - ex.y) ** 2
+        if pred == 1 and ex.y == 1:
+            cm["tp"] += 1
+        elif pred == 1 and ex.y == 0:
+            cm["fp"] += 1
+        elif pred == 0 and ex.y == 0:
+            cm["tn"] += 1
+        else:
+            cm["fn"] += 1
+    return correct / len(examples), brier / len(examples), cm
+
+
+def _walk_forward(examples: List[Example], train_ratio: float = 0.7) -> Tuple[float, float, Dict[str, int]]:
+    n = len(examples)
+    if n < 2:
+        return 0.0, 0.0, {"tp": 0, "fp": 0, "tn": 0, "fn": 0}
+    split = int(n * train_ratio)
+    split = max(1, min(n - 1, split))
+    model = _train_sgd(examples[:split])
+    return _evaluate(model, examples[split:])
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input-dir", default="data/candidates")
+    parser.add_argument("--output", default="data/models/scoring_linear_v2.json")
+    parser.add_argument("--min-samples", type=int, default=100)
+    args = parser.parse_args()
+
+    records = _load_records(args.input_dir)
+    if not records:
+        print("No candidate records found.")
+        return 1
+    examples = _build_examples(records)
+    if len(examples) < args.min_samples:
+        print(f"Not enough samples: {len(examples)} < {args.min_samples}")
+        return 1
+
+    model = _train_sgd(examples)
+    out = {
+        "bias": model["bias"],
+        "roi": model["roi"],
+        "profit": model["profit"],
+        "depth": model["depth"],
+        "spread": model["spread"],
+        "volatility": model["volatility"],
+    }
+    out_path = Path(args.output)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(out, indent=2), encoding="utf-8")
+
+    acc, brier, cm = _walk_forward(examples)
+    print(f"Samples: {len(examples)}")
+    print(f"Saved model: {out_path}")
+    print(f"Walk-forward accuracy: {acc:.4f}")
+    print(f"Walk-forward brier: {brier:.4f}")
+    print(f"Confusion matrix: {cm}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

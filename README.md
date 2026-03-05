@@ -6,9 +6,9 @@ See [brief.md](brief.md) for strategy and architecture, [CLAUDE.md](CLAUDE.md) f
 
 ---
 
-## Local AI (Qwen)
+## Local AI (optional)
 
-We use **Qwen via Ollama** (e.g. `qwen25-32b`) for subagents that don’t need full coding power: Tier 1 tasks (scaffolding, docstrings, tests from spec, simple wrappers, UI) and straightforward Tier 2 work. Full-power models (e.g. Claude) are reserved for Tier 3 (financial-critical code) and complex integration. See [CLAUDE.md](CLAUDE.md) for tier rules and the “Prefer Qwen” guidance. Ensure Ollama is running and the model is available (e.g. `ollama list`) when dispatching Tier 1 agents.
+The trading runtime runs without any local LLM/Ollama dependencies.
 
 ---
 
@@ -86,6 +86,25 @@ Or: `uvicorn monitoring.dashboard:app --reload --host 0.0.0.0` (run from project
 
 Open **http://127.0.0.1:8000**. Use **Start trading** to run the engine (login → watchlist → poll prices → scan → paper execute). The page shows balance, daily P&L, markets watched, a live feed of scans/opportunities/trades, and a trades table. State polls every 2 seconds.
 
+The dashboard also shows:
+- **System Status** (explicit PAPER/LIVE mode + feed/prediction/architect/risk health).
+- **Model Artifacts** (scoring/fill model present + last modified).
+- **Performance Gates** (latest baseline vs ML report, pass/fail and lift metrics).
+- **Opportunity Funnel** and decision split (EXECUTE/DEFER/SKIP).
+
+### Stop/Resume behavior (state persistence)
+
+Stopping and restarting the engine keeps learning/state by default:
+- Paper account balance + recent trade log tail are restored from `PAPER_STATE_PATH`.
+- Prediction model weights are saved in `PREDICTION_MODEL_DIR`.
+- Prediction account state (balance, counters, open positions) is restored from `PREDICTION_STATE_DIR`.
+- Candidate logs and CLV logs are append-only on disk.
+
+Defaults:
+- `PAPER_STATE_PATH=data/state/paper_executor_state.json`
+- `PAPER_TRADES_LOG_PATH=data/state/paper_trades.jsonl`
+- `PREDICTION_STATE_DIR=data/prediction/state`
+
 If the dashboard still shows **no markets**, run `python scripts/seed_market_ids.py` to fetch market IDs and write `MARKET_IDS=id1,id2,...` to `.env`. Alternatively run `python scripts/list_markets.py` to inspect what the API returns and set `MARKET_IDS` manually.
 
 ## When going live
@@ -94,6 +113,27 @@ If the dashboard still shows **no markets**, run `python scripts/seed_market_ids
 2. Run `python scripts/check_env.py` to verify credentials and config.
 3. Keep `PAPER_TRADING=true` and run the engine in paper mode first.
 4. Only after 2+ weeks of paper trading and meeting the gate in [CLAUDE.md](CLAUDE.md) consider setting `PAPER_TRADING=false`.
+
+## Troubleshooting
+
+To check/fix macOS deps: ./scripts/ensure_libomp.sh
+
+### XGBoost / Contrarian training: `Library not loaded: libomp.dylib` (macOS)
+
+The funding contrarian strategy and Strategy Orchestrator use XGBoost, which needs the OpenMP runtime on macOS. If you see:
+
+```text
+XGBoostError: Library not loaded: @rpath/libomp.dylib
+Mac OSX users: Run `brew install libomp` to install OpenMP runtime.
+```
+
+install the OpenMP library with Homebrew (in a terminal where `brew` is available):
+
+```bash
+brew install libomp
+```
+
+Then restart the Funding engine or dashboard. No Python or repo code changes are required.
 
 ---
 
@@ -107,3 +147,53 @@ If the dashboard still shows **no markets**, run `python scripts/seed_market_ids
 - `monitoring/` — dashboard, Telegram alerting, trade logger
 - `main.py` — paper loop entry (set `MARKET_IDS` or use stream + market_selector)
 - **Dashboard** — run `uvicorn monitoring.dashboard:app` then open the UI to start/stop trading and view P&L
+
+## Quant scoring and data capture
+
+- `strategy/features.py` builds deterministic microstructure features per opportunity.
+- `strategy/model_inference.py` scores each opportunity (`EXECUTE` / `DEFER` / `SKIP`) with model fallback.
+- `data/candidate_logger.py` writes all scan outcomes to `data/candidates/*.jsonl` for supervised training.
+- Dashboard exposes an opportunity funnel (scanned, scored, deferred, executed) and scoring telemetry.
+
+### Gate validation (baseline vs ML)
+
+Run:
+
+```bash
+python scripts/validate_performance_gates.py --input-dir data/candidates --output-dir data/reports/performance_gates --min-samples 200
+```
+
+This writes:
+- `data/reports/performance_gates/gate_report_<timestamp>.json`
+- `data/reports/performance_gates/latest.json`
+
+And evaluates gates:
+- Precision lift >= 25%
+- Profit/trade lift >= 15%
+- Max drawdown not increased
+
+## Multi-agent delivery
+
+See [docs/MULTI_AGENT_DELIVERY.md](docs/MULTI_AGENT_DELIVERY.md) for tier routing (cheap vs high-capability agents), lane ownership, and merge protocol.
+
+## Predictive model track (optional, paper-mode)
+
+This is separate from arbitrage and can be tested independently.
+For the live parallel comparison league in dashboard, see [docs/PREDICTION_MODELS.md](docs/PREDICTION_MODELS.md).
+For the meta-controller that tunes model parameters, see [docs/LEARNING_ARCHITECT.md](docs/LEARNING_ARCHITECT.md).
+
+1. Generate a synthetic dataset (for tooling validation):
+```bash
+python scripts/generate_synthetic_prediction_data.py --output data/prediction/training.csv
+```
+2. Train the residual predictive model:
+```bash
+python scripts/train_predictive_model.py --input data/prediction/training.csv --output models/predictive_model_v1.json
+```
+3. Backtest the saved model:
+```bash
+python scripts/backtest_predictive_model.py --model models/predictive_model_v1.json --input data/prediction/training.csv
+```
+
+CSV schema expected by training/backtest scripts:
+`timestamp,base_prob,odds,label,spread_mean,imbalance,depth_total_eur,price_velocity,short_volatility,time_to_start_sec,in_play`

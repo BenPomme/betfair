@@ -13,3 +13,8 @@ certs/*.key
 certs/*.pem
 .DS_Store
 monitoring/reports/*.json
+
+# Local ML artifacts and online learning logs
+data/candidates/
+data/prediction/
+models/
