@@ -1040,6 +1040,21 @@ class FundingEngine:
             self._learning_events.extend(self._contrarian_learner.drain_events())
         self._learning_events = self._learning_events[-200:]
 
+        total_exposure = pm.total_exposure()
+        total_funding_collected = sum(p.funding_collected for p in all_positions)
+        total_fees_paid = sum(p.trading_fees_paid for p in all_positions)
+        realized_net_pnl = total_funding_collected - total_fees_paid
+        assumed_capital = Decimal(str(config.FUNDING_MAX_TOTAL_EXPOSURE_USD))
+        capital_base = assumed_capital if assumed_capital > Decimal("0") else max(total_exposure, Decimal("1"))
+        deployed_usage_pct = (total_exposure / capital_base * Decimal("100")) if capital_base > Decimal("0") else Decimal("0")
+        realized_roi_pct = (realized_net_pnl / capital_base * Decimal("100")) if capital_base > Decimal("0") else Decimal("0")
+        projected_next_settlement_pnl = realized_net_pnl + est_next_funding_total
+        projected_next_settlement_roi_pct = (
+            projected_next_settlement_pnl / capital_base * Decimal("100")
+            if capital_base > Decimal("0")
+            else Decimal("0")
+        )
+
         return {
             "mode": config.FUNDING_MODE,
             "running": self._running,
@@ -1051,19 +1066,21 @@ class FundingEngine:
             "opportunity_count": self._opportunity_count,
             "trade_count": self._trade_count,
             "open_hedges": len(open_positions),
-            "total_exposure": float(pm.total_exposure()),
-            "total_funding_collected": float(
-                sum(p.funding_collected for p in all_positions)
-            ),
-            "total_fees_paid": float(
-                sum(p.trading_fees_paid for p in all_positions)
-            ),
+            "total_exposure": float(total_exposure),
+            "total_funding_collected": float(total_funding_collected),
+            "total_fees_paid": float(total_fees_paid),
+            "assumed_capital_usd": float(capital_base),
+            "deployed_usage_pct": float(deployed_usage_pct),
+            "realized_net_pnl_usd": float(realized_net_pnl),
+            "realized_roi_pct": float(realized_roi_pct),
             "trading_halted": risk_manager.trading_halted,
             "next_settlement_utc": next_settlement.isoformat(),
             "minutes_to_next_settlement": round(minutes_to_settlement, 2),
             "estimated_next_funding_total": float(est_next_funding_total),
             "estimated_next_funding_symbols_covered": est_next_symbols_covered,
             "estimated_next_funding_symbols_total": len(open_positions),
+            "projected_next_settlement_pnl_usd": float(projected_next_settlement_pnl),
+            "projected_next_settlement_roi_pct": float(projected_next_settlement_roi_pct),
             "positions": enriched_open_positions,
             "online_learner": self._online_learner.get_state(),
             "contrarian_learner": (

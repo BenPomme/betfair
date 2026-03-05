@@ -943,6 +943,10 @@ function renderFunding(fs){
 
   // KPIs
   const netPnl=fs.total_funding_collected-fs.total_fees_paid;
+  const assumedCap=Number(fs.assumed_capital_usd||0);
+  const usagePct=Number(fs.deployed_usage_pct||0);
+  const realizedRoi=Number(fs.realized_roi_pct||0);
+  const projectedRoi=Number(fs.projected_next_settlement_roi_pct||0);
   $('fkHedges').textContent=fs.open_hedges||0;
   $('fkHedgesSub').textContent=fs.positions?.length?fs.positions.map(p=>p.symbol).join(', '):'';
   $('fkFunding').textContent=fmtUsd(fs.total_funding_collected||0);
@@ -955,9 +959,9 @@ function renderFunding(fs){
   $('fkFees').textContent=fmtUsd(fs.total_fees_paid||0);
   $('fkPnl').textContent=fmtUsd(netPnl);
   $('fkPnl').className='val '+(netPnl>0?'g':netPnl<0?'r':'');
-  $('fkPnlSub').textContent='Realized funding - fees (unsettled funding excluded)';
+  $('fkPnlSub').textContent='ROI: '+fmtPct(realizedRoi,2)+' realized • '+fmtPct(projectedRoi,2)+' projected next settlement';
   $('fkExposure').textContent=fmtUsd(fs.total_exposure||0,0);
-  $('fkExposureSub').textContent='open notional across hedge legs';
+  $('fkExposureSub').textContent='assumed capital '+fmtUsd(assumedCap,0)+' • deployed '+fmtPct(usagePct,1);
   $('fkOpps').textContent=fs.opportunity_count||0;
   $('fkSymbols').textContent=fs.watchlist_size||0;
   $('fkSymbolsSub').textContent='Cache: '+(fs.cache_size||0);
@@ -1116,13 +1120,17 @@ setInterval(fetchFundingMLStatus,15000);
 
 function renderStrategyOverview(data){
   const hedge=Number((data.hedge||{}).net_pnl||0);
+  const hedgeRoi=Number((data.hedge||{}).roi_pct||0);
+  const hedgeProjectedRoi=Number((data.hedge||{}).projected_next_settlement_roi_pct||0);
   const contrarian=Number((data.contrarian||{}).total_pnl||0);
   const combined=Number(data.combined_net_pnl||0);
+  const combinedRoi=Number(data.combined_roi_pct||0);
   const summary=data.funding_summary||{};
+  const assumedCap=Number(data.assumed_capital_usd||0);
 
   $('soHedgePnl').textContent='$'+hedge.toFixed(2);
   $('soHedgePnl').className='val '+(hedge>0?'g':hedge<0?'r':'');
-  $('soHedgePnlSub').textContent=(data.hedge||{}).open_hedges!=null?(data.hedge||{}).open_hedges+' open hedges':'';
+  $('soHedgePnlSub').textContent=((data.hedge||{}).open_hedges!=null?(data.hedge||{}).open_hedges+' open hedges • ':'')+'ROI '+fmtPct(hedgeRoi,2)+' (proj '+fmtPct(hedgeProjectedRoi,2)+')';
 
   $('soContrarianPnl').textContent='$'+contrarian.toFixed(2);
   $('soContrarianPnl').className='val '+(contrarian>0?'g':contrarian<0?'r':'');
@@ -1130,7 +1138,7 @@ function renderStrategyOverview(data){
 
   $('soCombinedPnl').textContent='$'+combined.toFixed(2);
   $('soCombinedPnl').className='val '+(combined>0?'g':combined<0?'r':'');
-  $('soCombinedPnlSub').textContent='eligible: '+(summary.eligible_models_count||0)+' • strict pass rate: '+Number(summary.strict_gate_pass_rate||0).toFixed(2)+' • weighted win: '+Number(summary.weighted_win_rate_pct||0).toFixed(1)+'%';
+  $('soCombinedPnlSub').textContent='ROI '+fmtPct(combinedRoi,2)+' on '+fmtUsd(assumedCap,0)+' • eligible: '+(summary.eligible_models_count||0)+' • strict pass rate: '+Number(summary.strict_gate_pass_rate||0).toFixed(2)+' • weighted win: '+Number(summary.weighted_win_rate_pct||0).toFixed(1)+'%';
 
   const strategies=[
     {name:'Hedge',enabled:true,trade_count:(data.hedge||{}).open_hedges||0,win_rate:0.5,net_pnl:hedge,avg_hold_hours:null},

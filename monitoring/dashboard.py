@@ -524,23 +524,32 @@ def api_strategy_overview():
         return {"enabled": False}
     state = _funding_engine.get_state()
     hedge_pnl = state.get("total_funding_collected", 0)
+    fees = state.get("total_fees_paid", 0)
+    hedge_net = hedge_pnl - fees
+    assumed_capital = float(state.get("assumed_capital_usd", 0) or 0)
+    hedge_roi_pct = (hedge_net / assumed_capital * 100.0) if assumed_capital > 0 else 0.0
     contrarian = state.get("contrarian") or {}
     contrarian_pnl = contrarian.get("total_pnl", 0)
+    combined_net = hedge_net + contrarian_pnl
+    combined_roi_pct = (combined_net / assumed_capital * 100.0) if assumed_capital > 0 else 0.0
     return {
         "enabled": True,
         "funding_summary": state.get("funding_summary", {}) or {},
+        "assumed_capital_usd": assumed_capital,
         "hedge": {
             "total_funding_collected": hedge_pnl,
             "open_hedges": state.get("open_hedges", 0),
-            "total_fees_paid": state.get("total_fees_paid", 0),
-            "net_pnl": hedge_pnl - state.get("total_fees_paid", 0),
+            "total_fees_paid": fees,
+            "net_pnl": hedge_net,
+            "roi_pct": hedge_roi_pct,
+            "projected_next_settlement_pnl_usd": float(state.get("projected_next_settlement_pnl_usd", hedge_net)),
+            "projected_next_settlement_roi_pct": float(state.get("projected_next_settlement_roi_pct", hedge_roi_pct)),
         },
         "contrarian": {
             "total_pnl": contrarian_pnl,
             "win_rate": contrarian.get("win_rate", 0),
             "trade_count": contrarian.get("trade_count", 0),
         },
-        "combined_net_pnl": (
-            hedge_pnl - state.get("total_fees_paid", 0) + contrarian_pnl
-        ),
+        "combined_net_pnl": combined_net,
+        "combined_roi_pct": combined_roi_pct,
     }
