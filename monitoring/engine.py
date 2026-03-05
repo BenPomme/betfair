@@ -237,7 +237,13 @@ class TradingEngine:
             self._last_prediction_ts = time.time()
         for ev in events:
             kind = ev.get("kind")
-            if kind in {"prediction_open", "prediction_settle"}:
+            if kind in {
+                "prediction_open",
+                "prediction_settle",
+                "prediction_gate_pass",
+                "prediction_gate_fail",
+                "prediction_update_rejected",
+            }:
                 self.record_event(kind, ev)
 
     def on_architect(self, payload: Dict[str, Any]) -> None:
@@ -498,6 +504,9 @@ class TradingEngine:
                 "resets_total": 0,
                 "wins_total": 0,
                 "weighted_win_rate_pct": 0.0,
+                "eligible_models_count": 0,
+                "strict_gate_pass_rate": 0.0,
+                "strict_gate_pass": False,
                 "avg_brier": 0.0,
                 "avg_roi_pct": 0.0,
                 "learning_settled_total": 0,
@@ -544,6 +553,18 @@ class TradingEngine:
                     for m in models
                     if int(m.get("settled_bets", 0)) >= 30 and float(m.get("avg_brier", 1.0)) <= 0.28
                 ))
+                eligible = [
+                    m for m in models
+                    if str(m.get("model_kind", "")) != "implied_market"
+                    and int(m.get("settled_bets", 0)) >= int(getattr(config, "PREDICTION_STRICT_GATE_MIN_SETTLED", 100))
+                ]
+                prediction_summary["eligible_models_count"] = len(
+                    [m for m in eligible if bool(m.get("strict_gate_pass", False))]
+                )
+                if eligible:
+                    pass_count = len([m for m in eligible if bool(m.get("strict_gate_pass", False))])
+                    prediction_summary["strict_gate_pass_rate"] = round(pass_count / len(eligible), 4)
+                    prediction_summary["strict_gate_pass"] = bool(pass_count == len(eligible))
                 if prediction_leader:
                     prediction_summary["leader_model_id"] = prediction_leader.get("model_id")
                     prediction_summary["leader_roi_pct"] = float(prediction_leader.get("roi_pct", 0.0))

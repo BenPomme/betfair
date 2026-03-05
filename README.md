@@ -83,6 +83,7 @@ python scripts/run_dashboard.py
 ```
 
 Or: `uvicorn monitoring.dashboard:app --reload --host 0.0.0.0` (run from project root).
+For script-based auto-reload, run with `DASHBOARD_RELOAD=true python scripts/run_dashboard.py`.
 
 Open **http://127.0.0.1:8000**. Use **Start trading** to run the engine (login → watchlist → poll prices → scan → paper execute). The page shows balance, daily P&L, markets watched, a live feed of scans/opportunities/trades, and a trades table. State polls every 2 seconds.
 

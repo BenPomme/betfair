@@ -7,12 +7,17 @@ live in the dashboard.
 from __future__ import annotations
 
 import json
+import hashlib
+import math
+import os
+import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from collections import deque
 from typing import Dict, List, Optional, Tuple
 
+import config
 from core.types import PriceSnapshot
 from data.clv_tracker import CLVTracker
 from strategy.features import build_market_microstructure
@@ -38,6 +43,7 @@ FEATURE_NAMES = [
 ]
 
 RECENT_LIFT_WINDOW = 200
+ROLLING_WINDOWS = (50, 100, 200)
 
 
 @dataclass(frozen=True)
@@ -122,6 +128,12 @@ class OnlinePredictionEngine:
         self.learning_baseline_brier_sum = 0.0
         self._recent_brier_lift = deque(maxlen=RECENT_LIFT_WINDOW)
         self._recent_learning_brier_lift = deque(maxlen=RECENT_LIFT_WINDOW)
+        self._settled_history = deque(maxlen=500)
+        self._prediction_history = deque(maxlen=max(300, int(config.PREDICTION_SATURATION_WINDOW)))
+        self._feature_drift_stats: Dict[str, Dict[str, float]] = {}
+        self._update_rejections: deque = deque(maxlen=200)
+        self._consecutive_gate_passes = 0
+        self._last_gate_state: Optional[bool] = None
 
         self._pending: Dict[Tuple[str, str], _PendingBet] = {}
         self._learning_candidates: Dict[str, _LearningCandidate] = {}
@@ -130,6 +142,9 @@ class OnlinePredictionEngine:
         self._examples_log.parent.mkdir(parents=True, exist_ok=True)
         self._clv_tracker = clv_tracker
         self._state_path = Path(state_path) if state_path else None
+        self._experiment_log_path = Path(config.PREDICTION_EXPERIMENT_LOG_PATH)
+        self._enforcement_mode = str(config.PREDICTION_GATE_ENFORCEMENT_MODE or "observe").lower()
+        self._pass_streak_required = max(1, int(config.PREDICTION_GATE_PASS_STREAK_REQUIRED))
 
         self.model = self._load_or_init_model()
         self._load_state()
@@ -197,6 +212,12 @@ class OnlinePredictionEngine:
             "learning_baseline_brier_sum": self.learning_baseline_brier_sum,
             "recent_brier_lift": list(self._recent_brier_lift),
             "recent_learning_brier_lift": list(self._recent_learning_brier_lift),
+            "settled_history": list(self._settled_history),
+            "prediction_history": list(self._prediction_history),
+            "feature_drift_stats": self._feature_drift_stats,
+            "update_rejections": list(self._update_rejections),
+            "consecutive_gate_passes": self._consecutive_gate_passes,
+            "last_gate_state": self._last_gate_state,
             "stake_fraction": self.stake_fraction,
             "min_edge": self.min_edge,
             "pending": [
@@ -269,6 +290,33 @@ class OnlinePredictionEngine:
                         self._recent_learning_brier_lift.append(float(v))
                     except Exception:
                         continue
+            settled_history = raw.get("settled_history", [])
+            if isinstance(settled_history, list):
+                for item in settled_history[-500:]:
+                    if isinstance(item, dict):
+                        self._settled_history.append(item)
+            prediction_history = raw.get("prediction_history", [])
+            if isinstance(prediction_history, list):
+                for v in prediction_history[-self._prediction_history.maxlen:]:
+                    try:
+                        self._prediction_history.append(float(v))
+                    except Exception:
+                        continue
+            feature_drift_stats = raw.get("feature_drift_stats", {})
+            if isinstance(feature_drift_stats, dict):
+                self._feature_drift_stats = {
+                    str(k): dict(v)
+                    for k, v in feature_drift_stats.items()
+                    if isinstance(v, dict)
+                }
+            update_rejections = raw.get("update_rejections", [])
+            if isinstance(update_rejections, list):
+                for item in update_rejections[-200:]:
+                    if isinstance(item, dict):
+                        self._update_rejections.append(item)
+            self._consecutive_gate_passes = int(raw.get("consecutive_gate_passes", self._consecutive_gate_passes))
+            last_gate_state = raw.get("last_gate_state", self._last_gate_state)
+            self._last_gate_state = last_gate_state if isinstance(last_gate_state, bool) else None
             self.stake_fraction = float(raw.get("stake_fraction", self.stake_fraction))
             self.min_edge = float(raw.get("min_edge", self.min_edge))
             pending = raw.get("pending", [])
@@ -356,6 +404,205 @@ class OnlinePredictionEngine:
         with self._examples_log.open("a", encoding="utf-8") as f:
             f.write(json.dumps(payload, separators=(",", ":")) + "\n")
 
+    def _is_control_model(self) -> bool:
+        return self.model_kind == "implied_market"
+
+    def _record_prediction(self, prob: float) -> None:
+        if math.isfinite(prob):
+            self._prediction_history.append(float(prob))
+
+    def _prediction_is_frozen(self) -> bool:
+        w = max(5, int(config.PREDICTION_FROZEN_WINDOW))
+        if len(self._prediction_history) < w:
+            return False
+        vals = list(self._prediction_history)[-w:]
+        mean = sum(vals) / len(vals)
+        var = sum((x - mean) ** 2 for x in vals) / len(vals)
+        return math.sqrt(var) <= float(config.PREDICTION_FROZEN_STD_THRESHOLD)
+
+    def _prediction_saturation_rate(self) -> float:
+        w = max(10, int(config.PREDICTION_SATURATION_WINDOW))
+        if len(self._prediction_history) < w:
+            return 0.0
+        vals = list(self._prediction_history)[-w:]
+        low = float(config.PREDICTION_SATURATION_LOW)
+        high = float(config.PREDICTION_SATURATION_HIGH)
+        sat = sum(1 for p in vals if p <= low or p >= high)
+        return sat / len(vals)
+
+    def _update_feature_drift(self, features: Dict[str, float], market_id: str) -> List[dict]:
+        events: List[dict] = []
+        min_count = max(2, int(config.PREDICTION_DRIFT_MIN_COUNT))
+        z_thresh = float(config.PREDICTION_DRIFT_Z_THRESHOLD)
+        sustain = max(1, int(config.PREDICTION_DRIFT_SUSTAIN_COUNT))
+        for name, raw in features.items():
+            x = float(raw)
+            if not math.isfinite(x):
+                continue
+            st = self._feature_drift_stats.setdefault(name, {"n": 0.0, "mean": 0.0, "m2": 0.0, "streak": 0.0})
+            n = int(st.get("n", 0))
+            mean = float(st.get("mean", 0.0))
+            m2 = float(st.get("m2", 0.0))
+            if n >= min_count:
+                var = m2 / max(1, n - 1)
+                sd = math.sqrt(max(var, 1e-12))
+                z = abs(x - mean) / sd if sd > 0 else 0.0
+                if z >= z_thresh:
+                    st["streak"] = float(st.get("streak", 0.0)) + 1.0
+                else:
+                    st["streak"] = 0.0
+                if int(st["streak"]) == sustain:
+                    events.append(
+                        {
+                            "kind": "prediction_drift_alert",
+                            "model_id": self.model_id,
+                            "market_id": market_id,
+                            "feature": name,
+                            "z_score": round(z, 4),
+                            "value": round(x, 6),
+                        }
+                    )
+            n += 1
+            delta = x - mean
+            mean += delta / n
+            m2 += delta * (x - mean)
+            st["n"] = float(n)
+            st["mean"] = float(mean)
+            st["m2"] = float(m2)
+        return events
+
+    def _validate_features(self, features: Dict[str, float], market_id: str, context: str) -> Optional[dict]:
+        abs_max = float(config.PREDICTION_FEATURE_ABS_MAX)
+        for name, v in features.items():
+            x = float(v)
+            if not math.isfinite(x):
+                ev = {
+                    "kind": "prediction_update_rejected",
+                    "model_id": self.model_id,
+                    "market_id": market_id,
+                    "context": context,
+                    "reason": "non_finite_feature",
+                    "feature": name,
+                }
+                self._update_rejections.append(ev)
+                return ev
+            if abs(x) > abs_max:
+                ev = {
+                    "kind": "prediction_update_rejected",
+                    "model_id": self.model_id,
+                    "market_id": market_id,
+                    "context": context,
+                    "reason": "feature_abs_limit",
+                    "feature": name,
+                    "value": round(x, 4),
+                    "limit": abs_max,
+                }
+                self._update_rejections.append(ev)
+                return ev
+        return None
+
+    def _rolling_metrics(self, window: int) -> Dict[str, object]:
+        hist = list(self._settled_history)[-window:]
+        settled = len(hist)
+        if settled <= 0:
+            return {
+                "settled": 0,
+                "model_brier": 0.0,
+                "baseline_brier": 0.0,
+                "brier_lift_abs": 0.0,
+                "roi_pct": 0.0,
+                "clv_avg": None,
+            }
+        model_brier = sum(float(h.get("model_brier", 0.0)) for h in hist) / settled
+        baseline_brier = sum(float(h.get("baseline_brier", 0.0)) for h in hist) / settled
+        pnl = sum(float(h.get("pnl", 0.0)) for h in hist)
+        stake = sum(max(0.0, float(h.get("stake", 0.0))) for h in hist)
+        roi_pct = (pnl / stake * 100.0) if stake > 0 else 0.0
+        clv_vals = [float(h["clv"]) for h in hist if isinstance(h.get("clv"), (int, float))]
+        clv_avg = (sum(clv_vals) / len(clv_vals)) if clv_vals else None
+        return {
+            "settled": settled,
+            "model_brier": round(model_brier, 6),
+            "baseline_brier": round(baseline_brier, 6),
+            "brier_lift_abs": round(baseline_brier - model_brier, 6),
+            "roi_pct": round(roi_pct, 4),
+            "clv_avg": round(clv_avg, 6) if clv_avg is not None else None,
+        }
+
+    def _strict_gate_status(self) -> Tuple[bool, str, Dict[str, object], Dict[str, object], Dict[str, object]]:
+        r50 = self._rolling_metrics(50)
+        r100 = self._rolling_metrics(100)
+        r200 = self._rolling_metrics(200)
+        if self._is_control_model():
+            return False, "control_model", r50, r100, r200
+        if int(self.settled_bets) < int(config.PREDICTION_STRICT_GATE_MIN_SETTLED):
+            return False, "insufficient_settled_bets", r50, r100, r200
+        if int(r100["settled"]) < 100 or int(r200["settled"]) < 200:
+            return False, "insufficient_window_coverage", r50, r100, r200
+        if float(r100["brier_lift_abs"]) <= 0 or float(r200["brier_lift_abs"]) <= 0:
+            return False, "negative_brier_lift", r50, r100, r200
+        if float(r100["roi_pct"]) < 0 or float(r200["roi_pct"]) < 0:
+            return False, "negative_roi", r50, r100, r200
+        return True, "pass", r50, r100, r200
+
+    def _effective_policy(self) -> Tuple[float, float]:
+        gate_pass, _, _, _, _ = self._strict_gate_status()
+        mode = self._enforcement_mode
+        if mode not in {"soft", "strict"}:
+            return 1.0, self.min_edge
+        if gate_pass:
+            if self._consecutive_gate_passes >= self._pass_streak_required:
+                return 1.0, self.min_edge
+            # keep conservative until pass streak is met
+            return 0.5, self.min_edge
+        fail_mult = float(config.PREDICTION_GATE_FAIL_STAKE_MULTIPLIER)
+        if mode == "soft":
+            fail_mult = max(0.5, fail_mult)
+        return fail_mult, self.min_edge + float(config.PREDICTION_GATE_FAIL_MIN_EDGE_BUMP)
+
+    def _git_sha(self) -> str:
+        try:
+            out = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL)
+            return out.decode("utf-8").strip()
+        except Exception:
+            return "unknown"
+
+    def _config_hash(self) -> str:
+        payload = {
+            "model_id": self.model_id,
+            "model_kind": self.model_kind,
+            "stake_fraction": self.stake_fraction,
+            "min_edge": self.min_edge,
+            "min_liquidity": self.min_liquidity,
+            "enforcement": self._enforcement_mode,
+        }
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        return hashlib.sha256(raw).hexdigest()[:12]
+
+    def _maybe_log_experiment_snapshot(self) -> None:
+        every = max(1, int(config.PREDICTION_EXPERIMENT_LOG_EVERY_SETTLED))
+        if self.settled_bets <= 0 or (self.settled_bets % every) != 0:
+            return
+        gate_pass, gate_reason, r50, r100, r200 = self._strict_gate_status()
+        self._experiment_log_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "run_id": f"{self.model_id}-{self.settled_bets}",
+            "ts_start": None,
+            "ts_end": datetime.now(timezone.utc).isoformat(),
+            "git_sha": self._git_sha(),
+            "model_id": self.model_id,
+            "model_kind": self.model_kind,
+            "config_hash": self._config_hash(),
+            "models": {
+                "model_path": str(self.model_path),
+                "model_updates": self.update_count,
+            },
+            "metrics": {"rolling_50": r50, "rolling_100": r100, "rolling_200": r200},
+            "gate": {"strict_gate_pass": gate_pass, "reason": gate_reason},
+        }
+        with self._experiment_log_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, separators=(",", ":")) + "\n")
+
     def _update_model(self, ex: PredictionExample) -> None:
         if self.model_kind == "implied_market":
             return
@@ -364,8 +611,8 @@ class OnlinePredictionEngine:
         self._maybe_save_model()
         self._save_state()
 
-    def _stake_size(self) -> float:
-        stake = self.balance * self.stake_fraction
+    def _stake_size(self, stake_multiplier: float = 1.0) -> float:
+        stake = self.balance * self.stake_fraction * max(0.0, float(stake_multiplier))
         stake = max(self.min_stake, stake)
         stake = min(self.max_stake, stake, self.balance)
         return round(stake, 2)
@@ -396,6 +643,7 @@ class OnlinePredictionEngine:
                 continue
             base_prob = 1.0 / odds
             pred_prob = self._predict_prob(base_prob, features)
+            self._record_prediction(pred_prob)
             if best is None or liq > best["liq"]:
                 best = {
                     "selection_id": sel.selection_id,
@@ -474,6 +722,12 @@ class OnlinePredictionEngine:
             label=y,
             features=cand.features,
         )
+        rejection = self._validate_features(cand.features, cand.market_id, context="learning")
+        if rejection is not None:
+            self._learning_candidates.pop(snapshot.market_id, None)
+            self._save_state()
+            events.append(rejection)
+            return events
         self.learning_settled += 1
         model_brier = (cand.predicted_prob - y) ** 2
         baseline_brier = (cand.base_prob - y) ** 2
@@ -547,6 +801,12 @@ class OnlinePredictionEngine:
                 label=y,
                 features=bet.features,
             )
+            rejection = self._validate_features(bet.features, bet.market_id, context="settlement")
+            if rejection is not None:
+                to_remove.append(key)
+                events.append(rejection)
+                self._save_state()
+                continue
             self._update_model(ex)
             self._append_example(ex)
 
@@ -565,6 +825,20 @@ class OnlinePredictionEngine:
                 self.losses += 1
                 pnl = -bet.stake
             self.total_pnl += pnl
+            clv_value = self._clv_tracker.compute_clv(bet.bet_id) if self._clv_tracker else None
+            self._settled_history.append(
+                {
+                    "market_id": bet.market_id,
+                    "selection_id": bet.selection_id,
+                    "stake": float(bet.stake),
+                    "pnl": float(pnl),
+                    "model_brier": float(model_brier),
+                    "baseline_brier": float(baseline_brier),
+                    "clv": clv_value if isinstance(clv_value, (int, float)) else None,
+                    "pred_prob": float(bet.predicted_prob),
+                    "base_prob": float(bet.base_prob),
+                }
+            )
             busted = self._reset_if_bust()
             events.append(
                 {
@@ -578,9 +852,26 @@ class OnlinePredictionEngine:
                     "balance_eur": round(self.balance, 2),
                     "reset": busted,
                     "brier_lift": round(baseline_brier - model_brier, 6),
-                    "clv": self._clv_tracker.compute_clv(bet.bet_id) if self._clv_tracker else None,
+                    "clv": clv_value,
                 }
             )
+            gate_pass, gate_reason, _, _, _ = self._strict_gate_status()
+            if gate_pass:
+                self._consecutive_gate_passes += 1
+            else:
+                self._consecutive_gate_passes = 0
+            if self._last_gate_state is None or gate_pass != self._last_gate_state:
+                events.append(
+                    {
+                        "kind": "prediction_gate_pass" if gate_pass else "prediction_gate_fail",
+                        "model_id": self.model_id,
+                        "market_id": bet.market_id,
+                        "reason": gate_reason,
+                        "settled_bets": self.settled_bets,
+                    }
+                )
+            self._last_gate_state = gate_pass
+            self._maybe_log_experiment_snapshot()
             to_remove.append(key)
             self._save_state()
 
@@ -599,6 +890,11 @@ class OnlinePredictionEngine:
     ) -> Optional[dict]:
         if str(getattr(snapshot, "market_status", "OPEN") or "OPEN") == "CLOSED":
             return None
+        stake_multiplier, effective_min_edge = self._effective_policy()
+        if self._prediction_is_frozen():
+            return None
+        if self._prediction_saturation_rate() >= float(config.PREDICTION_SATURATION_RATE_THRESHOLD):
+            return None
         best = None
         for sel in snapshot.selections:
             odds = float(sel.best_back_price)
@@ -607,6 +903,7 @@ class OnlinePredictionEngine:
                 continue
             base_prob = 1.0 / odds
             pred_prob = self._predict_prob(base_prob, features)
+            self._record_prediction(pred_prob)
             edge = pred_prob - base_prob
             if best is None or edge > best["edge"]:
                 best = {
@@ -618,14 +915,14 @@ class OnlinePredictionEngine:
                     "edge": edge,
                 }
 
-        if best is None or best["edge"] < self.min_edge:
+        if best is None or best["edge"] < effective_min_edge:
             return None
 
         key = (market_id, best["selection_id"])
         if key in self._pending:
             return None
 
-        stake = self._stake_size()
+        stake = self._stake_size(stake_multiplier=stake_multiplier)
         if stake < self.min_stake or stake <= 0:
             return None
 
@@ -669,6 +966,8 @@ class OnlinePredictionEngine:
             "edge": round(best["edge"], 5),
             "pred_prob": round(best["pred_prob"], 5),
             "stake_eur": stake,
+            "stake_multiplier": round(stake_multiplier, 4),
+            "effective_min_edge": round(effective_min_edge, 6),
             "balance_eur": round(self.balance, 2),
             "bet_id": bet_id,
         }
@@ -688,6 +987,7 @@ class OnlinePredictionEngine:
         events.extend(settle_events)
         events.extend(learning_events)
         features = self._features_from_snapshot(snapshot, market_start)
+        events.extend(self._update_feature_drift(features, market_id=market_id))
         if not any(e.get("reset") for e in settle_events):
             opened = self._open_bet(market_id, snapshot, event_name, features)
             if opened:
@@ -746,6 +1046,9 @@ class OnlinePredictionEngine:
             sum(self._recent_learning_brier_lift) / len(self._recent_learning_brier_lift)
             if len(self._recent_learning_brier_lift) > 0 else 0.0
         )
+        gate_pass, gate_reason, r50, r100, r200 = self._strict_gate_status()
+        saturation_rate = self._prediction_saturation_rate()
+        frozen = self._prediction_is_frozen()
         return {
             "model_id": self.model_id,
             "model_kind": self.model_kind,
@@ -777,6 +1080,15 @@ class OnlinePredictionEngine:
             "learning_open_markets": len(self._learning_candidates),
             "recent_brier_lift": round(recent_brier_lift, 6),
             "recent_learning_brier_lift": round(recent_learning_brier_lift, 6),
+            "rolling_50": r50,
+            "rolling_100": r100,
+            "rolling_200": r200,
+            "strict_gate_pass": gate_pass,
+            "strict_gate_reason": gate_reason,
+            "gate_pass_streak": int(self._consecutive_gate_passes),
+            "prediction_frozen": frozen,
+            "prediction_saturation_rate": round(saturation_rate, 6),
+            "update_rejection_count": len(self._update_rejections),
             "model_path": str(self.model_path),
             "model_version": f"{self.model_kind}_online_v1",
             "last_edge": round(self.last_edge, 6),

@@ -24,8 +24,10 @@ from typing import Any, Dict, Optional
 
 import numpy as np
 import pandas as pd
+from sklearn.metrics import roc_auc_score
 
 from funding.ml.tft_predictor import TFTPredictor, _DEEP_LEARNING_AVAILABLE
+from funding.ml.contrarian_baseline import ContrarianBaselineModel
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +145,7 @@ class ModelSelector:
         self._selected_model: Optional[str] = None  # "xgboost", "tft", or None
         self._xgb: Optional[Any] = None
         self._tft: Optional[TFTPredictor] = None
+        self._fallback: Optional[ContrarianBaselineModel] = None
 
     # ------------------------------------------------------------------
     # Public API
@@ -236,9 +239,12 @@ class ModelSelector:
                 ),
             }
 
+        fallback_result = self._train_fallback(df)
+
         self._comparison = {
             "xgboost": xgb_result,
             "tft": tft_result,
+            "fallback": fallback_result,
         }
 
         # Run select_best to populate _selected_model and annotate comparison
@@ -285,10 +291,10 @@ class ModelSelector:
 
         if not xgb_trained and not tft_trained:
             logger.warning(
-                "Neither model trained successfully. No model selected."
+                "Neither model trained successfully. Selecting fallback baseline model."
             )
-            self._selected_model = None
-            return None
+            self._selected_model = "fallback"
+            return self._selected_model
 
         if xgb_trained and not tft_trained:
             if ContrarianXGBoost is None:
@@ -388,26 +394,39 @@ class ModelSelector:
             self.select_best()
 
         if self._selected_model is None:
-            return None
+            # Keep the contrarian strategy operational even when historical
+            # comparisons contain no viable heavy model.
+            if self._fallback is None:
+                model = ContrarianBaselineModel(model_dir=str(self._model_dir / "contrarian_baseline"))
+                model.load()
+                self._fallback = model
+            return self._fallback
+
+        if self._selected_model == "fallback":
+            if self._fallback is None:
+                model = ContrarianBaselineModel(model_dir=str(self._model_dir / "contrarian_baseline"))
+                model.load()
+                self._fallback = model
+            return self._fallback
 
         if self._selected_model == "tft":
             if self._tft is None:
-                raise RuntimeError(
-                    "TFT model selected but instance is None. "
-                    "Ensure compare() completed successfully for TFT."
-                )
+                model = TFTPredictor(model_dir=str(self._model_dir / "tft"))
+                model.load()
+                self._tft = model
             return self._tft
 
         # Selected is "xgboost"
         if ContrarianXGBoost is None:
             if self._tft is not None:
                 return self._tft
+            if self._fallback is not None:
+                return self._fallback
             return None
         if self._xgb is None:
-            raise RuntimeError(
-                "XGBoost model selected but instance is None. "
-                "Ensure compare() completed successfully for XGBoost."
-            )
+            model = ContrarianXGBoost(model_dir=str(self._model_dir / "contrarian_xgb"))
+            model.load()
+            self._xgb = model
         return self._xgb
 
     def get_comparison(self) -> Dict[str, Any]:
@@ -568,6 +587,58 @@ class ModelSelector:
             logger.error("TFTPredictor training failed: %s", exc, exc_info=True)
             result["error"] = str(exc)
 
+        return result
+
+    def _train_fallback(self, df: pd.DataFrame) -> Dict[str, Any]:
+        """
+        Always-available baseline model used when heavier models are unavailable.
+        """
+        result: Dict[str, Any] = {
+            "trained": False,
+            "direction_accuracy": 0.0,
+            "auc": 0.0,
+            "sharpe_simulated": _FALLBACK_SHARPE,
+            "profit_factor": 0.0,
+            "metrics": {},
+            "error": None,
+        }
+        try:
+            model = ContrarianBaselineModel(model_dir=str(self._model_dir / "contrarian_baseline"))
+            model.train(df)
+            preds = model.predict(df)
+            if preds.empty or "direction_24h" not in df.columns or "price_return_24h_target" not in df.columns:
+                return result
+            y_dir = df["direction_24h"].astype(int).values
+            y_ret = df["price_return_24h_target"].astype(float).values
+            direction_prob = preds["direction_prob"].astype(float).values
+            pred_dir = preds["predicted_direction"].astype(bool).astype(int).values
+
+            try:
+                auc = float(roc_auc_score(y_dir, direction_prob)) if len(np.unique(y_dir)) > 1 else 0.5
+            except Exception:
+                auc = 0.5
+            acc = float((pred_dir == y_dir).mean()) if len(y_dir) > 0 else 0.0
+            signal = np.where(pred_dir >= 1, 1.0, -1.0)
+            n_min = min(len(signal), len(y_ret))
+            pnl = signal[:n_min] * y_ret[:n_min]
+            sharpe = _annualised_sharpe(pnl)
+            profit_factor = _compute_profit_factor(pnl)
+
+            model.save()
+            self._fallback = model
+            result.update(
+                {
+                    "trained": True,
+                    "direction_accuracy": acc,
+                    "auc": auc,
+                    "sharpe_simulated": sharpe,
+                    "profit_factor": profit_factor,
+                    "metrics": {"engine": "baseline"},
+                    "error": None,
+                }
+            )
+        except Exception as exc:
+            result["error"] = str(exc)
         return result
 
     # ------------------------------------------------------------------

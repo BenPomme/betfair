@@ -3,9 +3,13 @@ Dashboard API and UI: start/stop trading, live state, P&L, trades, events.
 Run: uvicorn monitoring.dashboard:app --reload --host 0.0.0.0
 """
 import json
+import logging
+import subprocess
+import time
 from pathlib import Path
 from typing import Optional
 
+import config
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 
@@ -13,6 +17,7 @@ from monitoring.engine import TradingEngine
 
 _engine = TradingEngine()
 _template_path = Path(__file__).parent / "templates" / "dashboard.html"
+logger = logging.getLogger(__name__)
 
 
 def get_engine() -> TradingEngine:
@@ -24,6 +29,17 @@ def _html() -> str:
 
 
 app = FastAPI(title="Betfair Arb Dashboard")
+
+
+def _git_sha() -> str:
+    try:
+        out = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL)
+        return out.decode("utf-8").strip()
+    except Exception:
+        return "unknown"
+
+
+logger.info("Dashboard boot: git_sha=%s started_at=%s", _git_sha(), time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -160,6 +176,21 @@ def api_audit_report():
     if entries:
         return {"report": entries[-1]}
     return {"report": None}
+
+
+@app.get("/api/prediction/experiments")
+def api_prediction_experiments(limit: int = 200):
+    """Prediction experiment snapshots and best strict-pass run."""
+    path = Path("data/prediction/experiments.jsonl")
+    entries = _read_jsonl_tail(path, max_lines=limit)
+    strict_pass = [e for e in entries if bool(((e.get("gate") or {}).get("strict_gate_pass")))]
+    best = None
+    if strict_pass:
+        best = max(
+            strict_pass,
+            key=lambda e: float(((e.get("metrics") or {}).get("rolling_200") or {}).get("roi_pct", 0.0)),
+        )
+    return {"entries": entries[-limit:], "best_strict_pass_run": best}
 
 
 # === FUNDING MODULE ENDPOINTS ===
@@ -341,10 +372,43 @@ def api_funding_ml_metrics():
 def api_funding_ml_status():
     """Online learner status: AUC, retrain history, prediction accuracy."""
     if _funding_engine is None:
-        return {"running": False, "current_auc": 0, "retrain_count": 0,
-                "prediction_accuracy": 0, "retrain_history": []}
+        return {
+            "running": False,
+            "current_auc": 0,
+            "retrain_count": 0,
+            "prediction_accuracy": 0,
+            "retrain_history": [],
+            "funding_summary": {
+                "eligible_models_count": 0,
+                "strict_gate_pass_rate": 0.0,
+                "weighted_win_rate_pct": 0.0,
+                "strict_gate_pass": False,
+            },
+            "online_learner": {},
+            "contrarian_learner": {},
+        }
     state = _funding_engine.get_state()
-    return state.get("online_learner", {})
+    return {
+        **(state.get("online_learner", {}) or {}),
+        "online_learner": state.get("online_learner", {}) or {},
+        "contrarian_learner": state.get("contrarian_learner", {}) or {},
+        "funding_summary": state.get("funding_summary", {}) or {},
+    }
+
+
+@app.get("/api/funding/experiments")
+def api_funding_experiments(limit: int = 200):
+    """Funding experiment snapshots and best strict-pass run."""
+    path = Path(config.FUNDING_EXPERIMENT_LOG_PATH)
+    entries = _read_jsonl_tail(path, max_lines=limit)
+    strict_pass = [e for e in entries if bool(((e.get("gate") or {}).get("strict_gate_pass")))]
+    best = None
+    if strict_pass:
+        best = max(
+            strict_pass,
+            key=lambda e: float(((e.get("metrics") or {}).get("rolling_200") or {}).get("roi_pct", 0.0)),
+        )
+    return {"entries": entries[-limit:], "best_strict_pass_run": best}
 
 
 @app.get("/api/orchestrator/state")
@@ -378,6 +442,17 @@ def api_contrarian_state():
         }
     state = _funding_engine.get_state()
     contrarian = state.get("contrarian") or {}
+    learner = state.get("contrarian_learner") or {}
+    positions = contrarian.get("positions") or contrarian.get("open_positions") or []
+    contrarian["positions"] = positions
+    contrarian["open_positions"] = positions
+    if "model_name" not in contrarian:
+        contrarian["model_name"] = contrarian.get("model")
+    if "total_realized_pnl" not in contrarian:
+        contrarian["total_realized_pnl"] = learner.get("total_realized_pnl", 0.0)
+    contrarian["strict_gate_pass"] = learner.get("strict_gate_pass")
+    contrarian["strict_gate_reason"] = learner.get("strict_gate_reason")
+    contrarian["settled_count"] = learner.get("settled_count", 0)
     contrarian["enabled"] = getattr(_cfg, "CONTRARIAN_ENABLED", False)
     contrarian["active"] = True
     return contrarian
@@ -387,17 +462,45 @@ def api_contrarian_state():
 def api_regime_state():
     """Current market regime and adapter state; enabled from config, active when Funding runs."""
     import config as _cfg
+    enabled = getattr(_cfg, "REGIME_ENABLED", False)
     if _funding_engine is None:
         return {
-            "enabled": getattr(_cfg, "REGIME_ENABLED", False),
+            "enabled": enabled,
             "active": False,
             "message": "Start Funding engine to activate.",
+            "regime": "disabled" if not enabled else "unknown",
+            "label": "disabled" if not enabled else "unknown",
+            "last_updated": None,
         }
     state = _funding_engine.get_state()
     regime = state.get("regime") or {}
-    regime["enabled"] = getattr(_cfg, "REGIME_ENABLED", False)
-    regime["active"] = True
-    return regime
+    if not regime:
+        return {
+            "enabled": enabled,
+            "active": True,
+            "regime": "disabled" if not enabled else "unknown",
+            "label": "disabled" if not enabled else "unknown",
+            "last_updated": None,
+            "message": "Regime adapter disabled" if not enabled else "Regime adapter not initialized",
+        }
+    label = regime.get("regime_label") or regime.get("label") or "unknown"
+    out = {
+        "enabled": enabled,
+        "active": True,
+        "regime": str(label),
+        "label": str(label),
+        "last_updated": regime.get("last_update") or regime.get("last_updated"),
+        "current_regime": regime.get("current_regime"),
+        "halt_trading": bool(regime.get("halt_trading", False)),
+        "adjustments": regime.get("adjustments"),
+    }
+    proba = regime.get("regime_proba")
+    if isinstance(proba, list) and proba:
+        try:
+            out["confidence"] = float(max(proba))
+        except Exception:
+            pass
+    return out
 
 
 @app.get("/api/cascade/state")
@@ -425,6 +528,7 @@ def api_strategy_overview():
     contrarian_pnl = contrarian.get("total_pnl", 0)
     return {
         "enabled": True,
+        "funding_summary": state.get("funding_summary", {}) or {},
         "hedge": {
             "total_funding_collected": hedge_pnl,
             "open_hedges": state.get("open_hedges", 0),

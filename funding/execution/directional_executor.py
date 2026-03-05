@@ -89,6 +89,12 @@ class DirectionalExecutor:
             )
 
         self._positions = position_manager or DirectionalPositionManager()
+        self._simulated_fills_only = bool(config.FUNDING_MODE == "paper") and not (
+            bool(config.BINANCE_FUTURES_TESTNET_API_KEY)
+            and bool(config.BINANCE_FUTURES_TESTNET_API_SECRET)
+        )
+        if self._simulated_fills_only:
+            logger.warning("DirectionalExecutor running in local-sim mode (futures testnet keys missing).")
 
     # ------------------------------------------------------------------
     # Public API
@@ -131,6 +137,13 @@ class DirectionalExecutor:
         quantity: Decimal = Decimal(str(params["quantity"]))
         stop_loss: Decimal = Decimal(str(params["stop_loss"]))
         take_profit: Decimal = Decimal(str(params["take_profit"]))
+        if quantity <= Decimal("0"):
+            notional = Decimal(str(params.get("notional", "0")))
+            mark = Decimal(str(params.get("entry_price", signal.mark_price or "0")))
+            if mark > Decimal("0") and notional > Decimal("0"):
+                quantity = (notional / mark).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        if self._simulated_fills_only:
+            return self._open_position_simulated(signal, params, quantity, stop_loss, take_profit)
 
         entry_side = _entry_side(signal.direction)
         close_side = _opposite_side(signal.direction)
@@ -144,6 +157,8 @@ class DirectionalExecutor:
             # Step 1: Set leverage
             await self._futures.set_leverage(symbol, leverage)
         except Exception as exc:
+            if self._should_fallback_to_sim(exc):
+                return self._open_position_simulated(signal, params, quantity, stop_loss, take_profit)
             logger.error(
                 "Failed to set leverage %sx for %s: %s — aborting open_position",
                 leverage, symbol, exc,
@@ -170,6 +185,8 @@ class DirectionalExecutor:
                 quantity=quantity,
             )
         except Exception as exc:
+            if self._should_fallback_to_sim(exc):
+                return self._open_position_simulated(signal, params, quantity, stop_loss, take_profit)
             logger.error(
                 "Market entry order failed for %s: %s — aborting open_position",
                 symbol, exc,
@@ -267,6 +284,7 @@ class DirectionalExecutor:
         self,
         symbol: str,
         reason: str = "manual",
+        current_price: Optional[Decimal] = None,
     ) -> Optional[DirectionalPosition]:
         """Close an open directional position by placing a closing market order.
 
@@ -303,6 +321,9 @@ class DirectionalExecutor:
 
         position.status = DirectionalPositionStatus.CLOSING
         self._positions.update_position(position)
+
+        if self._simulated_fills_only:
+            return self._close_position_simulated(position, reason=reason, current_price=current_price)
 
         try:
             close_order = await self._futures.place_order(
@@ -414,7 +435,7 @@ class DirectionalExecutor:
                         "Max hold reached for %s (held=%s) — closing",
                         symbol, held,
                     )
-                    closed = await self.close_position(symbol, reason="max_hold")
+                    closed = await self.close_position(symbol, reason="max_hold", current_price=snapshot.mark_price if snapshot else None)
                     if closed is not None:
                         closed_symbols.append(symbol)
                     # Skip price checks — position is already closed.
@@ -433,7 +454,7 @@ class DirectionalExecutor:
                         "LONG stop triggered: %s price=%s <= SL=%s",
                         symbol, current_price, position.stop_loss,
                     )
-                    closed = await self.close_position(symbol, reason="stopped")
+                    closed = await self.close_position(symbol, reason="stopped", current_price=current_price)
                     if closed is not None:
                         closed_symbols.append(symbol)
 
@@ -442,7 +463,7 @@ class DirectionalExecutor:
                         "LONG take-profit triggered: %s price=%s >= TP=%s",
                         symbol, current_price, position.take_profit,
                     )
-                    closed = await self.close_position(symbol, reason="took_profit")
+                    closed = await self.close_position(symbol, reason="took_profit", current_price=current_price)
                     if closed is not None:
                         closed_symbols.append(symbol)
 
@@ -452,7 +473,7 @@ class DirectionalExecutor:
                         "SHORT stop triggered: %s price=%s >= SL=%s",
                         symbol, current_price, position.stop_loss,
                     )
-                    closed = await self.close_position(symbol, reason="stopped")
+                    closed = await self.close_position(symbol, reason="stopped", current_price=current_price)
                     if closed is not None:
                         closed_symbols.append(symbol)
 
@@ -461,7 +482,7 @@ class DirectionalExecutor:
                         "SHORT take-profit triggered: %s price=%s <= TP=%s",
                         symbol, current_price, position.take_profit,
                     )
-                    closed = await self.close_position(symbol, reason="took_profit")
+                    closed = await self.close_position(symbol, reason="took_profit", current_price=current_price)
                     if closed is not None:
                         closed_symbols.append(symbol)
 
@@ -492,6 +513,75 @@ class DirectionalExecutor:
                 "Could not cancel open orders for %s: %s — manual cleanup may be required",
                 symbol, exc,
             )
+
+    def _open_position_simulated(
+        self,
+        signal: ContrarianSignal,
+        params: dict,
+        quantity: Decimal,
+        stop_loss: Decimal,
+        take_profit: Decimal,
+    ) -> Optional[DirectionalPosition]:
+        symbol = signal.symbol
+        entry_price = Decimal(str(params.get("entry_price", signal.mark_price or "0")))
+        if entry_price <= Decimal("0") or quantity <= Decimal("0"):
+            return None
+        if stop_loss <= Decimal("0") or take_profit <= Decimal("0"):
+            stop_pct = Decimal(str(config.CONTRARIAN_STOP_LOSS_PCT))
+            rr = Decimal(str(config.CONTRARIAN_TAKE_PROFIT_RATIO))
+            stop_dist = (entry_price * stop_pct).quantize(Decimal("0.00000001"), rounding=ROUND_HALF_UP)
+            reward_dist = (stop_dist * rr).quantize(Decimal("0.00000001"), rounding=ROUND_HALF_UP)
+            if signal.direction is DirectionalSide.LONG:
+                stop_loss = (entry_price - stop_dist).quantize(Decimal("0.00000001"), rounding=ROUND_HALF_UP)
+                take_profit = (entry_price + reward_dist).quantize(Decimal("0.00000001"), rounding=ROUND_HALF_UP)
+            else:
+                stop_loss = (entry_price + stop_dist).quantize(Decimal("0.00000001"), rounding=ROUND_HALF_UP)
+                take_profit = (entry_price - reward_dist).quantize(Decimal("0.00000001"), rounding=ROUND_HALF_UP)
+
+        position = DirectionalPosition(
+            symbol=symbol,
+            side=signal.direction,
+            entry_price=entry_price,
+            quantity=quantity,
+            leverage=int(params.get("leverage", config.CONTRARIAN_LEVERAGE)),
+            margin_type=str(params.get("margin_type", config.FUNDING_MARGIN_TYPE)),
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+            entry_time=datetime.now(timezone.utc),
+            status=DirectionalPositionStatus.OPEN,
+            signal=signal,
+        )
+        self._positions.add_position(position)
+        return position
+
+    def _close_position_simulated(
+        self,
+        position: DirectionalPosition,
+        reason: str,
+        current_price: Optional[Decimal] = None,
+    ) -> DirectionalPosition:
+        exit_price = current_price if current_price is not None else position.entry_price
+        if position.side is DirectionalSide.LONG:
+            pnl = (exit_price - position.entry_price) * position.quantity
+        else:
+            pnl = (position.entry_price - exit_price) * position.quantity
+        pnl = pnl.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        _reason_to_status: Dict[str, DirectionalPositionStatus] = {
+            "stopped": DirectionalPositionStatus.STOPPED,
+            "took_profit": DirectionalPositionStatus.TOOK_PROFIT,
+        }
+        final_status = _reason_to_status.get(reason, DirectionalPositionStatus.CLOSED)
+        position.exit_price = exit_price
+        position.exit_time = datetime.now(timezone.utc)
+        position.realized_pnl = pnl
+        position.status = final_status
+        self._positions.update_position(position)
+        return position
+
+    @staticmethod
+    def _should_fallback_to_sim(exc: Exception) -> bool:
+        msg = str(exc).lower()
+        return ("-2015" in msg) or ("invalid api-key" in msg) or ("permissions for action" in msg)
 
     # ------------------------------------------------------------------
     # Properties

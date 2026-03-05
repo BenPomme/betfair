@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from decimal import Decimal
+import math
 
 from core.types import PriceSnapshot, SelectionPrice
 from data.price_cache import PriceCache
@@ -231,3 +232,91 @@ def test_implied_model_tracks_learning_without_model_updates(tmp_path):
     assert any(e["kind"] == "prediction_learning_settle" for e in out["events"])
     assert out["state"]["learning_settled"] >= 1
     assert out["state"]["learning_updates"] == 0
+
+
+def test_strict_gate_pass_fail_matrix():
+    engine = OnlinePredictionEngine(
+        model_id="gate_matrix",
+        model_kind="residual_logit",
+        initial_balance_eur=1000.0,
+        stake_fraction=0.05,
+        min_stake_eur=2.0,
+        max_stake_eur=20.0,
+        min_edge=-1.0,
+        min_liquidity_eur=1.0,
+        model_path="data/prediction/test_gate_matrix.json",
+        save_every=100,
+    )
+    # 200 settled points, all with positive brier lift and positive ROI.
+    engine.settled_bets = 200
+    engine._settled_history.clear()
+    for _ in range(200):
+        engine._settled_history.append(
+            {
+                "model_brier": 0.18,
+                "baseline_brier": 0.22,
+                "pnl": 0.15,
+                "stake": 1.0,
+                "clv": None,
+            }
+        )
+    st = engine.get_state()
+    assert st["strict_gate_pass"] is True
+    # Flip ROI negative while keeping positive lift -> must fail strict.
+    engine._settled_history.clear()
+    for _ in range(200):
+        engine._settled_history.append(
+            {
+                "model_brier": 0.18,
+                "baseline_brier": 0.22,
+                "pnl": -0.15,
+                "stake": 1.0,
+                "clv": None,
+            }
+        )
+    st2 = engine.get_state()
+    assert st2["strict_gate_pass"] is False
+
+
+def test_settlement_update_rejected_on_non_finite_features(tmp_path):
+    engine = OnlinePredictionEngine(
+        model_id="reject_nonfinite",
+        model_kind="residual_logit",
+        initial_balance_eur=100.0,
+        stake_fraction=0.1,
+        min_stake_eur=2.0,
+        max_stake_eur=20.0,
+        min_edge=-1.0,
+        min_liquidity_eur=1.0,
+        model_path=str(tmp_path / "reject_nonfinite_model.json"),
+        save_every=1,
+    )
+    engine._features_from_snapshot = lambda snapshot, market_start: {"spread_mean": float("inf")}  # type: ignore[method-assign]
+    s_open = _snapshot("13.1", "3.0", "3.2", market_status="OPEN")
+    out_open = engine.process_snapshot("13.1", s_open, "Reject", None)
+    assert any(e["kind"] == "prediction_open" for e in out_open["events"])
+    s_closed = _snapshot("13.1", "2.8", "3.3", market_status="CLOSED", a_status="WINNER", b_status="LOSER")
+    out_closed = engine.process_snapshot("13.1", s_closed, "Reject", None)
+    assert any(e["kind"] == "prediction_update_rejected" for e in out_closed["events"])
+
+
+def test_saturation_and_frozen_detection_state():
+    engine = OnlinePredictionEngine(
+        model_id="sat_freeze",
+        model_kind="pure_logit",
+        initial_balance_eur=1000.0,
+        stake_fraction=0.05,
+        min_stake_eur=2.0,
+        max_stake_eur=20.0,
+        min_edge=-1.0,
+        min_liquidity_eur=1.0,
+        model_path="data/prediction/test_sat_freeze.json",
+        save_every=100,
+    )
+    # Saturated + nearly frozen values
+    engine._prediction_history.clear()
+    for _ in range(120):
+        engine._prediction_history.append(0.999)
+    st = engine.get_state()
+    assert st["prediction_saturation_rate"] > 0.7
+    assert st["prediction_frozen"] is True

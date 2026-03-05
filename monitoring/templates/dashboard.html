@@ -182,7 +182,7 @@
     <div class="card">
       <h2>Prediction League</h2>
       <table>
-        <thead><tr><th>Model</th><th>Balance</th><th>ROI</th><th>Brier</th><th>Win%</th><th>Bets</th><th>Edge</th></tr></thead>
+        <thead><tr><th>Model</th><th>Gate</th><th>Balance</th><th>ROI</th><th>Brier</th><th>Lift 100/200</th><th>ROI 100/200</th><th>Win%</th><th>Bets</th><th>Edge</th></tr></thead>
         <tbody id="leagueBody"></tbody>
       </table>
     </div>
@@ -628,7 +628,7 @@ function render(s){
   $('kPredWin').className='val '+(weightedWin>=.5?'g':weightedWin>=.4?'a':'r');
   $('kPredWinSub').textContent='Settled-weighted • Avg Brier: '+(ps.avg_brier||0).toFixed(4);
   $('kCalibrated').textContent=ps.calibrated_models||0;
-  $('kCalibratedSub').textContent='of '+(ps.model_count||0)+' models';
+  $('kCalibratedSub').textContent='eligible: '+(ps.eligible_models_count||0)+' • strict pass rate: '+Number(ps.strict_gate_pass_rate||0).toFixed(2);
   const clv=ps.clv||{};
   $('kCLV').textContent=clv.avg_clv!=null?(clv.avg_clv>=0?'+':'')+clv.avg_clv.toFixed(4):'—';
   $('kCLV').className='val '+(clv.avg_clv>0?'g':clv.avg_clv<0?'r':'');
@@ -660,11 +660,17 @@ function render(s){
     const roi=Number(m.roi_pct||0);
     const brier=Number(m.avg_brier||0);
     const win=Number(m.win_rate||0)*100;
+    const r100=m.rolling_100||{};
+    const r200=m.rolling_200||{};
+    const gate=Boolean(m.strict_gate_pass||false);
     return `<tr>
       <td style="color:var(--text)">${id}</td>
+      <td><span class="${gate?'g':'r'}">${gate?'PASS':'FAIL'}</span></td>
       <td>€${Number(m.balance_eur||0).toFixed(0)}</td>
       <td class="${roi>=0?'g':'r'}">${roi.toFixed(2)}%</td>
       <td class="${brier<.24?'g':brier<.28?'a':'r'}">${brier.toFixed(4)}</td>
+      <td class="${Number(r100.brier_lift_abs||0)>=0&&Number(r200.brier_lift_abs||0)>=0?'g':'r'}">${Number(r100.brier_lift_abs||0).toFixed(4)} / ${Number(r200.brier_lift_abs||0).toFixed(4)}</td>
+      <td class="${Number(r100.roi_pct||0)>=0&&Number(r200.roi_pct||0)>=0?'g':'r'}">${Number(r100.roi_pct||0).toFixed(2)}% / ${Number(r200.roi_pct||0).toFixed(2)}%</td>
       <td>${win.toFixed(1)}%</td>
       <td>${m.settled_bets||0}</td>
       <td>${Number(m.min_edge||0).toFixed(3)}</td>
@@ -731,7 +737,10 @@ function render(s){
       if(kind==='trade')text=`${d.event_name||''} ${d.arb_type||''} €${Number(d.net_profit_eur||0).toFixed(4)}`;
       else if(kind==='opportunity')text=`${d.event_name||''} ${d.arb_type||''} ${d.decision||''} fill:${Number(d.fill_prob||0).toFixed(2)} stake×${Number(d.stake_multiplier||1).toFixed(2)}`;
       else if(kind==='prediction_open')text=`${d.model_id||''} ${d.event_name||''} @${d.odds||''} edge:${Number(d.edge||0).toFixed(4)}`;
-      else if(kind==='prediction_settle')text=`${d.model_id||''} ${d.selection||''} ${d.won?'WON':'LOST'} €${Number(d.pnl_eur||0).toFixed(2)}`;
+      else if(kind==='prediction_settle')text=`${d.model_id||''} ${d.selection||''} ${d.won?'WON':'LOST'} €${Number(d.pnl_eur||0).toFixed(2)} lift:${Number(d.brier_lift||0).toFixed(4)}`;
+      else if(kind==='prediction_gate_pass')text=`${d.model_id||''} gate PASS (${d.reason||''})`;
+      else if(kind==='prediction_gate_fail')text=`${d.model_id||''} gate FAIL (${d.reason||''})`;
+      else if(kind==='prediction_update_rejected')text=`${d.model_id||''} rejected ${d.reason||''} ${d.feature||''}`;
       else if(kind==='architect')text=`mode:${d.mode||''} applied:${d.applied} ${d.reason||''}`;
       else if(kind==='qa')text=`mode:${d.mode||''} applied:${d.applied} ${d.reason||''}`;
       else text=JSON.stringify(d).substring(0,120);
@@ -1022,25 +1031,37 @@ async function fetchFundingMLStatus(){
   try{
     const r=await fetch('/api/funding/ml-status');
     const s=await r.json();
-    if(!s.running&&!s.retrain_count)return;
-    const auc=Number(s.current_auc||0);
+    const ol=s.online_learner||s;
+    const cl=s.contrarian_learner||{};
+    const summary=s.funding_summary||{};
+    if(!ol.running&&!ol.retrain_count)return;
+    const auc=Number(ol.current_auc||0);
     $('fkOlAuc').textContent=auc.toFixed(4);
     $('fkOlAuc').className='val '+(auc>=.8?'g':auc>=.7?'a':'r');
-    $('fkOlAucSub').textContent='min: '+s.min_auc_threshold;
-    const acc=Number(s.prediction_accuracy||0);
+    const gateBadge=Boolean(ol.strict_gate_pass)?'PASS':'FAIL';
+    $('fkOlAucSub').textContent='min: '+ol.min_auc_threshold+' • gate: '+gateBadge;
+    const acc=Number(ol.prediction_accuracy||0);
     $('fkOlAccuracy').textContent=acc>0?(acc*100).toFixed(1)+'%':'—';
-    $('fkOlAccuracySub').textContent=s.prediction_total+' predictions';
-    $('fkOlRetrains').textContent=s.retrain_count||0;
-    $('fkOlRetrainsSub').textContent=s.last_retrain_result||'—';
-    $('fkOlLastRetrain').textContent=s.last_retrain_time?(s.last_retrain_time||'').substring(0,19).replace('T',' '):'—';
-    const nxt=Number(s.next_retrain_hours||0);
+    const r100=ol.rolling_100||{};
+    const r200=ol.rolling_200||{};
+    $('fkOlAccuracySub').textContent=(ol.prediction_total||0)+' preds • ROI100/200: '+Number(r100.roi_pct||0).toFixed(2)+'% / '+Number(r200.roi_pct||0).toFixed(2)+'%';
+    $('fkOlRetrains').textContent=ol.retrain_count||0;
+    $('fkOlRetrainsSub').textContent=(ol.last_retrain_result||'—')+' • eligible: '+(summary.eligible_models_count||0);
+    $('fkOlLastRetrain').textContent=ol.last_retrain_time?(ol.last_retrain_time||'').substring(0,19).replace('T',' '):'—';
+    const nxt=Number(ol.next_retrain_hours||0);
     $('fkOlNextRetrain').textContent=nxt>0?nxt.toFixed(1)+'h':'now';
-    $('fkOlNextRetrainSub').textContent='interval: '+s.retrain_interval_hours+'h';
+    $('fkOlNextRetrainSub').textContent='interval: '+ol.retrain_interval_hours+'h • strict pass rate: '+Number(summary.strict_gate_pass_rate||0).toFixed(2);
     // Retrain history
-    const hist=s.retrain_history||[];
+    const hist=ol.retrain_history||[];
     $('fOlHistoryBody').innerHTML=hist.slice().reverse().map(h=>
       `<tr><td>${(h.time||'').substring(5,19).replace('T',' ')}</td><td>${h.old_auc}</td><td>${h.new_auc}</td><td>${h.data_rows}</td><td style="color:var(${h.result==='accepted'?'--green':'--red'})">${h.result}</td></tr>`
     ).join('');
+    if(cl && cl.rolling_100){
+      const cgate=Boolean(cl.strict_gate_pass)?'PASS':'FAIL';
+      const c100=cl.rolling_100||{};
+      const c200=cl.rolling_200||{};
+      $('fkOlLastRetrainSub').textContent+=' • contrarian: '+cgate+' '+Number(c100.roi_pct||0).toFixed(2)+'%/'+Number(c200.roi_pct||0).toFixed(2)+'%';
+    }
   }catch(e){console.error('funding ml status',e);}
 }
 
@@ -1057,23 +1078,27 @@ setInterval(fetchFundingMLStatus,15000);
 // ═══════════════════════════════════════════════
 
 function renderStrategyOverview(data){
-  const hedge=Number(data.hedge_net_pnl||0);
-  const contrarian=Number(data.contrarian_net_pnl||0);
-  const combined=Number(data.combined_total_pnl||0);
+  const hedge=Number((data.hedge||{}).net_pnl||0);
+  const contrarian=Number((data.contrarian||{}).total_pnl||0);
+  const combined=Number(data.combined_net_pnl||0);
+  const summary=data.funding_summary||{};
 
   $('soHedgePnl').textContent='$'+hedge.toFixed(2);
   $('soHedgePnl').className='val '+(hedge>0?'g':hedge<0?'r':'');
-  $('soHedgePnlSub').textContent=data.hedge_trade_count!=null?data.hedge_trade_count+' trades':'';
+  $('soHedgePnlSub').textContent=(data.hedge||{}).open_hedges!=null?(data.hedge||{}).open_hedges+' open hedges':'';
 
   $('soContrarianPnl').textContent='$'+contrarian.toFixed(2);
   $('soContrarianPnl').className='val '+(contrarian>0?'g':contrarian<0?'r':'');
-  $('soContrarianPnlSub').textContent=data.contrarian_trade_count!=null?data.contrarian_trade_count+' trades':'';
+  $('soContrarianPnlSub').textContent=(data.contrarian||{}).trade_count!=null?(data.contrarian||{}).trade_count+' trades':'';
 
   $('soCombinedPnl').textContent='$'+combined.toFixed(2);
   $('soCombinedPnl').className='val '+(combined>0?'g':combined<0?'r':'');
-  $('soCombinedPnlSub').textContent=data.last_updated?(data.last_updated||'').substring(0,19).replace('T',' '):'';
+  $('soCombinedPnlSub').textContent='eligible: '+(summary.eligible_models_count||0)+' • strict pass rate: '+Number(summary.strict_gate_pass_rate||0).toFixed(2)+' • weighted win: '+Number(summary.weighted_win_rate_pct||0).toFixed(1)+'%';
 
-  const strategies=data.strategies||[];
+  const strategies=[
+    {name:'Hedge',enabled:true,trade_count:(data.hedge||{}).open_hedges||0,win_rate:0.5,net_pnl:hedge,avg_hold_hours:null},
+    {name:'Contrarian',enabled:true,trade_count:(data.contrarian||{}).trade_count||0,win_rate:Number((data.contrarian||{}).win_rate||0),net_pnl:contrarian,avg_hold_hours:null},
+  ];
   $('soBreakdownBody').innerHTML=strategies.length?strategies.map(s=>{
     const pnl=Number(s.net_pnl||0);
     const wr=Number(s.win_rate||0)*100;

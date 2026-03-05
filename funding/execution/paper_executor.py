@@ -38,6 +38,16 @@ class FundingPaperExecutor:
             base_url=config.BINANCE_SPOT_TESTNET_URL,
         )
         self._positions = position_manager or PositionManager()
+        self._simulated_fills_only = not (
+            bool(config.BINANCE_FUTURES_TESTNET_API_KEY)
+            and bool(config.BINANCE_FUTURES_TESTNET_API_SECRET)
+            and bool(config.BINANCE_SPOT_TESTNET_API_KEY)
+            and bool(config.BINANCE_SPOT_TESTNET_API_SECRET)
+        )
+        if self._simulated_fills_only:
+            logger.warning(
+                "FundingPaperExecutor running in local-sim mode (testnet API keys missing)."
+            )
 
     async def open_hedge(
         self,
@@ -63,6 +73,9 @@ class FundingPaperExecutor:
         if spot_qty <= Decimal("0"):
             logger.error("Cannot calculate quantities for %s", symbol)
             return None
+
+        if self._simulated_fills_only:
+            return self._open_hedge_simulated(opportunity, spot_qty, perp_qty)
 
         try:
             # Step 1: Set leverage
@@ -130,6 +143,9 @@ class FundingPaperExecutor:
             return position
 
         except Exception as e:
+            if self._should_fallback_to_sim(e):
+                logger.warning("Falling back to simulated hedge fill for %s due to API auth/permission error", symbol)
+                return self._open_hedge_simulated(opportunity, spot_qty, perp_qty)
             logger.error("Failed to open hedge for %s: %s", symbol, e)
             return None
 
@@ -146,6 +162,9 @@ class FundingPaperExecutor:
 
         logger.info("Closing hedge for %s", symbol)
         position.status = HedgeStatus.CLOSING
+
+        if self._simulated_fills_only:
+            return self._close_hedge_simulated(position)
 
         try:
             # Step 1: Close perp (buy to close short)
@@ -193,6 +212,9 @@ class FundingPaperExecutor:
             return self._positions.get_position(symbol)
 
         except Exception as e:
+            if self._should_fallback_to_sim(e):
+                logger.warning("Falling back to simulated hedge close for %s due to API auth/permission error", symbol)
+                return self._close_hedge_simulated(position)
             logger.error("Failed to close hedge for %s: %s", symbol, e)
             position.status = HedgeStatus.OPEN  # Revert to open
             return None
@@ -200,3 +222,48 @@ class FundingPaperExecutor:
     @property
     def position_manager(self) -> PositionManager:
         return self._positions
+
+    def _open_hedge_simulated(
+        self,
+        opportunity: FundingOpportunity,
+        spot_qty: Decimal,
+        perp_qty: Decimal,
+    ) -> HedgePosition:
+        spot_fill_price = opportunity.entry_price_spot
+        perp_fill_price = opportunity.entry_price_perp
+        notional = spot_qty * spot_fill_price
+        fees = fee_calculator.trading_fees_round_trip(notional) / Decimal("2")
+        position = HedgePosition(
+            symbol=opportunity.symbol,
+            entry_price_spot=spot_fill_price,
+            entry_price_perp=perp_fill_price,
+            quantity_spot=spot_qty,
+            quantity_perp=perp_qty,
+            leverage=config.FUNDING_LEVERAGE,
+            margin_type=config.FUNDING_MARGIN_TYPE,
+            entry_time=datetime.now(timezone.utc),
+            trading_fees_paid=fees,
+            status=HedgeStatus.OPEN,
+        )
+        self._positions.add_position(position)
+        return position
+
+    def _close_hedge_simulated(self, position: HedgePosition) -> HedgePosition:
+        spot_exit_price = position.entry_price_spot
+        perp_exit_price = position.entry_price_perp
+        price_pnl = Decimal("0")
+        notional = position.quantity_spot * spot_exit_price
+        exit_fees = fee_calculator.trading_fees_round_trip(notional) / Decimal("2")
+        closed = self._positions.close_position(
+            symbol=position.symbol,
+            exit_price_spot=spot_exit_price,
+            exit_price_perp=perp_exit_price,
+            exit_pnl=price_pnl,
+            trading_fees=exit_fees,
+        )
+        return closed if closed is not None else position
+
+    @staticmethod
+    def _should_fallback_to_sim(exc: Exception) -> bool:
+        msg = str(exc).lower()
+        return ("-2015" in msg) or ("invalid api-key" in msg) or ("permissions for action" in msg)

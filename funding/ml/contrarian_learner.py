@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set
 
 import config
+from funding.ml.learning_quality import FundingLearningQuality
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +85,13 @@ class ContrarianOnlineLearner:
 
         # Internal state dict (returned by get_state)
         self._state: Dict[str, Any] = {}
+        self._events: List[Dict[str, Any]] = []
+        self._total_realized_pnl: float = 0.0
+        self._quality = FundingLearningQuality(
+            model_id="contrarian_online_learner",
+            model_family="contrarian",
+            state_path="data/funding/state/contrarian_online_learner_quality.json",
+        )
 
         # Load last-known AUC from comparison file if present
         self._load_incumbent_auc()
@@ -125,6 +133,11 @@ class ContrarianOnlineLearner:
         """Signal the run loop to exit cleanly."""
         self._running = False
 
+    def drain_events(self) -> List[Dict[str, Any]]:
+        events = list(self._events)
+        self._events.clear()
+        return events
+
     # ------------------------------------------------------------------
     # Trade outcome logging
     # ------------------------------------------------------------------
@@ -164,6 +177,20 @@ class ContrarianOnlineLearner:
         self._accuracy_total += 1
         if correct:
             self._accuracy_correct += 1
+        self._total_realized_pnl += float(pnl_pct)
+        pred_prob = 0.5 + min(0.49, abs(float(pnl_pct)) * 5.0)
+        label = 1 if pnl_pct > 0 else 0
+        base_prob = 0.5
+        gate_events = self._quality.record_settlement(
+            symbol=symbol,
+            stake=1.0,
+            pnl=float(pnl_pct),
+            label=label,
+            pred_prob=pred_prob,
+            base_prob=base_prob,
+            clv=None,
+        )
+        self._events.extend(gate_events)
 
         entry = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -179,6 +206,32 @@ class ContrarianOnlineLearner:
                 fh.write(json.dumps(entry) + "\n")
         except Exception as exc:
             logger.warning("Failed to write contrarian trade log entry: %s", exc)
+
+    def record_signal_probability(self, confidence: float) -> None:
+        try:
+            c = float(confidence)
+        except Exception:
+            return
+        c = max(0.0, min(1.0, c))
+        self._quality.add_prediction(c)
+        if self._quality.prediction_is_frozen():
+            self._events.append(
+                {
+                    "kind": "funding_prediction_frozen",
+                    "model_id": "contrarian_online_learner",
+                    "window": int(config.FUNDING_FROZEN_WINDOW),
+                }
+            )
+        sat = self._quality.saturation_rate()
+        if sat >= float(config.FUNDING_SATURATION_RATE_THRESHOLD):
+            self._events.append(
+                {
+                    "kind": "funding_prediction_saturation",
+                    "model_id": "contrarian_online_learner",
+                    "window": int(config.FUNDING_SATURATION_WINDOW),
+                    "rate": round(sat, 4),
+                }
+            )
 
     # ------------------------------------------------------------------
     # State
@@ -207,6 +260,8 @@ class ContrarianOnlineLearner:
         else:
             next_retrain_h = 0.0
 
+        gate_mult, gate_edge_bump = self._quality.gate_policy()
+        quality_state = self._quality.state()
         return {
             "running": self._running,
             "current_auc": round(self._current_auc, 4),
@@ -218,7 +273,11 @@ class ContrarianOnlineLearner:
             "min_auc_threshold": _MIN_AUC,
             "prediction_accuracy": round(accuracy, 4),
             "prediction_total": self._accuracy_total,
+            "total_realized_pnl": round(self._total_realized_pnl, 6),
+            "gate_multiplier": round(gate_mult, 4),
+            "gate_edge_bump": round(gate_edge_bump, 6),
             "retrain_history": self._retrain_history[-10:],
+            **quality_state,
         }
 
     # ------------------------------------------------------------------
@@ -238,9 +297,21 @@ class ContrarianOnlineLearner:
           7. Reject: keep old model, log rejection reason.
         """
         symbols = self._get_watchlist()
+        now_str = datetime.now(timezone.utc).isoformat()
         if not symbols:
             logger.debug("ContrarianOnlineLearner: empty watchlist, skipping retrain")
-            self._last_retrain_ts = time.monotonic()
+            self._record_retrain(
+                {
+                    "time": now_str,
+                    "selected_model": "n/a",
+                    "new_auc": round(self._current_auc, 4),
+                    "old_auc": round(self._current_auc, 4),
+                    "sharpe": 0.0,
+                    "data_rows": 0,
+                    "result": "skipped",
+                    "reason": "empty_watchlist",
+                }
+            )
             return
 
         logger.info(
@@ -259,7 +330,18 @@ class ContrarianOnlineLearner:
             logger.warning(
                 "ContrarianOnlineLearner: feature building failed: %s", exc
             )
-            self._last_retrain_ts = time.monotonic()
+            self._record_retrain(
+                {
+                    "time": now_str,
+                    "selected_model": "n/a",
+                    "new_auc": round(self._current_auc, 4),
+                    "old_auc": round(self._current_auc, 4),
+                    "sharpe": 0.0,
+                    "data_rows": 0,
+                    "result": "rejected",
+                    "reason": f"feature_build_failed: {exc}",
+                }
+            )
             return
 
         if df is None or df.empty or len(df) < _MIN_ROWS:
@@ -269,7 +351,35 @@ class ContrarianOnlineLearner:
                 len(df) if df is not None and not df.empty else 0,
                 _MIN_ROWS,
             )
-            self._last_retrain_ts = time.monotonic()
+            self._record_retrain(
+                {
+                    "time": now_str,
+                    "selected_model": "n/a",
+                    "new_auc": round(self._current_auc, 4),
+                    "old_auc": round(self._current_auc, 4),
+                    "sharpe": 0.0,
+                    "data_rows": int(len(df) if df is not None else 0),
+                    "result": "skipped",
+                    "reason": "insufficient_rows",
+                }
+            )
+            return
+
+        reject = self._validate_training_df(df)
+        if reject is not None:
+            self._events.append(reject)
+            self._record_retrain(
+                {
+                    "time": now_str,
+                    "selected_model": "n/a",
+                    "new_auc": round(self._current_auc, 4),
+                    "old_auc": round(self._current_auc, 4),
+                    "sharpe": 0.0,
+                    "data_rows": int(len(df)),
+                    "result": "rejected",
+                    "reason": str(reject.get("reason", "validation_failed")),
+                }
+            )
             return
 
         # --- Step 2: Train / compare models ---
@@ -280,18 +390,45 @@ class ContrarianOnlineLearner:
                 "ContrarianOnlineLearner: could not create ModelSelector (e.g. XGBoost/libomp missing): %s",
                 exc,
             )
-            self._last_retrain_ts = time.monotonic()
+            self._record_retrain(
+                {
+                    "time": now_str,
+                    "selected_model": "n/a",
+                    "new_auc": round(self._current_auc, 4),
+                    "old_auc": round(self._current_auc, 4),
+                    "sharpe": 0.0,
+                    "data_rows": int(len(df)),
+                    "result": "rejected",
+                    "reason": f"selector_init_failed: {exc}",
+                }
+            )
             return
         try:
             loop = asyncio.get_event_loop()
             comparison = await loop.run_in_executor(
-                None, selector.compare, df
+                None,
+                lambda: selector.compare(
+                    df,
+                    n_trials=max(1, int(getattr(config, "CONTRARIAN_RETRAIN_XGB_TRIALS", 3))),
+                    tft_epochs=max(1, int(getattr(config, "CONTRARIAN_RETRAIN_TFT_EPOCHS", 5))),
+                ),
             )
         except Exception as exc:
             logger.warning(
                 "ContrarianOnlineLearner: ModelSelector.compare failed: %s", exc
             )
-            self._last_retrain_ts = time.monotonic()
+            self._record_retrain(
+                {
+                    "time": now_str,
+                    "selected_model": "n/a",
+                    "new_auc": round(self._current_auc, 4),
+                    "old_auc": round(self._current_auc, 4),
+                    "sharpe": 0.0,
+                    "data_rows": int(len(df)),
+                    "result": "rejected",
+                    "reason": f"compare_failed: {exc}",
+                }
+            )
             return
 
         # --- Step 3: Extract best-model metrics ---
@@ -299,7 +436,6 @@ class ContrarianOnlineLearner:
         model_entry = comparison.get(selected, {})
         new_auc = float(model_entry.get("auc", 0.0))
         new_sharpe = float(model_entry.get("sharpe_simulated", 0.0))
-        now_str = datetime.now(timezone.utc).isoformat()
 
         # --- Step 4: Quality gates ---
         auc_meets_min = new_auc >= _MIN_AUC
@@ -325,10 +461,7 @@ class ContrarianOnlineLearner:
                     retrain_record["result"] = "rejected"
                     retrain_record["reason"] = "no model available (install libomp for XGBoost or use TFT)"
                     self._last_retrain_result = "rejected"
-                    self._retrain_count += 1
-                    self._last_retrain_ts = time.monotonic()
-                    self._last_retrain = now_str
-                    self._retrain_history.append(retrain_record)
+                    self._record_retrain(retrain_record)
                     return
                 # Persist the winning model to disk
                 if hasattr(new_model, "save"):
@@ -380,12 +513,49 @@ class ContrarianOnlineLearner:
             )
 
         # --- Step 6: Record ---
-        self._retrain_count += 1
-        self._last_retrain_ts = time.monotonic()
-        self._last_retrain = now_str
-        self._retrain_history.append(retrain_record)
-        if len(self._retrain_history) > 50:
-            self._retrain_history = self._retrain_history[-50:]
+        self._record_retrain(retrain_record)
+
+    def _validate_training_df(self, df) -> Optional[Dict[str, Any]]:
+        if df is None or df.empty:
+            return None
+        sample_features: Dict[str, float] = {}
+        for col in df.columns:
+            if str(col) in {"target", "label", "target_direction"}:
+                continue
+            try:
+                series = (
+                    df[col]
+                    .replace([float("inf"), float("-inf")], float("nan"))
+                    .dropna()
+                )
+                if len(series) == 0:
+                    continue
+                sample_features[str(col)] = float(series.iloc[-1])
+            except Exception:
+                continue
+        if not sample_features:
+            return None
+        reject = self._quality.validate_features(
+            sample_features,
+            symbol="*",
+            context="contrarian_retrain_data",
+        )
+        if reject is not None:
+            return reject
+        self._events.extend(self._quality.update_feature_drift(sample_features, symbol="*"))
+        label_cols = [c for c in df.columns if str(c) in {"target", "label", "target_direction"}]
+        for col in label_cols:
+            for val in df[col].tail(200).values.tolist():
+                if val not in (0, 1):
+                    return {
+                        "kind": "funding_update_rejected",
+                        "model_id": "contrarian_online_learner",
+                        "symbol": "*",
+                        "context": "contrarian_retrain_data",
+                        "reason": "invalid_label",
+                        "label": str(val),
+                    }
+        return None
 
     # ------------------------------------------------------------------
     # Internal: helpers
@@ -400,14 +570,16 @@ class ContrarianOnlineLearner:
         try:
             result = self._watchlist_fn()
             if result:
-                return list(result)
+                max_symbols = max(1, int(getattr(config, "FUNDING_CONTRARIAN_RETRAIN_MAX_SYMBOLS", 20)))
+                return list(result)[:max_symbols]
         except Exception:
             pass
 
         # Fallback: discover from persisted funding-rate CSV files
         rates_dir = Path("data/funding_history/funding_rates")
         if rates_dir.exists():
-            return [f.stem for f in rates_dir.glob("*.csv")]
+            max_symbols = max(1, int(getattr(config, "FUNDING_CONTRARIAN_RETRAIN_MAX_SYMBOLS", 20)))
+            return [f.stem for f in rates_dir.glob("*.csv")][:max_symbols]
         return []
 
     def _get_or_create_selector(self) -> Any:
@@ -444,3 +616,12 @@ class ContrarianOnlineLearner:
             logger.debug(
                 "ContrarianOnlineLearner: could not load incumbent AUC: %s", exc
             )
+
+    def _record_retrain(self, retrain_record: Dict[str, Any]) -> None:
+        self._retrain_count += 1
+        self._last_retrain_ts = time.monotonic()
+        self._last_retrain = str(retrain_record.get("time"))
+        self._last_retrain_result = str(retrain_record.get("result"))
+        self._retrain_history.append(dict(retrain_record))
+        if len(self._retrain_history) > 50:
+            self._retrain_history = self._retrain_history[-50:]

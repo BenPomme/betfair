@@ -40,6 +40,17 @@ FEAR_GREED_EXTREME_FEAR = 25
 FEAR_GREED_EXTREME_GREED = 75
 
 
+def _parse_mixed_timestamp(series: pd.Series) -> pd.Series:
+    """
+    Parse Binance millisecond timestamps and ISO datetime strings robustly.
+    """
+    s = series.astype(str)
+    numeric = pd.to_numeric(s, errors="coerce")
+    ts_numeric = pd.to_datetime(numeric, unit="ms", utc=True, errors="coerce")
+    ts_iso = pd.to_datetime(s, utc=True, errors="coerce")
+    return ts_numeric.fillna(ts_iso)
+
+
 # ---------------------------------------------------------------------------
 # New loaders
 # ---------------------------------------------------------------------------
@@ -55,12 +66,12 @@ def load_long_short_ratio(symbol: str, data_dir: Optional[Path] = None) -> pd.Da
         logger.warning("Long/short ratio file not found: %s", path)
         return pd.DataFrame()
     df = pd.read_csv(path)
-    df["timestamp_dt"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
+    df["timestamp_dt"] = _parse_mixed_timestamp(df["timestamp"])
     for col in ["long_short_ratio", "long_account", "short_account",
                 "top_long_short_ratio", "top_long_account", "top_short_account"]:
         if col in df.columns:
             df[col] = df[col].astype(float)
-    df = df.sort_values("timestamp").reset_index(drop=True)
+    df = df.dropna(subset=["timestamp_dt"]).sort_values("timestamp_dt").reset_index(drop=True)
     return df
 
 
@@ -74,9 +85,9 @@ def load_fear_greed(data_dir: Optional[Path] = None) -> pd.DataFrame:
         logger.warning("Fear & greed file not found: %s", path)
         return pd.DataFrame()
     df = pd.read_csv(path)
-    df["timestamp_dt"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
+    df["timestamp_dt"] = _parse_mixed_timestamp(df["timestamp"])
     df["value"] = df["value"].astype(float)
-    df = df.sort_values("timestamp").reset_index(drop=True)
+    df = df.dropna(subset=["timestamp_dt"]).sort_values("timestamp_dt").reset_index(drop=True)
     return df
 
 

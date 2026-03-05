@@ -352,6 +352,9 @@ class ContrarianStrategy:
 
         min_rate: Decimal = config.CONTRARIAN_MIN_FUNDING_RATE
         min_confidence: float = config.CONTRARIAN_MIN_CONFIDENCE
+        if str(getattr(config, "FUNDING_MODE", "paper")).lower() == "paper":
+            min_rate = min(min_rate, Decimal("0.0002"))
+            min_confidence = max(0.55, min_confidence - 0.05)
 
         signals: List[ContrarianSignal] = []
 
@@ -477,6 +480,7 @@ class ContrarianStrategy:
                 predicted_return_72h=predicted_return_72h,
                 model_name=model_name,
                 funding_rate=funding_rate,
+                mark_price=snapshot.mark_price,
                 long_short_ratio=long_short_ratio,
                 fear_greed=fear_greed,
                 regime=regime_label,

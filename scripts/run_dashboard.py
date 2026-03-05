@@ -3,6 +3,7 @@
 Start the dashboard UI. Open http://127.0.0.1:8000 in your browser,
 then click "Start trading" to run paper trading.
 Sets cwd to project root and loads .env so credentials work from any launch dir.
+Set `DASHBOARD_RELOAD=true` for auto-reload during development.
 """
 import os
 import sys
@@ -21,6 +22,7 @@ except ImportError:
 if __name__ == "__main__":
     import uvicorn
     reload_enabled = os.getenv("DASHBOARD_RELOAD", "false").lower() == "true"
+    print(f"[dashboard] starting on :8000 reload={reload_enabled}")
     uvicorn.run(
         "monitoring.dashboard:app",
         host="0.0.0.0",

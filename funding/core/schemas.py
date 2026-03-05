@@ -151,6 +151,7 @@ class ContrarianSignal:
     predicted_return_72h: float
     model_name: str
     funding_rate: Decimal
+    mark_price: Optional[Decimal] = None
     long_short_ratio: Optional[float] = None
     fear_greed: Optional[int] = None
     regime: Optional[str] = None
@@ -199,6 +200,7 @@ class DirectionalPosition:
                 "predicted_return_72h": self.signal.predicted_return_72h,
                 "model_name": self.signal.model_name,
                 "funding_rate": str(self.signal.funding_rate),
+                "mark_price": str(self.signal.mark_price) if self.signal.mark_price is not None else None,
                 "long_short_ratio": self.signal.long_short_ratio,
                 "fear_greed": self.signal.fear_greed,
                 "regime": self.signal.regime,
@@ -237,6 +239,7 @@ class DirectionalPosition:
                 predicted_return_72h=float(s["predicted_return_72h"]),
                 model_name=s["model_name"],
                 funding_rate=Decimal(s["funding_rate"]),
+                mark_price=Decimal(s["mark_price"]) if s.get("mark_price") else None,
                 long_short_ratio=s.get("long_short_ratio"),
                 fear_greed=s.get("fear_greed"),
                 regime=s.get("regime"),

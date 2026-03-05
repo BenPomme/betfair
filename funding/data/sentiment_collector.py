@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Set
 
 import config
+from funding.utils.async_compat import async_timeout
 
 logger = logging.getLogger(__name__)
 
@@ -224,7 +225,7 @@ class SentimentCollector:
         ls_long_account: Optional[str] = None
         ls_short_account: Optional[str] = None
         try:
-            async with asyncio.timeout(_HTTP_TIMEOUT_SECONDS):
+            async with async_timeout(_HTTP_TIMEOUT_SECONDS):
                 ls_data = await self._futures_client.get_long_short_ratio(
                     symbol, period="5m", limit=1,
                 )
@@ -243,7 +244,7 @@ class SentimentCollector:
         top_long: Optional[str] = None
         top_short: Optional[str] = None
         try:
-            async with asyncio.timeout(_HTTP_TIMEOUT_SECONDS):
+            async with async_timeout(_HTTP_TIMEOUT_SECONDS):
                 top_data = await self._futures_client.get_top_long_short_position_ratio(
                     symbol, period="5m", limit=1,
                 )
@@ -284,7 +285,7 @@ class SentimentCollector:
         """Fetch and store one Fear & Greed snapshot from alternative.me."""
         try:
             async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT_SECONDS) as client:
-                async with asyncio.timeout(_HTTP_TIMEOUT_SECONDS + 2.0):
+                async with async_timeout(_HTTP_TIMEOUT_SECONDS + 2.0):
                     response = await client.get(_FEAR_GREED_URL)
                     response.raise_for_status()
                     payload = response.json()

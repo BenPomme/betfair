@@ -83,6 +83,8 @@ def _extract_best_prediction(
         for model_id, st in states.items()
         if int(st.get("settled_bets", 0)) >= 30
         and float(st.get("avg_brier", 1.0)) < 0.28
+        and str(st.get("model_kind", "")) != "implied_market"
+        and bool(st.get("strict_gate_pass", False))
     ]
     if not candidates:
         return None

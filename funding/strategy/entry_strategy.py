@@ -117,6 +117,26 @@ def _build_live_features(
         "hour_of_day": now.hour,
         "day_of_week": now.weekday(),
         "is_weekend": 1 if now.weekday() >= 5 else 0,
+        # Extra training columns that may not be available live.
+        "kline_volume": 0.0,
+        "kline_quote_volume": 0.0,
+        "kline_return_8h": (prices[-1] / prices[-2] - 1) if len(prices) >= 2 and prices[-2] != 0 else 0.0,
+        "kline_volatility_8h": np.std(
+            [prices[i] / prices[i - 1] - 1 for i in range(1, len(prices)) if prices[i - 1] != 0]
+        ) if len(prices) >= 2 else 0.0,
+        "kline_taker_buy_ratio": 0.5,
+        "volume_change_8h": 0.0,
+        "volume_mean_3": 0.0,
+        "btc_funding_rate": 0.0,
+        "btc_rate_change": 0.0,
+        "btc_rate_mean_3": 0.0,
+        "rate_vs_btc": current_rate,
+        "rate_zscore_9": (
+            (current_rate - float(np.mean(rates[-9:]))) / float(np.std(rates[-9:]))
+        ) if len(rates) >= 9 and float(np.std(rates[-9:])) > 0 else 0.0,
+        "rate_percentile_30": (
+            sum(1 for r in rates[-30:] if r <= current_rate) / max(1, len(rates[-30:]))
+        ) if len(rates) >= 2 else 0.5,
     }
 
     df = pd.DataFrame([features], index=[pd.Timestamp(now)])
@@ -151,6 +171,11 @@ async def evaluate_entries(
     entry_window = entry_window_minutes or config.FUNDING_ENTRY_WINDOW_MINUTES
     ml_min_confidence = ml_min_confidence if ml_min_confidence is not None else config.FUNDING_ML_MIN_CONFIDENCE
     ml_min_predicted_rate = ml_min_predicted_rate if ml_min_predicted_rate is not None else config.FUNDING_ML_MIN_PREDICTED_RATE
+    if str(getattr(config, "FUNDING_MODE", "paper")).lower() == "paper":
+        # In paper mode we widen exploration to generate real settled labels faster.
+        entry_window = max(int(entry_window), 120)
+        ml_min_confidence = min(float(ml_min_confidence), 0.60)
+        ml_min_predicted_rate = min(float(ml_min_predicted_rate), 0.00005)
     entries: List[Tuple[FundingOpportunity, Decimal]] = []
 
     # Check timing

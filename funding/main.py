@@ -6,6 +6,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 from decimal import Decimal
+from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
 import config
@@ -20,6 +21,7 @@ from funding.ml.online_learner import FundingOnlineLearner
 from funding.ml.contrarian_learner import ContrarianOnlineLearner
 from funding.strategy import entry_strategy, exit_strategy
 from funding.strategy.symbol_selector import SymbolSelector
+from funding.utils.async_compat import async_timeout
 
 # Optional data collectors — imported unconditionally; instantiated conditionally.
 from funding.data.liquidation_stream import LiquidationStream
@@ -31,6 +33,7 @@ from funding.strategy.contrarian_strategy import ContrarianStrategy
 from funding.execution.directional_executor import DirectionalExecutor
 
 logger = logging.getLogger(__name__)
+_ENGINE_BUILD_TS = datetime.now(timezone.utc).isoformat()
 
 # Settlement times (UTC hours)
 SETTLEMENT_HOURS = {0, 8, 16}
@@ -112,16 +115,29 @@ class FundingEngine:
                 _selector = ModelSelector()
                 _selector.load_comparison()
                 _contrarian_model = _selector.get_model()
+                if _contrarian_model is None:
+                    from funding.ml.contrarian_baseline import ContrarianBaselineModel
+
+                    _contrarian_model = ContrarianBaselineModel()
+                    _contrarian_model.load()
                 logger.info(
                     "Contrarian model loaded: %s",
                     type(_contrarian_model).__name__,
                 )
             except Exception as _exc:
-                logger.warning(
-                    "Could not load contrarian model (%s) — "
-                    "ContrarianStrategy will produce no signals until a model is trained",
-                    _exc,
-                )
+                logger.warning("Could not load contrarian model from selector: %s", _exc)
+                try:
+                    from funding.ml.contrarian_baseline import ContrarianBaselineModel
+
+                    _contrarian_model = ContrarianBaselineModel()
+                    _contrarian_model.load()
+                    logger.info("Using ContrarianBaselineModel fallback")
+                except Exception as _fallback_exc:
+                    logger.warning(
+                        "Could not load contrarian fallback model (%s) — "
+                        "ContrarianStrategy will produce no signals until a model is trained",
+                        _fallback_exc,
+                    )
 
             self._contrarian_strategy = ContrarianStrategy(model=_contrarian_model)
             self._directional_executor = DirectionalExecutor(
@@ -175,12 +191,27 @@ class FundingEngine:
 
         # Contrarian state counters
         self._contrarian_signal_count = 0
-        self._contrarian_trade_count = 0
+        self._contrarian_trade_count = (
+            len(self._directional_executor.position_manager.open_positions())
+            if self._directional_executor is not None
+            else 0
+        )
+        self._contrarian_cycle_count = 0
+        self._contrarian_last_cycle_at: Optional[str] = None
+        self._contrarian_last_cycle_diag: Dict[str, object] = {}
+        self._learning_events: List[Dict[str, object]] = []
+        logger.info(
+            "Funding engine boot: mode=%s gate_mode=%s build_ts=%s",
+            config.FUNDING_MODE,
+            getattr(config, "FUNDING_GATE_MODE", "observe"),
+            _ENGINE_BUILD_TS,
+        )
 
     async def start(self) -> None:
         """Start the funding engine."""
         logger.info("Starting funding engine (mode=%s)", config.FUNDING_MODE)
         self._running = True
+        risk_manager.reset_circuit_breaker()
 
         # Initialize watchlist
         watchlist = await self._symbol_selector.refresh()
@@ -321,11 +352,54 @@ class FundingEngine:
         pm = executor.get_position_manager()
         open_positions = pm.open_positions()
 
+        funding_gate_mult = 1.0
+        funding_edge_bump = 0.0
+        funding_gate_pass = True
+        funding_learner_state = self._online_learner.get_state() if self._online_learner else {}
+        if funding_learner_state:
+            funding_gate_mult = float(funding_learner_state.get("gate_multiplier", 1.0) or 1.0)
+            funding_edge_bump = float(funding_learner_state.get("gate_edge_bump", 0.0) or 0.0)
+            funding_gate_pass = bool(funding_learner_state.get("strict_gate_pass", False))
+            if bool(funding_learner_state.get("prediction_frozen", False)):
+                self._learning_events.append(
+                    {"kind": "funding_prediction_frozen", "model_id": "funding_online_learner"}
+                )
+            sat_rate = float(funding_learner_state.get("prediction_saturation_rate", 0.0) or 0.0)
+            if sat_rate >= float(config.FUNDING_SATURATION_RATE_THRESHOLD):
+                self._learning_events.append(
+                    {
+                        "kind": "funding_prediction_saturation",
+                        "model_id": "funding_online_learner",
+                        "rate": round(sat_rate, 4),
+                    }
+                )
+        funding_mode = str(getattr(config, "FUNDING_GATE_MODE", "observe")).lower()
+        use_ml = not (funding_mode == "full" and not funding_gate_pass)
         entries = await entry_strategy.evaluate_entries(
             opportunities, open_positions, self._futures_client
+            , use_ml=use_ml
+            , ml_min_confidence=float(config.FUNDING_ML_MIN_CONFIDENCE) + funding_edge_bump
+            , ml_min_predicted_rate=float(config.FUNDING_ML_MIN_PREDICTED_RATE) + funding_edge_bump * 0.001
         )
 
         for opp, size in entries:
+            if funding_gate_mult <= 0:
+                continue
+            if funding_gate_mult < 1.0:
+                size = (Decimal(str(size)) * Decimal(str(funding_gate_mult))).quantize(Decimal("0.01"))
+                if size <= Decimal("0"):
+                    continue
+                opp = FundingOpportunity(
+                    symbol=opp.symbol,
+                    current_rate=opp.current_rate,
+                    predicted_rate=opp.predicted_rate,
+                    annualized_yield=opp.annualized_yield,
+                    entry_price_spot=opp.entry_price_spot,
+                    entry_price_perp=opp.entry_price_perp,
+                    position_size=size,
+                    expected_funding_payment=opp.expected_funding_payment * Decimal(str(funding_gate_mult)),
+                    timestamp=opp.timestamp,
+                )
             filters = self._symbol_selector.get_exchange_filters(opp.symbol)
             result = await executor.execute_entry(opp, filters)
             if result:
@@ -406,26 +480,67 @@ class FundingEngine:
     async def _run_contrarian_cycle(self) -> None:
         """Single contrarian scan cycle: evaluate signals → risk check → execute → check stops."""
         if self._contrarian_strategy is None or self._directional_executor is None:
+            self._contrarian_last_cycle_diag = {"reason": "contrarian_disabled"}
             return
 
-        # Get current price snapshots
+        self._contrarian_cycle_count += 1
+        self._contrarian_last_cycle_at = datetime.now(timezone.utc).isoformat()
+        diag: Dict[str, object] = {
+            "cycle": self._contrarian_cycle_count,
+            "ts": self._contrarian_last_cycle_at,
+        }
+
+        # Get current price snapshots.
         snapshots = self._price_cache.get_all_snapshots()
+        diag["snapshots"] = len(snapshots)
         if not snapshots:
             logger.debug("Contrarian cycle: no fresh snapshots in cache")
+            diag["reason"] = "no_snapshots"
+            self._contrarian_last_cycle_diag = diag
             return
 
-        # Gather rate histories for all symbols with extreme funding rates
+        # Only fetch histories for high-value candidates, otherwise the cycle
+        # can starve when the watchlist is large.
+        min_rate = config.CONTRARIAN_MIN_FUNDING_RATE
+        if str(getattr(config, "FUNDING_MODE", "paper")).lower() == "paper":
+            min_rate = min(min_rate, Decimal("0.0002"))
+        candidates = [
+            (sym, snap)
+            for sym, snap in snapshots.items()
+            if abs(snap.funding_rate) >= min_rate
+        ]
+        candidates.sort(key=lambda x: abs(x[1].funding_rate), reverse=True)
+        symbol_limit = max(1, int(getattr(config, "CONTRARIAN_HISTORY_SYMBOL_LIMIT", 25)))
+        candidate_symbols = [sym for sym, _ in candidates[:symbol_limit]]
+        candidate_snapshots = {sym: snapshots[sym] for sym in candidate_symbols}
+        diag["min_rate"] = str(min_rate)
+        diag["candidate_symbols"] = len(candidate_symbols)
+
+        if not candidate_symbols:
+            diag["reason"] = "no_extreme_candidates"
+            self._contrarian_last_cycle_diag = diag
+            return
+
+        # Gather rate histories with bounded concurrency.
         rate_histories: Dict[str, list] = {}
-        for symbol in snapshots:
-            try:
-                async with asyncio.timeout(10.0):
-                    history = await self._futures_client.get_funding_rate_history(
-                        symbol, limit=50
-                    )
-                if history:
-                    rate_histories[symbol] = history
-            except Exception as e:
-                logger.debug("Could not fetch rate history for %s: %s", symbol, e)
+        concurrency = max(1, int(getattr(config, "CONTRARIAN_HISTORY_FETCH_CONCURRENCY", 8)))
+        sem = asyncio.Semaphore(concurrency)
+
+        async def _fetch_history(sym: str):
+            async with sem:
+                try:
+                    async with async_timeout(10.0):
+                        history = await self._futures_client.get_funding_rate_history(sym, limit=50)
+                    return sym, history
+                except Exception as exc:
+                    logger.debug("Could not fetch rate history for %s: %s", sym, exc)
+                    return sym, None
+
+        fetched = await asyncio.gather(*[_fetch_history(sym) for sym in candidate_symbols])
+        for sym, history in fetched:
+            if history:
+                rate_histories[sym] = history
+        diag["history_loaded"] = len(rate_histories)
 
         # Gather sentiment data from collector if available
         sentiment: Optional[Dict[str, float]] = None
@@ -452,12 +567,41 @@ class FundingEngine:
 
         # Evaluate contrarian signals
         signals = self._contrarian_strategy.evaluate_signals(
-            snapshots=snapshots,
+            snapshots=candidate_snapshots,
             rate_histories=rate_histories,
             sentiment=sentiment if sentiment else None,
             fear_greed=fear_greed,
         )
+        raw_signal_count = len(signals)
+        diag["raw_signals"] = raw_signal_count
+        if self._contrarian_learner is not None:
+            for sig in signals:
+                self._contrarian_learner.record_signal_probability(sig.confidence)
+
+        gate_mult = 1.0
+        edge_bump = 0.0
+        gate_pass = True
+        if self._contrarian_learner is not None:
+            st = self._contrarian_learner.get_state()
+            gate_mult = float(st.get("gate_multiplier", 1.0) or 1.0)
+            edge_bump = float(st.get("gate_edge_bump", 0.0) or 0.0)
+            gate_pass = bool(st.get("strict_gate_pass", False))
+        mode = str(getattr(config, "FUNDING_GATE_MODE", "observe")).lower()
+        diag["gate_mode"] = mode
+        diag["gate_pass"] = gate_pass
+        diag["gate_multiplier"] = round(gate_mult, 4)
+        diag["gate_edge_bump"] = round(edge_bump, 6)
+        if mode == "full" and not gate_pass:
+            signals = []
+            diag["gate_result"] = "blocked_full_mode"
+        elif edge_bump > 0:
+            min_conf = float(config.CONTRARIAN_MIN_CONFIDENCE) + edge_bump
+            before = len(signals)
+            signals = [s for s in signals if float(s.confidence) >= min_conf]
+            diag["edge_filtered"] = before - len(signals)
+
         self._contrarian_signal_count += len(signals)
+        diag["final_signals"] = len(signals)
 
         if signals:
             logger.info("Contrarian: %d signal(s) generated this cycle", len(signals))
@@ -466,6 +610,9 @@ class FundingEngine:
         pm = executor.get_position_manager()
         open_hedges = pm.open_positions()
         open_directional = self._directional_executor.position_manager.open_positions()
+        opened_positions = 0
+        risk_rejections = 0
+        risk_reason_counts: Dict[str, int] = {}
 
         for signal in signals:
             approved, reason = risk_manager.approve_directional(
@@ -478,23 +625,38 @@ class FundingEngine:
                     "Contrarian signal %s %s rejected: %s",
                     signal.symbol, signal.direction.value, reason,
                 )
+                risk_rejections += 1
+                key = str(reason)
+                risk_reason_counts[key] = int(risk_reason_counts.get(key, 0)) + 1
                 continue
 
             # Fetch account balance for position sizing (best-effort)
             balance = Decimal("0")
             try:
-                async with asyncio.timeout(10.0):
-                    account = await self._futures_client.get_account()
-                    balance = Decimal(str(account.get("totalWalletBalance", "0")))
+                if hasattr(self._futures_client, "get_account"):
+                    async with async_timeout(10.0):
+                        account = await self._futures_client.get_account()
+                        balance = Decimal(str(account.get("totalWalletBalance", "0")))
             except Exception as e:
                 logger.warning(
                     "Could not fetch account balance for contrarian sizing: %s", e
                 )
+            if balance <= Decimal("0") and str(getattr(config, "FUNDING_MODE", "paper")).lower() == "paper":
+                balance = Decimal(str(config.FUNDING_MAX_TOTAL_EXPOSURE_USD))
 
             params = self._contrarian_strategy.calculate_position_params(
                 signal=signal,
                 balance=balance,
             )
+            if gate_mult < 1.0:
+                try:
+                    qty = Decimal(str(params.get("quantity", "0")))
+                    qty = (qty * Decimal(str(gate_mult))).quantize(Decimal("0.0001"))
+                    if qty <= Decimal("0"):
+                        continue
+                    params["quantity"] = qty
+                except Exception:
+                    continue
 
             position = await self._directional_executor.open_position(
                 signal=signal,
@@ -502,6 +664,7 @@ class FundingEngine:
             )
             if position is not None:
                 self._contrarian_trade_count += 1
+                opened_positions += 1
                 logger.info(
                     "Contrarian position opened: %s %s qty=%s",
                     signal.symbol, signal.direction.value, params.get("quantity"),
@@ -511,8 +674,25 @@ class FundingEngine:
 
         # Check stops / take-profits / max-hold for all open directional positions
         closed = await self._directional_executor.check_stops(snapshots)
+        diag["risk_rejections"] = risk_rejections
+        if risk_reason_counts:
+            diag["risk_rejection_reasons"] = risk_reason_counts
+        diag["opened_positions"] = opened_positions
+        diag["closed_positions"] = len(closed or [])
         if closed:
             logger.info("Contrarian stops triggered, closed positions: %s", closed)
+            if self._contrarian_learner is not None:
+                dpm = self._directional_executor.position_manager
+                all_pos = dpm.all_positions()
+                for p in all_pos:
+                    if p.symbol in closed and p.realized_pnl is not None and p.entry_price > 0 and p.exit_price > 0:
+                        self._contrarian_learner.log_trade_outcome(
+                            symbol=p.symbol,
+                            direction=p.side.value,
+                            entry_price=float(p.entry_price),
+                            exit_price=float(p.exit_price),
+                        )
+        self._contrarian_last_cycle_diag = diag
 
     async def _regime_update_loop(self) -> None:
         """Periodic regime model update."""
@@ -573,10 +753,28 @@ class FundingEngine:
         """
         from funding.ml.model_selector import ModelSelector
 
-        _selector = ModelSelector()
-        _selector.load_comparison()
-        model = _selector.get_model()
-        model_name = type(model).__name__
+        model = None
+        model_name = "None"
+        try:
+            _selector = ModelSelector()
+            _selector.load_comparison()
+            model = _selector.get_model()
+            if model is None:
+                from funding.ml.contrarian_baseline import ContrarianBaselineModel
+
+                model = ContrarianBaselineModel()
+                model.load()
+            model_name = type(model).__name__
+        except Exception:
+            try:
+                from funding.ml.contrarian_baseline import ContrarianBaselineModel
+
+                model = ContrarianBaselineModel()
+                model.load()
+                model_name = type(model).__name__
+            except Exception:
+                model = None
+                model_name = "None"
 
         if self._contrarian_strategy is not None:
             # Hot-swap: replace the model on the existing strategy
@@ -674,21 +872,52 @@ class FundingEngine:
         directional_positions = []
         contrarian_win_rate: Optional[float] = None
         contrarian_model_info: Optional[str] = None
+        contrarian_wins = 0
+        contrarian_losses = 0
+        contrarian_total_pnl = Decimal("0")
+        contrarian_avg_hold_hours = 0.0
         if self._directional_executor is not None:
             dpm = self._directional_executor.position_manager
             open_directional = dpm.open_positions()
-            directional_positions = [p.to_dict() for p in open_directional]
+            current_snaps = self._price_cache.get_all_snapshots()
+            now_utc = datetime.now(timezone.utc)
+            for p in open_directional:
+                row = p.to_dict()
+                snap = current_snaps.get(p.symbol)
+                current_price = snap.mark_price if snap is not None else p.entry_price
+                try:
+                    row["current_price"] = str(current_price)
+                    row["unrealized_pnl"] = str(p.unrealized_pnl(current_price))
+                except Exception:
+                    row["current_price"] = str(p.entry_price)
+                    row["unrealized_pnl"] = "0"
+                if p.entry_time is not None:
+                    row["hold_hours"] = round(max(0.0, (now_utc - p.entry_time).total_seconds() / 3600.0), 3)
+                else:
+                    row["hold_hours"] = 0.0
+                directional_positions.append(row)
 
             # Win rate: closed positions with positive PnL / total closed
             try:
                 all_directional = dpm.all_positions()
                 closed = [
                     p for p in all_directional
-                    if p.realized_pnl is not None
+                    if getattr(getattr(p, "status", None), "value", "") not in {"OPEN", "CLOSING"}
                 ]
                 if closed:
-                    winners = sum(1 for p in closed if p.realized_pnl > Decimal("0"))
-                    contrarian_win_rate = winners / len(closed)
+                    contrarian_wins = sum(1 for p in closed if p.realized_pnl > Decimal("0"))
+                    contrarian_losses = max(0, len(closed) - contrarian_wins)
+                    contrarian_win_rate = contrarian_wins / len(closed)
+                    contrarian_total_pnl = sum(
+                        (p.realized_pnl - p.trading_fees_paid) for p in closed
+                    )
+                    holds = [
+                        (p.exit_time - p.entry_time).total_seconds() / 3600.0
+                        for p in closed
+                        if p.entry_time is not None and p.exit_time is not None
+                    ]
+                    if holds:
+                        contrarian_avg_hold_hours = sum(holds) / len(holds)
             except Exception:
                 pass
 
@@ -700,8 +929,18 @@ class FundingEngine:
             "signal_count": self._contrarian_signal_count,
             "trade_count": self._contrarian_trade_count,
             "open_positions": directional_positions,
+            "positions": directional_positions,
             "win_rate": contrarian_win_rate,
             "model": contrarian_model_info,
+            "model_name": contrarian_model_info,
+            "wins": contrarian_wins,
+            "losses": contrarian_losses,
+            "total_pnl": float(contrarian_total_pnl),
+            "total_realized_pnl": float(contrarian_total_pnl),
+            "avg_hold_hours": round(float(contrarian_avg_hold_hours), 3),
+            "cycle_count": self._contrarian_cycle_count,
+            "last_cycle_at": self._contrarian_last_cycle_at,
+            "last_cycle_diag": self._contrarian_last_cycle_diag,
         }
 
         # --- Regime state ---
@@ -710,6 +949,31 @@ class FundingEngine:
             if self._regime_adapter is not None
             else None
         )
+
+        funding_quality = self._online_learner.get_state() if self._online_learner is not None else {}
+        contrarian_quality = (
+            self._contrarian_learner.get_state() if self._contrarian_learner is not None else {}
+        )
+        eligible_count = 0
+        strict_total = 0
+        weighted_wins = 0.0
+        weighted_settled = 0.0
+        for learner_state in [funding_quality, contrarian_quality]:
+            if learner_state:
+                strict_total += 1
+                if bool(learner_state.get("strict_gate_pass", False)):
+                    eligible_count += 1
+                settled = float(((learner_state.get("rolling_200") or {}).get("settled", 0) or 0))
+                wr = float(learner_state.get("prediction_accuracy", 0.0) or 0.0)
+                weighted_wins += wr * settled
+                weighted_settled += settled
+        strict_gate_pass_rate = (eligible_count / strict_total) if strict_total > 0 else 0.0
+        weighted_win_rate_pct = (weighted_wins / weighted_settled * 100.0) if weighted_settled > 0 else 0.0
+
+        self._learning_events.extend(self._online_learner.drain_events())
+        if self._contrarian_learner is not None:
+            self._learning_events.extend(self._contrarian_learner.drain_events())
+        self._learning_events = self._learning_events[-200:]
 
         return {
             "mode": config.FUNDING_MODE,
@@ -737,6 +1001,17 @@ class FundingEngine:
                 if self._contrarian_learner is not None
                 else None
             ),
+            "funding_summary": {
+                "eligible_models_count": eligible_count,
+                "strict_gate_pass_rate": round(strict_gate_pass_rate, 4),
+                "weighted_win_rate_pct": round(weighted_win_rate_pct, 2),
+                "strict_gate_pass": bool(strict_total > 0 and eligible_count == strict_total),
+            },
+            "learning_events": self._learning_events[-50:],
+            "build_info": {
+                "git_sha": _git_sha(),
+                "started_at": _ENGINE_BUILD_TS,
+            },
             "liquidation_stream": liquidation_state,
             "sentiment_collector": sentiment_state,
             "depth_collector": depth_state,
@@ -778,3 +1053,16 @@ async def run_funding_loop(
         on_funding=on_funding,
     )
     await engine.start()
+
+
+def _git_sha() -> str:
+    try:
+        sha = Path(".git/HEAD")
+        if not sha.exists():
+            return "unknown"
+        import subprocess
+
+        out = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"])
+        return out.decode("utf-8").strip()
+    except Exception:
+        return "unknown"
