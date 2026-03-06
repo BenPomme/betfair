@@ -189,9 +189,9 @@ def _history_trend(portfolio_id: str) -> Dict[str, Any]:
     if latest_progress >= 95.0:
         eta_hours = 0.0
         eta_text = "ready_now"
-    elif latest_ts is not None and baseline_ts is not None:
+    elif len(rows) >= 3 and latest_ts is not None and baseline_ts is not None:
         elapsed_hours = max(0.0, (latest_ts - baseline_ts).total_seconds() / 3600.0)
-        if elapsed_hours > 0:
+        if elapsed_hours >= 6.0:
             progress_rate = delta / elapsed_hours
             if progress_rate > 0.15:
                 eta_hours = max(0.0, (95.0 - latest_progress) / progress_rate)
@@ -251,14 +251,14 @@ def _enrich_models(portfolio_id: str, models: List[Dict[str, Any]], portfolio_et
             rows = _read_jsonl(_model_history_path(portfolio_id, str(payload.get("model_id"))), limit=1000)
             latest = rows[-1] if rows else None
             baseline = rows[0] if rows else None
-            if latest is not None and baseline is not None:
+            if len(rows) >= 3 and latest is not None and baseline is not None:
                 latest_ts = _parse_iso(str(latest.get("ts", "") or ""))
                 baseline_ts = _parse_iso(str(baseline.get("ts", "") or ""))
                 latest_settled = int(latest.get("settled_count", settled) or settled)
                 baseline_settled = int(baseline.get("settled_count", 0) or 0)
                 if latest_ts is not None and baseline_ts is not None:
                     elapsed_hours = max(0.0, (latest_ts - baseline_ts).total_seconds() / 3600.0)
-                    if elapsed_hours > 0:
+                    if elapsed_hours >= 6.0:
                         settled_rate = (latest_settled - baseline_settled) / elapsed_hours
                         if latest_settled < target and settled_rate > 0:
                             eta_hours = max(0.0, (target - latest_settled) / settled_rate)

@@ -264,11 +264,23 @@ def test_command_center_history_trend(tmp_path, monkeypatch):
             "open_count": 1,
         },
     )
+    store.append_jsonl(
+        path,
+        {
+            "ts": "2026-03-06T18:30:00Z",
+            "readiness": "paper_validating",
+            "progress_pct": 55.0,
+            "blocker_count": 1,
+            "realized_pnl": 20.0,
+            "roi_pct": 0.04,
+            "open_count": 1,
+        },
+    )
 
     trend = command_center._history_trend("hedge_validation")
 
-    assert trend["latest_progress_pct"] == 45.0
-    assert trend["progress_delta_24h"] == 25.0
+    assert trend["latest_progress_pct"] == 55.0
+    assert trend["progress_delta_24h"] == 35.0
     assert trend["direction"] == "improving"
     assert trend["eta_hours"] is not None
     assert trend["eta_to_readiness"] != "unknown"
@@ -298,6 +310,16 @@ def test_command_center_enrich_models_adds_eta(tmp_path, monkeypatch):
             "brier_lift_abs": 0.02,
         },
     )
+    store.append_jsonl(
+        history_path,
+        {
+            "ts": "2026-03-06T18:00:00Z",
+            "settled_count": 85,
+            "strict_gate_pass": False,
+            "current_auc": 0.66,
+            "brier_lift_abs": 0.03,
+        },
+    )
 
     models = command_center._enrich_models(
         "betfair_core",
@@ -307,10 +329,10 @@ def test_command_center_enrich_models_adds_eta(tmp_path, monkeypatch):
                 "model_id": "pure_logit_3",
                 "settled_count": 60,
                 "metrics": {
-                    "settled_count": 60,
+                    "settled_count": 85,
                     "strict_gate_pass": False,
                     "strict_gate_reason": "insufficient_settled_bets",
-                    "current_auc": 0.64,
+                    "current_auc": 0.66,
                 },
             }
         ],
@@ -319,7 +341,7 @@ def test_command_center_enrich_models_adds_eta(tmp_path, monkeypatch):
 
     assert models[0]["settled_target"] == config.PREDICTION_STRICT_GATE_MIN_SETTLED
     assert models[0]["eta_to_readiness"] not in {"unknown", "quality_blocker"}
-    assert models[0]["settled_remaining"] == config.PREDICTION_STRICT_GATE_MIN_SETTLED - 60
+    assert models[0]["settled_remaining"] == config.PREDICTION_STRICT_GATE_MIN_SETTLED - 85
 
 
 def test_trade_close_alert_filter_uses_threshold(monkeypatch):
