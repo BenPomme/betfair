@@ -10,11 +10,22 @@ class CascadeRiskManager:
     def __init__(self) -> None:
         self._last_trade_at: Dict[str, datetime] = {}
 
-    def can_open(self, symbol: str, open_positions: List[dict], gross_exposure: float, realized_pnl: float) -> tuple[bool, str]:
+    def can_open(
+        self,
+        symbol: str,
+        open_positions: List[dict],
+        gross_exposure: float,
+        realized_pnl: float,
+        *,
+        max_open_positions: int | None = None,
+        max_gross_exposure: float | None = None,
+    ) -> tuple[bool, str]:
         now = datetime.now(timezone.utc)
-        if len(open_positions) >= int(config.CASCADE_ALPHA_MAX_OPEN_POSITIONS):
+        effective_max_open = int(max_open_positions if max_open_positions is not None else config.CASCADE_ALPHA_MAX_OPEN_POSITIONS)
+        effective_gross_cap = float(max_gross_exposure if max_gross_exposure is not None else config.CASCADE_ALPHA_MAX_GROSS_EXPOSURE_USD)
+        if len(open_positions) >= effective_max_open:
             return False, "max_open_positions"
-        if gross_exposure >= float(config.CASCADE_ALPHA_MAX_GROSS_EXPOSURE_USD):
+        if gross_exposure >= effective_gross_cap:
             return False, "max_gross_exposure"
         cooldown = int(config.CASCADE_ALPHA_EVENT_COOLDOWN_SECONDS)
         last_trade = self._last_trade_at.get(symbol)

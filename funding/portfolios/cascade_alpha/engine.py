@@ -68,6 +68,43 @@ class CascadeAlphaEngine:
             "setup_stats": {},
         }
 
+    def _adaptive_policy(self) -> Dict[str, object]:
+        settled = int(self._learner.get("settled_count", 0) or 0)
+        activation = int(getattr(config, "CASCADE_ALPHA_POLICY_ACTIVATION_SETTLED", 5))
+        strict_gate_pass = bool(self._learner.get("strict_gate_pass", False))
+        policy: Dict[str, object] = {
+            "mode": "baseline",
+            "min_signal_score": 0.0,
+            "notional_multiplier": 1.0,
+            "max_open_positions": int(config.CASCADE_ALPHA_MAX_OPEN_POSITIONS),
+            "max_gross_exposure_usd": float(config.CASCADE_ALPHA_MAX_GROSS_EXPOSURE_USD),
+            "disabled_setups": [],
+        }
+        if settled < activation:
+            return policy
+        if strict_gate_pass:
+            policy["mode"] = "validated"
+            return policy
+        disabled_setups = []
+        for setup_name, stats in (self._learner.get("setup_stats") or {}).items():
+            try:
+                if int(stats.get("settled", 0) or 0) >= 2 and float(stats.get("avg_net_pnl_usd", 0.0) or 0.0) < 0.0:
+                    disabled_setups.append(str(setup_name).upper())
+            except Exception:
+                continue
+        policy.update(
+            {
+                "mode": "tightened",
+                "min_signal_score": float(getattr(config, "CASCADE_ALPHA_POLICY_STRONG_MIN_SIGNAL_SCORE", 8.0)),
+                "notional_multiplier": float(getattr(config, "CASCADE_ALPHA_POLICY_REDUCED_NOTIONAL_MULTIPLIER", 0.5)),
+                "max_open_positions": int(getattr(config, "CASCADE_ALPHA_POLICY_REDUCED_MAX_OPEN_POSITIONS", 2)),
+                "max_gross_exposure_usd": float(config.CASCADE_ALPHA_MAX_GROSS_EXPOSURE_USD)
+                * float(getattr(config, "CASCADE_ALPHA_POLICY_REDUCED_NOTIONAL_MULTIPLIER", 0.5)),
+                "disabled_setups": disabled_setups,
+            }
+        )
+        return policy
+
     async def start(self) -> None:
         self._running = True
         await self._selector.refresh()
@@ -143,6 +180,7 @@ class CascadeAlphaEngine:
                 self._events.append({"kind": "trade_closed", "data": trade})
                 self._record_learning_sample(trade)
         gross_exposure = sum(float(pos.get("notional_usd", 0.0) or 0.0) for pos in self._executor.open_positions)
+        adaptive_policy = self._adaptive_policy()
         for symbol in symbols:
             snap = snapshots.get(symbol)
             if snap is None:
@@ -179,12 +217,33 @@ class CascadeAlphaEngine:
             )
             if not signal:
                 continue
-            approved, reason = self._risk.can_open(symbol, self._executor.open_positions, gross_exposure, self._realized_pnl)
+            if str(signal.get("setup", "")).upper() in set(adaptive_policy.get("disabled_setups") or []):
+                reason = "setup_disabled_by_learner"
+                self._rejections[reason] = self._rejections.get(reason, 0) + 1
+                self._events.append({"kind": "signal_rejected", "data": {"symbol": symbol, "reason": reason, "signal": signal}})
+                continue
+            if float(signal.get("signal_score", 0.0) or 0.0) < float(adaptive_policy.get("min_signal_score", 0.0) or 0.0):
+                reason = "signal_score_below_policy"
+                self._rejections[reason] = self._rejections.get(reason, 0) + 1
+                self._events.append({"kind": "signal_rejected", "data": {"symbol": symbol, "reason": reason, "signal": signal}})
+                continue
+            approved, reason = self._risk.can_open(
+                symbol,
+                self._executor.open_positions,
+                gross_exposure,
+                self._realized_pnl,
+                max_open_positions=int(adaptive_policy.get("max_open_positions", int(config.CASCADE_ALPHA_MAX_OPEN_POSITIONS))),
+                max_gross_exposure=float(adaptive_policy.get("max_gross_exposure_usd", float(config.CASCADE_ALPHA_MAX_GROSS_EXPOSURE_USD))),
+            )
             if not approved:
                 self._rejections[reason] = self._rejections.get(reason, 0) + 1
                 self._events.append({"kind": "signal_rejected", "data": {"symbol": symbol, "reason": reason, "signal": signal}})
                 continue
-            signal["notional_usd"] = min(float(config.CASCADE_ALPHA_MAX_NOTIONAL_PER_TRADE_USD), float(config.CASCADE_ALPHA_INITIAL_BALANCE_USD) * 0.2)
+            notional_multiplier = float(adaptive_policy.get("notional_multiplier", 1.0) or 1.0)
+            signal["notional_usd"] = min(
+                float(config.CASCADE_ALPHA_MAX_NOTIONAL_PER_TRADE_USD) * notional_multiplier,
+                float(config.CASCADE_ALPHA_INITIAL_BALANCE_USD) * 0.2 * notional_multiplier,
+            )
             position = self._executor.open_trade(signal)
             self._risk.mark_open(symbol)
             gross_exposure += float(position.get("notional_usd", 0.0) or 0.0)
@@ -348,4 +407,5 @@ class CascadeAlphaEngine:
                 "win_rate_pct": win_rate_pct,
                 "avg_net_pnl_usd": avg_net_pnl,
             },
+            "adaptive_policy": self._adaptive_policy(),
         }

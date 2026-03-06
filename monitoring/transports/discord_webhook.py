@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 import config
 
@@ -12,14 +12,23 @@ def discord_configured() -> bool:
     return bool(config.DISCORD_ENABLED and str(config.DISCORD_WEBHOOK_URL).strip())
 
 
-def send_discord(message: str, *, username: Optional[str] = None) -> bool:
+def send_discord(
+    message: str = "",
+    *,
+    username: Optional[str] = None,
+    embeds: Optional[List[Dict[str, Any]]] = None,
+) -> bool:
     if not discord_configured():
         logger.debug("Discord not configured; skipping message")
         return False
     try:
         import httpx
 
-        payload = {"content": message[:1900]}
+        payload: Dict[str, Any] = {}
+        if message:
+            payload["content"] = message[:1900]
+        if embeds:
+            payload["embeds"] = embeds[:10]
         if username:
             payload["username"] = username
         elif config.DISCORD_WEBHOOK_USERNAME:

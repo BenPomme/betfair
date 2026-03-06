@@ -47,6 +47,18 @@ DISCORD_NOTIFY_CRITICAL_ONLY: bool = os.getenv("DISCORD_NOTIFY_CRITICAL_ONLY", "
 DISCORD_NOTIFY_PORTFOLIOS: str = os.getenv(
     "DISCORD_NOTIFY_PORTFOLIOS", "betfair_core,hedge_validation,cascade_alpha,mev_scout_sol,contrarian_legacy,command_center"
 )
+DISCORD_MIN_TRADE_ALERT_PNL_USD: Decimal = Decimal(
+    os.getenv("DISCORD_MIN_TRADE_ALERT_PNL_USD", "5")
+)
+DISCORD_MIN_TRADE_ALERT_PNL_EUR: Decimal = Decimal(
+    os.getenv("DISCORD_MIN_TRADE_ALERT_PNL_EUR", "2")
+)
+DISCORD_MODEL_ALERT_MIN_AUC_DELTA: Decimal = Decimal(
+    os.getenv("DISCORD_MODEL_ALERT_MIN_AUC_DELTA", "0.02")
+)
+DISCORD_MODEL_ALERT_MIN_BRIER_LIFT_DELTA: Decimal = Decimal(
+    os.getenv("DISCORD_MODEL_ALERT_MIN_BRIER_LIFT_DELTA", "0.01")
+)
 NOTIFICATIONS_ENABLED: bool = os.getenv("NOTIFICATIONS_ENABLED", "true").lower() == "true"
 NOTIFY_DEDUPE_WINDOW_SECONDS: int = int(os.getenv("NOTIFY_DEDUPE_WINDOW_SECONDS", "600"))
 
@@ -442,6 +454,7 @@ DEPLOY_WATCHER_REMOTE: str = os.getenv("DEPLOY_WATCHER_REMOTE", "origin")
 DEPLOY_WATCHER_AUTO_RESTART_DASHBOARD: bool = (
     os.getenv("DEPLOY_WATCHER_AUTO_RESTART_DASHBOARD", "false").lower() == "true"
 )
+DEPLOY_WATCHER_AUTOSTART: bool = os.getenv("DEPLOY_WATCHER_AUTOSTART", "true").lower() == "true"
 DEPLOY_WATCHER_AUTO_RESTART_PORTFOLIOS: str = os.getenv(
     "DEPLOY_WATCHER_AUTO_RESTART_PORTFOLIOS",
     "betfair_core,hedge_validation,cascade_alpha,contrarian_legacy",
@@ -502,6 +515,18 @@ CASCADE_ALPHA_MIN_WIN_RATE_PCT: Decimal = Decimal(
 )
 CASCADE_ALPHA_MIN_AVG_NET_PNL_USD: Decimal = Decimal(
     os.getenv("CASCADE_ALPHA_MIN_AVG_NET_PNL_USD", "0")
+)
+CASCADE_ALPHA_POLICY_ACTIVATION_SETTLED: int = int(
+    os.getenv("CASCADE_ALPHA_POLICY_ACTIVATION_SETTLED", "5")
+)
+CASCADE_ALPHA_POLICY_REDUCED_MAX_OPEN_POSITIONS: int = int(
+    os.getenv("CASCADE_ALPHA_POLICY_REDUCED_MAX_OPEN_POSITIONS", "2")
+)
+CASCADE_ALPHA_POLICY_REDUCED_NOTIONAL_MULTIPLIER: Decimal = Decimal(
+    os.getenv("CASCADE_ALPHA_POLICY_REDUCED_NOTIONAL_MULTIPLIER", "0.5")
+)
+CASCADE_ALPHA_POLICY_STRONG_MIN_SIGNAL_SCORE: Decimal = Decimal(
+    os.getenv("CASCADE_ALPHA_POLICY_STRONG_MIN_SIGNAL_SCORE", "8.0")
 )
 
 # === SOLANA MEV SCOUT ===

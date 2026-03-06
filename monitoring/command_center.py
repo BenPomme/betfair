@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
+import os
 import subprocess
 import time
 import asyncio
@@ -31,6 +32,7 @@ _digest_sent_at: float = 0.0
 _daily_digest_sent_date: str = ""
 _template_path = Path(__file__).parent / "templates" / "command_center.html"
 _deploy_state_path = Path("data/runtime/deploy_watcher_state.json")
+_deploy_watcher_script = Path(__file__).resolve().parent.parent / "scripts" / "run_deploy_watcher.py"
 
 
 def _git_sha() -> str:
@@ -168,11 +170,40 @@ def _history_trend(portfolio_id: str) -> Dict[str, Any]:
 
 def _load_deploy_state() -> Dict[str, Any]:
     if not _deploy_state_path.exists():
-        return {"enabled": bool(getattr(config, "DEPLOY_WATCHER_ENABLED", False)), "configured": bool(getattr(config, "DEPLOY_WATCHER_ENABLED", False))}
+        return {"enabled": bool(getattr(config, "DEPLOY_WATCHER_ENABLED", False)), "configured": bool(getattr(config, "DEPLOY_WATCHER_ENABLED", False)), "running": False}
     try:
-        return json.loads(_deploy_state_path.read_text(encoding="utf-8"))
+        payload = json.loads(_deploy_state_path.read_text(encoding="utf-8"))
+        pid = payload.get("watcher_pid")
+        running = False
+        if pid:
+            try:
+                os.kill(int(pid), 0)
+                running = True
+            except Exception:
+                running = False
+        payload["running"] = running
+        return payload
     except Exception:
-        return {"enabled": bool(getattr(config, "DEPLOY_WATCHER_ENABLED", False)), "configured": bool(getattr(config, "DEPLOY_WATCHER_ENABLED", False)), "error": "failed_to_parse_state"}
+        return {"enabled": bool(getattr(config, "DEPLOY_WATCHER_ENABLED", False)), "configured": bool(getattr(config, "DEPLOY_WATCHER_ENABLED", False)), "running": False, "error": "failed_to_parse_state"}
+
+
+def _ensure_deploy_watcher() -> None:
+    if not bool(getattr(config, "DEPLOY_WATCHER_ENABLED", False)):
+        return
+    if not bool(getattr(config, "DEPLOY_WATCHER_AUTOSTART", True)):
+        return
+    state = _load_deploy_state()
+    if state.get("running"):
+        return
+    _deploy_state_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path = _deploy_state_path.parent / "deploy_watcher.log"
+    with log_path.open("a", encoding="utf-8") as handle:
+        subprocess.Popen(
+            ["python", str(_deploy_watcher_script)],
+            cwd=str(_deploy_watcher_script.parent.parent),
+            stdout=handle,
+            stderr=subprocess.STDOUT,
+        )
 
 
 def _maybe_send_daily_digest(summaries: List[Dict[str, Any]], snapshots: List[Dict[str, Any]]) -> None:
@@ -184,6 +215,9 @@ def _maybe_send_daily_digest(summaries: List[Dict[str, Any]], snapshots: List[Di
     today = now.date().isoformat()
     if now.hour < target_hour or _daily_digest_sent_date == today:
         return
+    leaders = sorted(summaries, key=lambda item: float(item.get("realized_pnl", 0.0) or 0.0), reverse=True)
+    improvers = sorted(summaries, key=lambda item: float(item.get("progress_delta_24h", 0.0) or 0.0), reverse=True)
+    blocked = [item for item in summaries if int(item.get("blocker_count", 0) or 0) > 0]
     lines = [f"Daily portfolio summary {today} UTC"]
     for item in summaries:
         snapshot = next((snap for snap in snapshots if snap["summary"]["portfolio_id"] == item["portfolio_id"]), None)
@@ -193,7 +227,21 @@ def _maybe_send_daily_digest(summaries: List[Dict[str, Any]], snapshots: List[Di
             f"delta24h={trend.get('progress_delta_24h', 0):+.1f} pnl={item.get('realized_pnl', 0):.2f} {item.get('currency', '')} "
             f"open={item.get('open_count', 0)}"
         )
-    if _notifier.send_daily_digest(lines):
+    sections = {
+        "Leaders": [
+            f"{item.get('label')}: {float(item.get('realized_pnl', 0.0) or 0.0):+.2f} {item.get('currency', '')} | ROI {float(item.get('roi_pct', 0.0) or 0.0):+.2f}%"
+            for item in leaders[:3]
+        ],
+        "Improving": [
+            f"{item.get('label')}: {float(item.get('progress_delta_24h', 0.0) or 0.0):+.1f} pts | {item.get('readiness')}"
+            for item in improvers[:3]
+        ],
+        "Blockers": [
+            f"{item.get('label')}: {int(item.get('blocker_count', 0) or 0)} blockers"
+            for item in blocked[:3]
+        ],
+    }
+    if _notifier.send_daily_digest(lines, sections=sections):
         _daily_digest_sent_date = today
 
 
@@ -240,6 +288,12 @@ def _closed_trade_message(trade: Dict[str, Any], summary: Dict[str, Any]) -> tup
     return severity, title, message
 
 
+def _should_alert_trade_close(trade: Dict[str, Any], summary: Dict[str, Any]) -> bool:
+    pnl, currency = _trade_pnl_and_ccy(trade, summary)
+    threshold = float(config.DISCORD_MIN_TRADE_ALERT_PNL_EUR if str(currency).upper() == "EUR" else config.DISCORD_MIN_TRADE_ALERT_PNL_USD)
+    return abs(pnl) >= threshold
+
+
 def _model_metric_bundle(model: Dict[str, Any]) -> Dict[str, Any]:
     metrics = dict(model.get("metrics") or {})
     return {
@@ -257,7 +311,28 @@ def _model_update_message(model: Dict[str, Any], previous: Dict[str, Any]) -> tu
     current = _model_metric_bundle(model)
     changed = current.get("last_retrain_time") and current.get("last_retrain_time") != previous.get("last_retrain_time")
     gate_changed = current.get("strict_gate_pass") != previous.get("strict_gate_pass")
-    if not changed and not gate_changed:
+    auc_current = current.get("current_auc")
+    auc_previous = previous.get("current_auc")
+    brier_current = current.get("rolling_200_brier_lift")
+    brier_previous = previous.get("rolling_200_brier_lift")
+    auc_delta = 0.0
+    brier_delta = 0.0
+    try:
+        if auc_current is not None and auc_previous is not None:
+            auc_delta = float(auc_current) - float(auc_previous)
+    except Exception:
+        auc_delta = 0.0
+    try:
+        if brier_current is not None and brier_previous is not None:
+            brier_delta = float(brier_current) - float(brier_previous)
+    except Exception:
+        brier_delta = 0.0
+    materially_better = (
+        auc_delta >= float(config.DISCORD_MODEL_ALERT_MIN_AUC_DELTA)
+        or brier_delta >= float(config.DISCORD_MODEL_ALERT_MIN_BRIER_LIFT_DELTA)
+    )
+    accepted = str(current.get("last_retrain_result") or "").lower() == "accepted"
+    if not gate_changed and not (changed and accepted and materially_better):
         return None
     model_id = model.get("model_id", "model")
     result = current.get("last_retrain_result") or "updated"
@@ -269,7 +344,7 @@ def _model_update_message(model: Dict[str, Any], previous: Dict[str, Any]) -> tu
     title = f"Model update: {model_id}"
     message = (
         f"result={result} auc={auc} gate={gate} settled={settled} "
-        f"rolling_200_brier_lift={brier_lift}"
+        f"rolling_200_brier_lift={brier_lift} auc_delta={auc_delta:+.3f} brier_delta={brier_delta:+.3f}"
     )
     return severity, title, message
 
@@ -327,6 +402,8 @@ def _emit_snapshot_notifications(snapshots: List[Dict[str, Any]]) -> None:
                 trade_id = _trade_identifier(trade)
                 if trade_id in previous_closed_trade_ids:
                     continue
+                if not _should_alert_trade_close(trade, summary):
+                    continue
                 severity, title, message = _closed_trade_message(trade, summary)
                 _notifier.send_event(
                     portfolio_id=portfolio_id,
@@ -334,7 +411,16 @@ def _emit_snapshot_notifications(snapshots: List[Dict[str, Any]]) -> None:
                     event_type="trade_closed",
                     title=title,
                     message=message,
-                    payload=trade,
+                    payload={
+                        **trade,
+                        "portfolio_label": summary.get("label"),
+                        "currency": summary.get("currency"),
+                        "pnl": _trade_pnl_and_ccy(trade, summary)[0],
+                        "roi_pct": summary.get("roi_pct"),
+                        "book_realized_pnl": summary.get("realized_pnl"),
+                        "readiness": summary.get("readiness"),
+                        "progress_pct": summary.get("progress_pct"),
+                    },
                     dedupe_key=f"{portfolio_id}:trade_closed:{trade_id}",
                 )
         current_models = {
@@ -358,7 +444,11 @@ def _emit_snapshot_notifications(snapshots: List[Dict[str, Any]]) -> None:
                     event_type="model_update",
                     title=title,
                     message=message,
-                    payload={"model_id": model_id, "metrics": model.get("metrics") or {}},
+                    payload={
+                        "portfolio_label": summary.get("label"),
+                        "model_id": model_id,
+                        **(_model_metric_bundle(model)),
+                    },
                     dedupe_key=(
                         f"{portfolio_id}:model_update:{model_id}:"
                         f"{(model.get('metrics') or {}).get('last_retrain_time')}:"
@@ -377,7 +467,7 @@ def _emit_snapshot_notifications(snapshots: List[Dict[str, Any]]) -> None:
 
     digest_interval = max(5, int(config.DISCORD_DIGEST_INTERVAL_MINUTES)) * 60
     if now - _digest_sent_at >= digest_interval:
-        _notifier.send_digest([item["summary"] for item in snapshots])
+        _notifier.send_digest([item["summary"] for item in snapshots], snapshots=snapshots)
         _digest_sent_at = now
     _maybe_send_daily_digest([item["summary"] for item in snapshots], snapshots)
 
@@ -512,6 +602,7 @@ def index() -> str:
 
 @app.on_event("startup")
 async def _startup() -> None:
+    _ensure_deploy_watcher()
     app.state.notification_task = asyncio.create_task(_notification_loop())
 
 

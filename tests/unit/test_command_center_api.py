@@ -270,3 +270,43 @@ def test_command_center_history_trend(tmp_path, monkeypatch):
     assert trend["latest_progress_pct"] == 45.0
     assert trend["progress_delta_24h"] == 25.0
     assert trend["direction"] == "improving"
+
+
+def test_trade_close_alert_filter_uses_threshold(monkeypatch):
+    monkeypatch.setattr(config, "DISCORD_MIN_TRADE_ALERT_PNL_USD", 5)
+    summary = {"currency": "USD"}
+
+    assert command_center._should_alert_trade_close({"net_pnl_usd": 6.0}, summary) is True
+    assert command_center._should_alert_trade_close({"net_pnl_usd": 4.0}, summary) is False
+
+
+def test_model_update_requires_gate_change_or_material_improvement(monkeypatch):
+    monkeypatch.setattr(config, "DISCORD_MODEL_ALERT_MIN_AUC_DELTA", 0.02)
+    monkeypatch.setattr(config, "DISCORD_MODEL_ALERT_MIN_BRIER_LIFT_DELTA", 0.01)
+
+    model = {
+        "model_id": "m1",
+        "metrics": {
+            "last_retrain_time": "2026-03-06T11:00:00Z",
+            "last_retrain_result": "accepted",
+            "current_auc": 0.71,
+            "strict_gate_pass": False,
+            "rolling_200": {"brier_lift_abs": 0.011},
+            "settled_count": 25,
+        },
+    }
+    previous = {
+        "last_retrain_time": "2026-03-06T10:00:00Z",
+        "last_retrain_result": "accepted",
+        "current_auc": 0.70,
+        "strict_gate_pass": False,
+        "rolling_200_brier_lift": 0.01,
+        "settled_count": 20,
+    }
+
+    assert command_center._model_update_message(model, previous) is None
+
+    model["metrics"]["current_auc"] = 0.74
+    update = command_center._model_update_message(model, previous)
+
+    assert update is not None
