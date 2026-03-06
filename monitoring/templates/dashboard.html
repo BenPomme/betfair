@@ -1196,7 +1196,11 @@ async function fetchFundingMLStatus(){
     $('fkOlLastRetrain').textContent=ol.last_retrain_time?(ol.last_retrain_time||'').substring(0,19).replace('T',' '):'—';
     const nxt=Number(ol.next_retrain_hours||0);
     $('fkOlNextRetrain').textContent=nxt>0?nxt.toFixed(1)+'h':'now';
-    $('fkOlNextRetrainSub').textContent='interval: '+ol.retrain_interval_hours+'h • strict pass rate: '+Number(summary.strict_gate_pass_rate||0).toFixed(2);
+    const lastRetrainSummary=[
+      'interval: '+ol.retrain_interval_hours+'h',
+      'strict pass rate: '+Number(summary.strict_gate_pass_rate||0).toFixed(2),
+    ];
+    $('fkOlNextRetrainSub').textContent=lastRetrainSummary.join(' | ');
     // Retrain history
     const hist=ol.retrain_history||[];
     $('fOlHistoryBody').innerHTML=hist.slice().reverse().map(h=>
@@ -1206,8 +1210,11 @@ async function fetchFundingMLStatus(){
       const cgate=Boolean(cl.strict_gate_pass)?'PASS':'FAIL';
       const c100=cl.rolling_100||{};
       const c200=cl.rolling_200||{};
-      $('fkOlLastRetrainSub').textContent+=' • contrarian: '+cgate+' '+Number(c100.roi_pct||0).toFixed(2)+'%/'+Number(c200.roi_pct||0).toFixed(2)+'%';
+      lastRetrainSummary.push(
+        'contrarian: '+cgate+' '+Number(c100.roi_pct||0).toFixed(2)+'%/'+Number(c200.roi_pct||0).toFixed(2)+'%'
+      );
     }
+    $('fkOlLastRetrainSub').textContent=lastRetrainSummary.join(' | ');
   }catch(e){console.error('funding ml status',e);}
 }
 
@@ -1504,3 +1511,4 @@ setInterval(fetchOrchestratorState,10000);
 </script>
 </body>
 </html>
+
