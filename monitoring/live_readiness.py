@@ -71,6 +71,7 @@ def evaluate_betfair_live_readiness(state: Dict[str, Any]) -> Dict[str, Any]:
     health = state.get("health") or {}
     cfg = state.get("config") or {}
     models = state.get("prediction_models") or {}
+    auth = state.get("auth") or {}
 
     strict_min_settled = _as_int(getattr(config, "PREDICTION_STRICT_GATE_MIN_SETTLED", 100), 100)
     min_pool = _as_int(getattr(config, "LIVE_READY_BETFAIR_MIN_MODEL_POOL", 2), 2)
@@ -84,6 +85,8 @@ def evaluate_betfair_live_readiness(state: Dict[str, Any]) -> Dict[str, Any]:
     prediction_mode = str(getattr(config, "PREDICTION_GATE_ENFORCEMENT_MODE", "observe")).lower()
     running = _as_bool(state.get("running"), False)
     feed_ok = _as_bool(health.get("feed_ok"), False)
+    feed_status = str(health.get("feed_status", "unknown") or "unknown")
+    primary_failure_reason = str(health.get("primary_failure_reason", auth.get("primary_failure_reason", "")) or "")
     prediction_ok = _as_bool(health.get("prediction_ok"), False)
     risk_ok = _as_bool(health.get("risk_ok"), False)
     paper_mode = _as_bool(cfg.get("paper_trading"), _as_bool(getattr(config, "PAPER_TRADING", True), True))
@@ -110,9 +113,21 @@ def evaluate_betfair_live_readiness(state: Dict[str, Any]) -> Dict[str, Any]:
     checks = [
         _check("engine_running", running, running, True, "Betfair runtime must be active"),
         _check(
+            "auth_ready",
+            not bool(primary_failure_reason),
+            primary_failure_reason or "ok",
+            "ok",
+            "Betfair auth prerequisites must be satisfied",
+        ),
+        _check(
             "health_feed_prediction_risk",
             (feed_ok and prediction_ok and risk_ok),
-            {"feed_ok": feed_ok, "prediction_ok": prediction_ok, "risk_ok": risk_ok},
+            {
+                "feed_ok": feed_ok,
+                "feed_status": feed_status,
+                "prediction_ok": prediction_ok,
+                "risk_ok": risk_ok,
+            },
             True,
             "Feed, prediction loop, and risk controls must all be healthy",
         ),
@@ -175,11 +190,13 @@ def evaluate_betfair_live_readiness(state: Dict[str, Any]) -> Dict[str, Any]:
 
     return {
         "system": "betfair",
+        "status": "blocked" if primary_failure_reason else ("candidate" if validation_ready else "paper_validating"),
         "mode": "paper" if paper_mode else "live",
         "validation_ready": validation_ready,
         "can_switch_to_live_now": can_switch_to_live,
         "score_pct": _score(checks),
         "confidence": _label_from_score(_score(checks)),
+        "primary_failure_reason": primary_failure_reason or None,
         "candidate_models": len(candidate_models),
         "passing_models": len(passing_models),
         "strict_pass_rate": round(pass_rate, 4),

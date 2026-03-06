@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import subprocess
 import time
+import asyncio
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -12,6 +14,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 
 from monitoring.live_readiness import evaluate_live_trading_readiness
+from monitoring.notifier import NotificationManager
 from monitoring.portfolio_process_manager import PortfolioProcessManager
 from monitoring.portfolio_registry import get_portfolio_spec, list_portfolios
 from portfolio.accounting import build_strategy_account
@@ -21,6 +24,9 @@ from portfolio.types import PortfolioState, PortfolioSummary
 logger = logging.getLogger(__name__)
 app = FastAPI(title="Strategy Command Center")
 _process_manager = PortfolioProcessManager()
+_notifier = NotificationManager()
+_snapshot_cache: Dict[str, Dict[str, Any]] = {}
+_digest_sent_at: float = 0.0
 _template_path = Path(__file__).parent / "templates" / "command_center.html"
 
 
@@ -39,6 +45,9 @@ def _html() -> str:
 def _readiness_label(readiness: Dict[str, Any]) -> str:
     if not readiness:
         return "unknown"
+    status = str(readiness.get("status", "") or "").strip().lower()
+    if status in {"blocked", "research_only", "paper_validating", "candidate", "ready_disabled", "live_ready"}:
+        return status
     if readiness.get("research_only"):
         return "research_only"
     if bool(readiness.get("can_switch_to_live_now")):
@@ -51,6 +60,69 @@ def _readiness_label(readiness: Dict[str, Any]) -> str:
     if blockers:
         return "blocked"
     return str(readiness.get("status", "monitoring"))
+
+
+def _collect_snapshots() -> List[Dict[str, Any]]:
+    return [_build_snapshot(spec.portfolio_id) for spec in list_portfolios()]
+
+
+def _emit_snapshot_notifications(snapshots: List[Dict[str, Any]]) -> None:
+    global _digest_sent_at
+    now = time.time()
+    for item in snapshots:
+        summary = item["summary"]
+        portfolio_id = summary["portfolio_id"]
+        previous = _snapshot_cache.get(portfolio_id, {})
+        previous_running = bool(previous.get("running"))
+        previous_readiness = previous.get("readiness")
+        previous_status = previous.get("status")
+        if previous_running != bool(summary.get("running")):
+            event_type = "portfolio_started" if summary.get("running") else "portfolio_stopped"
+            _notifier.send_event(
+                portfolio_id=portfolio_id,
+                severity="info" if summary.get("running") else "warning",
+                event_type=event_type,
+                title=f"{summary.get('label')} {'started' if summary.get('running') else 'stopped'}",
+                message=f"status={summary.get('status')} readiness={summary.get('readiness')}",
+                dedupe_key=f"{portfolio_id}:{event_type}:{summary.get('running')}",
+            )
+        if previous_readiness and previous_readiness != summary.get("readiness"):
+            _notifier.send_event(
+                portfolio_id=portfolio_id,
+                severity="warning" if summary.get("readiness") == "blocked" else "info",
+                event_type="readiness_changed",
+                title=f"{summary.get('label')} readiness changed",
+                message=f"{previous_readiness} -> {summary.get('readiness')}",
+                dedupe_key=f"{portfolio_id}:readiness:{summary.get('readiness')}",
+            )
+        if previous_status and previous_status != summary.get("status") and summary.get("status") == "error":
+            _notifier.send_event(
+                portfolio_id=portfolio_id,
+                severity="critical",
+                event_type="portfolio_error",
+                title=f"{summary.get('label')} error",
+                message="Portfolio entered error state",
+                dedupe_key=f"{portfolio_id}:error",
+            )
+        _snapshot_cache[portfolio_id] = {
+            "running": summary.get("running"),
+            "readiness": summary.get("readiness"),
+            "status": summary.get("status"),
+        }
+
+    digest_interval = max(5, int(config.DISCORD_DIGEST_INTERVAL_MINUTES)) * 60
+    if now - _digest_sent_at >= digest_interval:
+        _notifier.send_digest([item["summary"] for item in snapshots])
+        _digest_sent_at = now
+
+
+async def _notification_loop() -> None:
+    while True:
+        try:
+            _emit_snapshot_notifications(_collect_snapshots())
+        except Exception:
+            logger.exception("Notification loop failed")
+        await asyncio.sleep(60)
 
 
 def _default_account(spec) -> dict:
@@ -165,6 +237,20 @@ def index() -> str:
     return _html()
 
 
+@app.on_event("startup")
+async def _startup() -> None:
+    app.state.notification_task = asyncio.create_task(_notification_loop())
+
+
+@app.on_event("shutdown")
+async def _shutdown() -> None:
+    task = getattr(app.state, "notification_task", None)
+    if task is not None:
+        task.cancel()
+        with contextlib.suppress(Exception):
+            await task
+
+
 @app.get("/api/portfolios")
 def api_portfolios() -> Dict[str, Any]:
     snapshots = [_build_snapshot(spec.portfolio_id) for spec in list_portfolios()]
@@ -217,6 +303,24 @@ def api_portfolio_models(portfolio_id: str) -> Dict[str, Any]:
 def api_portfolio_readiness(portfolio_id: str) -> Dict[str, Any]:
     state = _build_snapshot(portfolio_id)["state"]
     return {"portfolio_id": portfolio_id, "readiness": state.get("readiness") or {}}
+
+
+@app.get("/api/notifications/state")
+def api_notifications_state() -> Dict[str, Any]:
+    return _notifier.state()
+
+
+@app.post("/api/notifications/discord/test")
+def api_notifications_discord_test() -> Dict[str, Any]:
+    ok = _notifier.send_event(
+        portfolio_id="command_center",
+        severity="info",
+        event_type="test",
+        title="Discord test notification",
+        message="Strategy Command Center test alert",
+        dedupe_key=f"discord_test:{int(time.time())}",
+    )
+    return {"ok": ok, "state": _notifier.state()}
 
 
 @app.post("/api/portfolios/{portfolio_id}/start")

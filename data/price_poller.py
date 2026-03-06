@@ -104,6 +104,9 @@ async def run_price_poller(
     REQUEST_TIMEOUT_SECONDS = float(getattr(config, "POLLER_REQUEST_TIMEOUT_SECONDS", 12.0))
     semaphore = asyncio.Semaphore(CONCURRENT_BATCHES)
     loop = asyncio.get_event_loop()
+    zero_snapshot_cycles = 0
+    zero_book_cycles = 0
+    timeout_cycles = 0
 
     async def _fetch_batch(batch: List[str], metrics: Dict[str, Any]) -> None:
         """Fetch a single batch with semaphore-bounded concurrency."""
@@ -177,6 +180,12 @@ async def run_price_poller(
             "errors": 0,
         }
         await asyncio.gather(*[_fetch_batch(batch, metrics) for batch in batches])
+        zero_snapshot_cycles = zero_snapshot_cycles + 1 if metrics["snapshots_set"] == 0 else 0
+        zero_book_cycles = zero_book_cycles + 1 if metrics["books_received"] == 0 else 0
+        timeout_cycles = timeout_cycles + 1 if metrics["timeouts"] > 0 else 0
+        metrics["zero_snapshot_cycles"] = zero_snapshot_cycles
+        metrics["zero_book_cycles"] = zero_book_cycles
+        metrics["timeout_cycles"] = timeout_cycles
         metrics["cycle_duration_sec"] = round(time.time() - cycle_start, 4)
         if on_metrics is not None:
             try:

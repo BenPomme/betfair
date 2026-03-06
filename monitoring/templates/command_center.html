@@ -179,6 +179,7 @@
 
     <section class="section active" id="section-overview">
       <h2>Overview</h2>
+      <div class="panel" id="notifications-panel" style="margin-bottom:14px;"></div>
       <div class="cards" id="overview-cards"></div>
     </section>
 
@@ -196,7 +197,7 @@
     <section class="section" id="section-hedge_validation"><h2>Hedge Validation</h2><div id="hedge_validation-body"></div></section>
     <section class="section" id="section-cascade_alpha"><h2>Cascade Alpha</h2><div id="cascade_alpha-body"></div></section>
     <section class="section" id="section-mev_scout_sol"><h2>MEV Scout</h2><div id="mev_scout_sol-body"></div></section>
-    <section class="section" id="section-legacy"><h2>Legacy</h2><div id="legacy-body"></div></section>
+    <section class="section" id="section-contrarian_legacy"><h2>Contrarian Legacy</h2><div id="contrarian_legacy-body"></div></section>
   </div>
 
   <script>
@@ -209,7 +210,7 @@
       hedge_validation: "Hedge Validation",
       cascade_alpha: "Cascade Alpha",
       mev_scout_sol: "MEV Scout",
-      legacy: "Legacy"
+      contrarian_legacy: "Contrarian"
     };
 
     async function getJSON(url) {
@@ -264,10 +265,25 @@
 
     function buildNav() {
       const nav = document.getElementById('nav');
-      nav.innerHTML = ["overview", "portfolios", "compare", "betfair_core", "hedge_validation", "cascade_alpha", "mev_scout_sol", "legacy"].map(id =>
+      nav.innerHTML = ["overview", "portfolios", "compare", "betfair_core", "hedge_validation", "contrarian_legacy", "cascade_alpha", "mev_scout_sol"].map(id =>
         `<button data-section="${id}">${labels[id]}</button>`
       ).join('');
       nav.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => showSection(btn.dataset.section)));
+    }
+
+    function renderNotifications(state) {
+      const root = document.getElementById('notifications-panel');
+      root.innerHTML = `
+        <h3>Notifications</h3>
+        <div class="grid">
+          <div class="metric"><div class="label">Discord</div><div class="value ${state.discord_configured ? 'good' : 'warn'}">${state.discord_configured ? 'Configured' : 'Not configured'}</div></div>
+          <div class="metric"><div class="label">Last Event</div><div class="value">${state.last_notification_ts || 'n/a'}</div></div>
+          <div class="metric"><div class="label">Last Digest</div><div class="value">${state.last_digest_ts || 'n/a'}</div></div>
+          <div class="metric"><div class="label">Failures</div><div class="value">${state.notification_failures || 0}</div></div>
+        </div>
+        <div class="actions">
+          <button onclick="sendDiscordTest()">Send Discord Test</button>
+        </div>`;
     }
 
     function renderOverview(portfolios, compareSeries) {
@@ -298,6 +314,17 @@
         </div>`;
       }).join('');
     }
+
+    async function sendDiscordTest() {
+      try {
+        document.getElementById('boot-pill').textContent = 'sending discord test';
+        await postJSON('/api/notifications/discord/test');
+        document.getElementById('boot-pill').textContent = 'discord test sent';
+      } catch (err) {
+        document.getElementById('boot-pill').textContent = `Discord error: ${err.message}`;
+      }
+    }
+    window.sendDiscordTest = sendDiscordTest;
 
     function renderCompare(payload) {
       const root = document.getElementById('compare-panel');
@@ -406,16 +433,15 @@
       try {
         const portfolioPayload = await getJSON('/api/portfolios');
         const comparePayload = await getJSON('/api/compare/portfolios');
+        const notificationState = await getJSON('/api/notifications/state').catch(() => ({}));
+        renderNotifications(notificationState);
         renderOverview(portfolioPayload.portfolios || [], comparePayload.series || {});
         renderPortfolioTable(portfolioPayload.portfolios || []);
         renderCompare(comparePayload);
         for (const portfolioId of portfolioOrder) {
-          if (portfolioId === 'contrarian_legacy') continue;
           const state = await getJSON(`/api/portfolios/${portfolioId}/state`).catch(() => null);
           if (state) renderState(`${portfolioId}-body`, state);
         }
-        const legacy = await getJSON('/api/portfolios/contrarian_legacy/state').catch(() => null);
-        if (legacy) renderState('legacy-body', legacy);
         document.getElementById('boot-pill').textContent = `Git ${portfolioPayload.git_sha}`;
         document.getElementById('time-pill').textContent = new Date().toLocaleTimeString();
       } catch (err) {

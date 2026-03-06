@@ -38,10 +38,6 @@ _MAX_AUC_REGRESSION = 0.05
 # Minimum number of feature rows required to attempt a retrain.
 _MIN_ROWS = 500
 
-# Path for trade outcome log used by prediction accuracy tracking.
-CONTRARIAN_TRADE_LOG_PATH = Path("data/funding_models/contrarian_trade_log.jsonl")
-
-
 class ContrarianOnlineLearner:
     """Continuously retrains the contrarian model as new market data arrives.
 
@@ -66,12 +62,15 @@ class ContrarianOnlineLearner:
         watchlist_fn: Optional[Callable[[], Any]] = None,
         model_selector: Optional[Any] = None,
         contrarian_strategy: Optional[Any] = None,
+        trade_log_path: Optional[str] = None,
+        quality_state_path: Optional[str] = None,
     ) -> None:
         self._watchlist_fn = watchlist_fn or (lambda: set())
         self._model_selector = model_selector
         self._contrarian_strategy = contrarian_strategy
 
         self._running: bool = False
+        self._trade_log_path = Path(trade_log_path or "data/funding_models/contrarian_trade_log.jsonl")
 
         # Retrain tracking
         self._last_retrain_ts: float = 0.0
@@ -92,7 +91,7 @@ class ContrarianOnlineLearner:
         self._quality = FundingLearningQuality(
             model_id="contrarian_online_learner",
             model_family="contrarian",
-            state_path="data/funding/state/contrarian_online_learner_quality.json",
+            state_path=quality_state_path or "data/funding/state/contrarian_online_learner_quality.json",
         )
 
         # Load last-known AUC from comparison file if present
@@ -105,7 +104,7 @@ class ContrarianOnlineLearner:
     async def run(self) -> None:
         """Main loop: trigger periodic retrains until stop() is called."""
         self._running = True
-        CONTRARIAN_TRADE_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        self._trade_log_path.parent.mkdir(parents=True, exist_ok=True)
         logger.info(
             "ContrarianOnlineLearner started "
             "(retrain_interval=%dh, min_auc=%.2f, max_regression=%.2f)",
@@ -167,7 +166,7 @@ class ContrarianOnlineLearner:
         exit_price:
             Execution price at exit.
         """
-        CONTRARIAN_TRADE_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        self._trade_log_path.parent.mkdir(parents=True, exist_ok=True)
 
         pnl_pct = (exit_price - entry_price) / entry_price if entry_price else 0.0
         # For a LONG position: pnl_pct > 0 is correct; SHORT: pnl_pct < 0 is correct.
@@ -204,7 +203,7 @@ class ContrarianOnlineLearner:
             "correct": correct,
         }
         try:
-            with open(CONTRARIAN_TRADE_LOG_PATH, "a") as fh:
+            with open(self._trade_log_path, "a") as fh:
                 fh.write(json.dumps(entry) + "\n")
         except Exception as exc:
             logger.warning("Failed to write contrarian trade log entry: %s", exc)

@@ -1,6 +1,7 @@
 import config
 
 from monitoring.live_readiness import evaluate_live_trading_readiness
+from monitoring.live_readiness import evaluate_betfair_live_readiness
 
 
 def _betfair_state_ready(paper_mode: bool = True):
@@ -126,3 +127,13 @@ def test_live_readiness_ignores_contrarian_when_hedge_portfolio_is_scoped(monkey
     readiness = evaluate_live_trading_readiness(_betfair_state_ready(paper_mode=True), funding)
     assert readiness["validation_ready"] is True
     assert readiness["binance"]["candidate_models"] == 1
+
+
+def test_betfair_live_readiness_blocks_on_auth_failure(monkeypatch):
+    monkeypatch.setattr(config, "PREDICTION_GATE_ENFORCEMENT_MODE", "strict")
+    state = _betfair_state_ready(paper_mode=True)
+    state["health"]["primary_failure_reason"] = "cert_missing"
+    readiness = evaluate_betfair_live_readiness(state)
+
+    assert readiness["validation_ready"] is False
+    assert "auth_ready" in readiness["blockers"]

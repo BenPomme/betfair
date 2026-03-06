@@ -102,3 +102,14 @@ def test_command_center_does_not_report_stale_runner_as_live(tmp_path, monkeypat
 
     assert summary["running"] is False
     assert summary["status"] == "idle"
+
+
+def test_command_center_notification_endpoints(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "PORTFOLIO_STATE_ROOT", str(tmp_path))
+    monkeypatch.setattr(command_center, "_process_manager", _DummyManager())
+
+    client = TestClient(command_center.app)
+    state = client.get("/api/notifications/state").json()
+
+    assert "discord_configured" in state
+    assert "notification_failures" in state

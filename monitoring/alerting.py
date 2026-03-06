@@ -5,8 +5,10 @@ import logging
 from typing import Optional
 
 import config
+from monitoring.notifier import NotificationManager
 
 logger = logging.getLogger(__name__)
+_notifier = NotificationManager()
 
 _PLACEHOLDER_MARKERS = ("your_token", "your_chat_id", "changeme", "replace_me", "example")
 
@@ -39,14 +41,39 @@ def send_telegram(message: str) -> bool:
 
 
 def alert_execution_failure(market_id: str, error: str) -> None:
+    _notifier.send_event(
+        portfolio_id="betfair_core",
+        severity="critical",
+        event_type="execution_failure",
+        title="Betfair execution failure",
+        message=f"market_id={market_id} error={error}",
+        payload={"market_id": market_id, "error": error},
+        dedupe_key=f"betfair_exec_failure:{market_id}:{error}",
+    )
     send_telegram(f"[Arb] Execution failed market_id={market_id}: {error}")
 
 
 def alert_circuit_breaker() -> None:
+    _notifier.send_event(
+        portfolio_id="betfair_core",
+        severity="critical",
+        event_type="circuit_breaker",
+        title="Betfair circuit breaker",
+        message="Trading halted after consecutive failures.",
+        dedupe_key="betfair:circuit_breaker",
+    )
     send_telegram("[Arb] Circuit breaker: trading halted after 3 consecutive failures.")
 
 
 def alert_daily_loss_cap() -> None:
+    _notifier.send_event(
+        portfolio_id="betfair_core",
+        severity="critical",
+        event_type="daily_loss_cap",
+        title="Betfair daily loss cap",
+        message="Daily loss limit reached. Trading halted.",
+        dedupe_key="betfair:daily_loss_cap",
+    )
     send_telegram("[Arb] Daily loss limit reached. Trading halted.")
 
 
