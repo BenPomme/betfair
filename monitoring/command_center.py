@@ -91,11 +91,19 @@ def _build_snapshot(portfolio_id: str) -> Dict[str, Any]:
     pid = store.read_pid()
     process_status = _process_manager.status(portfolio_id)
     process_running = bool(process_status.get("running"))
-    running = bool(raw_state.get("running")) if "running" in raw_state else process_running
+    raw_running = raw_state.get("running")
+    running = process_running and (bool(raw_running) if raw_running is not None else True)
     positions = _extract_positions(raw_state)
     open_count = len(positions)
     if open_count == 0:
         open_count = int(raw_state.get("open_hedges", raw_state.get("opportunity_count", 0)) or 0)
+    summary_status = str(raw_state.get("status", "idle"))
+    if running:
+        summary_status = "running"
+    elif raw_state.get("error"):
+        summary_status = "error"
+    elif summary_status == "running":
+        summary_status = "idle"
     summary = PortfolioSummary(
         portfolio_id=spec.portfolio_id,
         label=spec.label,
@@ -112,7 +120,7 @@ def _build_snapshot(portfolio_id: str) -> Dict[str, Any]:
         open_count=open_count,
         readiness=_readiness_label(readiness),
         last_heartbeat_ts=heartbeat.get("ts"),
-        status=str(raw_state.get("status", ("running" if running else "idle"))),
+        status=summary_status,
         process_pid=pid,
         errors=[raw_state.get("error")] if raw_state.get("error") else [],
     )

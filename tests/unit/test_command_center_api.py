@@ -72,3 +72,33 @@ def test_command_center_portfolio_endpoints(tmp_path, monkeypatch):
     assert hedge_state["portfolio_id"] == "hedge_validation"
     assert compare["series"]["betfair_core"][-1]["balance"] == 1010.0
     assert compare["series"]["hedge_validation"][-1]["balance"] == 50025.0
+
+
+def test_command_center_does_not_report_stale_runner_as_live(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "PORTFOLIO_STATE_ROOT", str(tmp_path))
+    monkeypatch.setattr(command_center, "_process_manager", _DummyManager())
+
+    hedge_store = PortfolioStateStore("hedge_validation")
+    hedge_store.write_account(
+        build_strategy_account(
+            portfolio_id="hedge_validation",
+            currency="USD",
+            starting_balance=50000.0,
+            current_balance=50000.0,
+            realized_pnl=0.0,
+        )
+    )
+    hedge_store.write_state(
+        {
+            "portfolio_id": "hedge_validation",
+            "running": True,
+            "status": "running",
+            "mode": "paper",
+        }
+    )
+
+    client = TestClient(command_center.app)
+    summary = client.get("/api/portfolios/hedge_validation/summary").json()
+
+    assert summary["running"] is False
+    assert summary["status"] == "idle"
