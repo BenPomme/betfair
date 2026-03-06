@@ -73,6 +73,10 @@ class PortfolioSummary:
     open_count: int
     readiness: str
     last_heartbeat_ts: Optional[str]
+    progress_pct: float = 0.0
+    trend_direction: str = "flat"
+    progress_delta_24h: float = 0.0
+    blocker_count: int = 0
     status: str = "idle"
     process_pid: Optional[int] = None
     errors: List[str] = field(default_factory=list)
@@ -101,6 +105,7 @@ class PortfolioState:
     raw_state: Dict[str, Any] = field(default_factory=dict)
     control_mode: PortfolioControlMode = "local_managed"
     error: Optional[str] = None
+    trend: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

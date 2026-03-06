@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import config
 from funding.data.agg_trade_stream import AggTradeStream
@@ -54,6 +54,19 @@ class CascadeAlphaEngine:
         self._realized_pnl = 0.0
         self._balance_history: List[dict] = []
         self._last_watchlist_refresh: Optional[str] = None
+        self._learner_samples: List[dict] = []
+        self._learner: Dict[str, object] = {
+            "running": bool(getattr(config, "CASCADE_ALPHA_LEARNER_ENABLED", True)),
+            "last_update_time": None,
+            "settled_count": 0,
+            "win_rate_pct": 0.0,
+            "avg_net_pnl_usd": 0.0,
+            "avg_slippage_bps": 0.0,
+            "strict_gate_pass": False,
+            "strict_gate_reason": "insufficient_settled_trades",
+            "rolling_20": {"settled": 0, "win_rate_pct": 0.0, "avg_net_pnl_usd": 0.0},
+            "setup_stats": {},
+        }
 
     async def start(self) -> None:
         self._running = True
@@ -128,6 +141,7 @@ class CascadeAlphaEngine:
                 trade = self._executor.close_position(position, current_price, reason)
                 self._realized_pnl += float(trade.get("net_pnl_usd", 0.0) or 0.0)
                 self._events.append({"kind": "trade_closed", "data": trade})
+                self._record_learning_sample(trade)
         gross_exposure = sum(float(pos.get("notional_usd", 0.0) or 0.0) for pos in self._executor.open_positions)
         for symbol in symbols:
             snap = snapshots.get(symbol)
@@ -182,15 +196,117 @@ class CascadeAlphaEngine:
         self._balance_history = self._balance_history[-1000:]
         self._events = self._events[-300:]
 
+    def _record_learning_sample(self, trade: Dict[str, object]) -> None:
+        sample = {
+            "trade_id": trade.get("trade_id"),
+            "symbol": trade.get("symbol"),
+            "setup": trade.get("setup"),
+            "side": trade.get("side"),
+            "signal_score": float(trade.get("signal_score", 0.0) or 0.0),
+            "spread_bps": float(trade.get("spread_bps", 0.0) or 0.0),
+            "slippage_bps": float(trade.get("slippage_bps", 0.0) or 0.0),
+            "taker_imbalance": float(trade.get("taker_imbalance", 0.0) or 0.0),
+            "net_pnl_usd": float(trade.get("net_pnl_usd", 0.0) or 0.0),
+            "close_reason": trade.get("close_reason"),
+            "closed_at": trade.get("closed_at"),
+        }
+        self._learner_samples.append(sample)
+        self._learner_samples = self._learner_samples[-500:]
+        self._update_learner_state()
+
+    def _update_learner_state(self) -> None:
+        settled = len(self._learner_samples)
+        if settled == 0:
+            return
+        total_net = sum(float(s.get("net_pnl_usd", 0.0) or 0.0) for s in self._learner_samples)
+        wins = sum(1 for s in self._learner_samples if float(s.get("net_pnl_usd", 0.0) or 0.0) >= 0.0)
+        avg_slippage = sum(float(s.get("slippage_bps", 0.0) or 0.0) for s in self._learner_samples) / settled
+        recent = self._learner_samples[-20:]
+        recent_settled = len(recent)
+        recent_total_net = sum(float(s.get("net_pnl_usd", 0.0) or 0.0) for s in recent)
+        recent_wins = sum(1 for s in recent if float(s.get("net_pnl_usd", 0.0) or 0.0) >= 0.0)
+        setup_stats: Dict[str, Dict[str, float]] = {}
+        for setup in {"CONTINUATION", "SNAPBACK"}:
+            rows = [s for s in self._learner_samples if s.get("setup") == setup]
+            if not rows:
+                continue
+            row_count = len(rows)
+            setup_stats[setup.lower()] = {
+                "settled": row_count,
+                "win_rate_pct": round((sum(1 for s in rows if float(s.get("net_pnl_usd", 0.0) or 0.0) >= 0.0) / row_count) * 100.0, 2),
+                "avg_net_pnl_usd": round(sum(float(s.get("net_pnl_usd", 0.0) or 0.0) for s in rows) / row_count, 6),
+            }
+        min_settled = int(getattr(config, "CASCADE_ALPHA_MIN_SETTLED_FOR_CANDIDATE", 20))
+        min_win_rate_pct = float(getattr(config, "CASCADE_ALPHA_MIN_WIN_RATE_PCT", 52))
+        min_avg_net = float(getattr(config, "CASCADE_ALPHA_MIN_AVG_NET_PNL_USD", 0))
+        strict_gate_pass = settled >= min_settled and ((wins / settled) * 100.0) >= min_win_rate_pct and (total_net / settled) >= min_avg_net
+        strict_gate_reason = ""
+        if not strict_gate_pass:
+            if settled < min_settled:
+                strict_gate_reason = "insufficient_settled_trades"
+            elif ((wins / settled) * 100.0) < min_win_rate_pct:
+                strict_gate_reason = "win_rate_below_threshold"
+            else:
+                strict_gate_reason = "avg_net_pnl_below_threshold"
+        self._learner = {
+            "running": bool(getattr(config, "CASCADE_ALPHA_LEARNER_ENABLED", True)),
+            "last_update_time": datetime.now(timezone.utc).isoformat(),
+            "settled_count": settled,
+            "win_rate_pct": round((wins / settled) * 100.0, 2),
+            "avg_net_pnl_usd": round(total_net / settled, 6),
+            "avg_slippage_bps": round(avg_slippage, 6),
+            "strict_gate_pass": strict_gate_pass,
+            "strict_gate_reason": strict_gate_reason,
+            "rolling_20": {
+                "settled": recent_settled,
+                "win_rate_pct": round((recent_wins / recent_settled) * 100.0, 2) if recent_settled else 0.0,
+                "avg_net_pnl_usd": round(recent_total_net / recent_settled, 6) if recent_settled else 0.0,
+            },
+            "setup_stats": setup_stats,
+        }
+
     def get_state(self) -> dict:
         current_prices = {sym: float(s.mark_price) for sym, s in self._price_cache.get_all_snapshots().items()}
         unrealized = self._unrealized_pnl(current_prices)
         current_balance = self._initial_balance + self._realized_pnl + unrealized
+        closed_trades = self._executor.closed_trades
+        learner_settled_count = int(self._learner.get("settled_count", 0) or 0)
+        settled_count = max(len(closed_trades), learner_settled_count)
+        win_rate_pct = float(self._learner.get("win_rate_pct", 0.0) or 0.0)
+        avg_net_pnl = float(self._learner.get("avg_net_pnl_usd", 0.0) or 0.0)
+        readiness_checks = [
+            {
+                "name": "engine_running",
+                "ok": self._running,
+                "reason": "Cascade runner must be active",
+            },
+            {
+                "name": "settled_trades_minimum",
+                "ok": settled_count >= int(getattr(config, "CASCADE_ALPHA_MIN_SETTLED_FOR_CANDIDATE", 20)),
+                "reason": "Need enough closed trades to evaluate edge",
+            },
+            {
+                "name": "win_rate_threshold",
+                "ok": settled_count < int(getattr(config, "CASCADE_ALPHA_MIN_SETTLED_FOR_CANDIDATE", 20))
+                or win_rate_pct >= float(getattr(config, "CASCADE_ALPHA_MIN_WIN_RATE_PCT", 52)),
+                "reason": "Closed-trade win rate must stay above threshold",
+            },
+            {
+                "name": "avg_net_pnl_threshold",
+                "ok": settled_count < int(getattr(config, "CASCADE_ALPHA_MIN_SETTLED_FOR_CANDIDATE", 20))
+                or avg_net_pnl >= float(getattr(config, "CASCADE_ALPHA_MIN_AVG_NET_PNL_USD", 0)),
+                "reason": "Average net P&L must remain non-negative",
+            },
+        ]
+        readiness_blockers = [c["name"] for c in readiness_checks if not c["ok"]]
+        readiness_status = "candidate" if settled_count >= int(getattr(config, "CASCADE_ALPHA_MIN_SETTLED_FOR_CANDIDATE", 20)) and not readiness_blockers else ("paper_validating" if self._running else "stopped")
         readiness = {
-            "status": "paper_validating" if self._running else "stopped",
+            "status": readiness_status,
             "research_only": False,
-            "blockers": [] if self._running else ["engine_not_running"],
-            "confidence": "low",
+            "blockers": readiness_blockers if self._running else ["engine_not_running"],
+            "confidence": "medium" if settled_count >= int(getattr(config, "CASCADE_ALPHA_MIN_SETTLED_FOR_CANDIDATE", 20)) else "low",
+            "score_pct": round((sum(1 for c in readiness_checks if c["ok"]) / len(readiness_checks)) * 100.0, 2),
+            "checks": readiness_checks,
         }
         return {
             "portfolio_id": "cascade_alpha",
@@ -202,21 +318,21 @@ class CascadeAlphaEngine:
             "last_watchlist_refresh": self._last_watchlist_refresh,
             "scan_count": self._scan_count,
             "signal_count": self._signal_count,
-            "trade_count": len(self._executor.closed_trades),
+            "trade_count": len(closed_trades),
             "open_positions": self._executor.open_positions,
-            "closed_trades": self._executor.closed_trades[-100:],
+            "closed_trades": closed_trades[-100:],
             "realized_pnl_usd": round(self._realized_pnl, 6),
             "unrealized_pnl_usd": round(unrealized, 6),
             "current_balance_usd": round(current_balance, 6),
-            "fees_paid_usd": round(sum(float(t.get("entry_fee_usd", 0.0) or 0.0) + float(t.get("exit_fee_usd", 0.0) or 0.0) for t in self._executor.closed_trades), 6),
+            "fees_paid_usd": round(sum(float(t.get("entry_fee_usd", 0.0) or 0.0) + float(t.get("exit_fee_usd", 0.0) or 0.0) for t in closed_trades), 6),
             "gross_exposure_usd": round(sum(float(p.get("notional_usd", 0.0) or 0.0) for p in self._executor.open_positions), 6),
             "rejections": dict(self._rejections),
             "event_classifier": {
-                "continuation_trades": sum(1 for t in self._executor.closed_trades if t.get("setup") == "CONTINUATION"),
-                "snapback_trades": sum(1 for t in self._executor.closed_trades if t.get("setup") == "SNAPBACK"),
+                "continuation_trades": sum(1 for t in closed_trades if t.get("setup") == "CONTINUATION"),
+                "snapback_trades": sum(1 for t in closed_trades if t.get("setup") == "SNAPBACK"),
             },
             "execution_quality": {
-                "avg_modeled_slippage_bps": round(sum(float(t.get("slippage_bps", 0.0) or 0.0) for t in self._executor.closed_trades) / len(self._executor.closed_trades), 6) if self._executor.closed_trades else 0.0,
+                "avg_modeled_slippage_bps": round(sum(float(t.get("slippage_bps", 0.0) or 0.0) for t in closed_trades) / len(closed_trades), 6) if closed_trades else 0.0,
                 "max_spread_bps": float(config.CASCADE_ALPHA_MAX_SPREAD_BPS),
             },
             "feature_buffer": self._features.get_state(),
@@ -225,4 +341,11 @@ class CascadeAlphaEngine:
             "events": self._events[-200:],
             "balance_history": self._balance_history,
             "readiness": readiness,
+            "learner": self._learner,
+            "training_progress": {
+                "settled_trades": settled_count,
+                "min_settled_target": int(getattr(config, "CASCADE_ALPHA_MIN_SETTLED_FOR_CANDIDATE", 20)),
+                "win_rate_pct": win_rate_pct,
+                "avg_net_pnl_usd": avg_net_pnl,
+            },
         }

@@ -50,6 +50,11 @@ class PortfolioStateStore:
             for row in rows:
                 handle.write(json.dumps(row, default=str) + "\n")
 
+    def append_jsonl(self, path: Path, row: Dict[str, Any]) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(row, default=str) + "\n")
+
     def read_jsonl(self, path: Path, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         if not path.exists():
             return []

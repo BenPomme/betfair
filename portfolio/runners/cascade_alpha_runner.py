@@ -9,7 +9,7 @@ from typing import Dict, Optional
 from funding.portfolios.cascade_alpha.engine import CascadeAlphaEngine
 from portfolio.accounting import build_strategy_account
 from portfolio.runner_base import PortfolioRunnerBase
-from portfolio.types import PortfolioRunnerSpec
+from portfolio.types import ModelShadowAccount, PortfolioRunnerSpec
 
 logger = logging.getLogger(__name__)
 
@@ -82,10 +82,25 @@ class CascadeAlphaPortfolioRunner(PortfolioRunnerBase):
                     trade_count=len(state.get("closed_trades") or []),
                     balance_history=state.get("balance_history") or [],
                 )
+                learner = state.get("learner") or {}
+                models = [
+                    ModelShadowAccount(
+                        portfolio_id=self.spec.portfolio_id,
+                        model_id="cascade_online_learner",
+                        shadow_starting_balance=self.spec.initial_balance,
+                        shadow_current_balance=float(state.get("current_balance_usd", self.spec.initial_balance) or self.spec.initial_balance),
+                        shadow_realized_pnl=float(state.get("realized_pnl_usd", 0.0) or 0.0),
+                        shadow_roi_pct=((float(state.get("realized_pnl_usd", 0.0) or 0.0) / self.spec.initial_balance) * 100.0) if self.spec.initial_balance else 0.0,
+                        settled_count=int(learner.get("settled_count", 0) or 0),
+                        metrics=learner,
+                        selected_for_execution=bool(learner.get("strict_gate_pass", False)),
+                    )
+                ]
                 self.publish_snapshot(
                     account=account,
                     raw_state=state,
                     readiness=state.get("readiness") or {},
+                    models=models,
                     trades=list(state.get("closed_trades") or []) + list(state.get("open_positions") or []),
                     events=list(state.get("events") or []),
                     balance_history=list(state.get("balance_history") or []),

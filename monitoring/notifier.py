@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 class NotificationState:
     last_notification_ts: Optional[str] = None
     last_digest_ts: Optional[str] = None
+    last_daily_digest_ts: Optional[str] = None
     notification_failures: int = 0
     discord_configured: bool = False
     sent_events: List[Dict[str, Any]] = field(default_factory=list)
@@ -24,6 +25,7 @@ class NotificationState:
         return {
             "last_notification_ts": self.last_notification_ts,
             "last_digest_ts": self.last_digest_ts,
+            "last_daily_digest_ts": self.last_daily_digest_ts,
             "notification_failures": self.notification_failures,
             "discord_configured": self.discord_configured,
             "sent_events": self.sent_events[-50:],
@@ -117,6 +119,19 @@ class NotificationManager:
         ok = send_discord("\n".join(lines), username="Strategy Digest")
         if ok:
             self._state.last_digest_ts = self._utc_now_iso()
+        else:
+            self._state.notification_failures += 1
+        return ok
+
+    def send_daily_digest(self, lines: List[str]) -> bool:
+        if not (config.NOTIFICATIONS_ENABLED and config.DISCORD_DAILY_DIGEST_ENABLED):
+            return False
+        if not discord_configured():
+            self._state.discord_configured = False
+            return False
+        ok = send_discord("\n".join(lines), username="Strategy Daily Digest")
+        if ok:
+            self._state.last_daily_digest_ts = self._utc_now_iso()
         else:
             self._state.notification_failures += 1
         return ok

@@ -41,6 +41,8 @@ DISCORD_WEBHOOK_USERNAME: str = os.getenv("DISCORD_WEBHOOK_USERNAME", "Strategy 
 DISCORD_WEBHOOK_AVATAR_URL: str = os.getenv("DISCORD_WEBHOOK_AVATAR_URL", "")
 DISCORD_DIGEST_ENABLED: bool = os.getenv("DISCORD_DIGEST_ENABLED", "true").lower() == "true"
 DISCORD_DIGEST_INTERVAL_MINUTES: int = int(os.getenv("DISCORD_DIGEST_INTERVAL_MINUTES", "30"))
+DISCORD_DAILY_DIGEST_ENABLED: bool = os.getenv("DISCORD_DAILY_DIGEST_ENABLED", "true").lower() == "true"
+DISCORD_DAILY_DIGEST_UTC_HOUR: int = int(os.getenv("DISCORD_DAILY_DIGEST_UTC_HOUR", "18"))
 DISCORD_NOTIFY_CRITICAL_ONLY: bool = os.getenv("DISCORD_NOTIFY_CRITICAL_ONLY", "false").lower() == "true"
 DISCORD_NOTIFY_PORTFOLIOS: str = os.getenv(
     "DISCORD_NOTIFY_PORTFOLIOS", "betfair_core,hedge_validation,cascade_alpha,mev_scout_sol,contrarian_legacy,command_center"
@@ -427,9 +429,23 @@ PORTFOLIO_STATE_ROOT: str = os.getenv("PORTFOLIO_STATE_ROOT", "data/portfolios")
 PORTFOLIO_RUNNER_HEARTBEAT_SECONDS: int = int(
     os.getenv("PORTFOLIO_RUNNER_HEARTBEAT_SECONDS", "5")
 )
+COMMAND_CENTER_HISTORY_INTERVAL_SECONDS: int = int(
+    os.getenv("COMMAND_CENTER_HISTORY_INTERVAL_SECONDS", "300")
+)
 COMMAND_CENTER_ENABLED: bool = os.getenv("COMMAND_CENTER_ENABLED", "true").lower() == "true"
 COMMAND_CENTER_HOST: str = os.getenv("COMMAND_CENTER_HOST", "0.0.0.0")
 COMMAND_CENTER_PORT: int = int(os.getenv("COMMAND_CENTER_PORT", "8000"))
+DEPLOY_WATCHER_ENABLED: bool = os.getenv("DEPLOY_WATCHER_ENABLED", "false").lower() == "true"
+DEPLOY_WATCHER_INTERVAL_SECONDS: int = int(os.getenv("DEPLOY_WATCHER_INTERVAL_SECONDS", "120"))
+DEPLOY_WATCHER_BRANCH: str = os.getenv("DEPLOY_WATCHER_BRANCH", "main")
+DEPLOY_WATCHER_REMOTE: str = os.getenv("DEPLOY_WATCHER_REMOTE", "origin")
+DEPLOY_WATCHER_AUTO_RESTART_DASHBOARD: bool = (
+    os.getenv("DEPLOY_WATCHER_AUTO_RESTART_DASHBOARD", "false").lower() == "true"
+)
+DEPLOY_WATCHER_AUTO_RESTART_PORTFOLIOS: str = os.getenv(
+    "DEPLOY_WATCHER_AUTO_RESTART_PORTFOLIOS",
+    "betfair_core,hedge_validation,cascade_alpha,contrarian_legacy",
+)
 BETFAIR_PORTFOLIO_ID: str = os.getenv("BETFAIR_PORTFOLIO_ID", "betfair_core")
 HEDGE_PORTFOLIO_ID: str = os.getenv("HEDGE_PORTFOLIO_ID", "hedge_validation")
 HEDGE_PORTFOLIO_INITIAL_BALANCE_USD: Decimal = Decimal(
@@ -474,6 +490,18 @@ CASCADE_ALPHA_MIN_LIQUIDATION_Z: Decimal = Decimal(
 )
 CASCADE_ALPHA_MIN_DEPTH_COLLAPSE_Z: Decimal = Decimal(
     os.getenv("CASCADE_ALPHA_MIN_DEPTH_COLLAPSE_Z", "2.0")
+)
+CASCADE_ALPHA_LEARNER_ENABLED: bool = (
+    os.getenv("CASCADE_ALPHA_LEARNER_ENABLED", "true").lower() == "true"
+)
+CASCADE_ALPHA_MIN_SETTLED_FOR_CANDIDATE: int = int(
+    os.getenv("CASCADE_ALPHA_MIN_SETTLED_FOR_CANDIDATE", "20")
+)
+CASCADE_ALPHA_MIN_WIN_RATE_PCT: Decimal = Decimal(
+    os.getenv("CASCADE_ALPHA_MIN_WIN_RATE_PCT", "52")
+)
+CASCADE_ALPHA_MIN_AVG_NET_PNL_USD: Decimal = Decimal(
+    os.getenv("CASCADE_ALPHA_MIN_AVG_NET_PNL_USD", "0")
 )
 
 # === SOLANA MEV SCOUT ===

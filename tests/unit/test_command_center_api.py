@@ -234,3 +234,39 @@ def test_emit_snapshot_notifications_sends_model_update_alert(monkeypatch):
     command_center._emit_snapshot_notifications([second])
 
     assert any(item["event_type"] == "model_update" for item in sent)
+
+
+def test_command_center_history_trend(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "PORTFOLIO_STATE_ROOT", str(tmp_path))
+    store = PortfolioStateStore("hedge_validation")
+    path = store.runtime_dir / "summary_history.jsonl"
+    store.append_jsonl(
+        path,
+        {
+            "ts": "2026-03-05T12:00:00Z",
+            "readiness": "blocked",
+            "progress_pct": 20.0,
+            "blocker_count": 4,
+            "realized_pnl": 0.0,
+            "roi_pct": 0.0,
+            "open_count": 0,
+        },
+    )
+    store.append_jsonl(
+        path,
+        {
+            "ts": "2026-03-06T12:30:00Z",
+            "readiness": "paper_validating",
+            "progress_pct": 45.0,
+            "blocker_count": 2,
+            "realized_pnl": 10.0,
+            "roi_pct": 0.02,
+            "open_count": 1,
+        },
+    )
+
+    trend = command_center._history_trend("hedge_validation")
+
+    assert trend["latest_progress_pct"] == 45.0
+    assert trend["progress_delta_24h"] == 25.0
+    assert trend["direction"] == "improving"

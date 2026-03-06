@@ -6,6 +6,7 @@ import logging
 import subprocess
 import time
 import asyncio
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -27,7 +28,9 @@ _process_manager = PortfolioProcessManager()
 _notifier = NotificationManager()
 _snapshot_cache: Dict[str, Dict[str, Any]] = {}
 _digest_sent_at: float = 0.0
+_daily_digest_sent_date: str = ""
 _template_path = Path(__file__).parent / "templates" / "command_center.html"
+_deploy_state_path = Path("data/runtime/deploy_watcher_state.json")
 
 
 def _git_sha() -> str:
@@ -40,6 +43,10 @@ def _git_sha() -> str:
 
 def _html() -> str:
     return _template_path.read_text(encoding="utf-8")
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def _readiness_label(readiness: Dict[str, Any]) -> str:
@@ -64,6 +71,130 @@ def _readiness_label(readiness: Dict[str, Any]) -> str:
 
 def _collect_snapshots() -> List[Dict[str, Any]]:
     return [_build_snapshot(spec.portfolio_id) for spec in list_portfolios()]
+
+
+def _history_path(portfolio_id: str) -> Path:
+    return PortfolioStateStore(portfolio_id).runtime_dir / "summary_history.jsonl"
+
+
+def _read_jsonl(path: Path, limit: int = 500) -> List[Dict[str, Any]]:
+    if not path.exists():
+        return []
+    rows: List[Dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            rows.append(json.loads(line))
+        except Exception:
+            continue
+    return rows[-limit:]
+
+
+def _append_history_if_due(summary: Dict[str, Any], state: Dict[str, Any], readiness: Dict[str, Any], previous: Dict[str, Any]) -> None:
+    now = time.time()
+    interval = max(60, int(getattr(config, "COMMAND_CENTER_HISTORY_INTERVAL_SECONDS", 300)))
+    last_write = float(previous.get("last_history_write", 0.0) or 0.0)
+    if last_write and (now - last_write) < interval:
+        return
+    progress = _progress_from_readiness(readiness)
+    blockers = readiness.get("blockers_v2") or readiness.get("blockers") or []
+    row = {
+        "ts": _utc_now_iso(),
+        "readiness": summary.get("readiness"),
+        "progress_pct": progress,
+        "blocker_count": len(blockers),
+        "realized_pnl": float((state.get("account") or {}).get("realized_pnl", 0.0) or 0.0),
+        "roi_pct": float((state.get("account") or {}).get("roi_pct", 0.0) or 0.0),
+        "open_count": int(summary.get("open_count", 0) or 0),
+    }
+    PortfolioStateStore(summary["portfolio_id"]).append_jsonl(_history_path(summary["portfolio_id"]), row)
+    previous["last_history_write"] = now
+
+
+def _parse_iso(ts: str) -> datetime | None:
+    if not ts:
+        return None
+    try:
+        value = ts.replace("Z", "+00:00")
+        return datetime.fromisoformat(value)
+    except Exception:
+        return None
+
+
+def _progress_from_readiness(readiness: Dict[str, Any]) -> float:
+    checks = readiness.get("checks_v2") or readiness.get("checks") or []
+    if checks:
+        return round((sum(1 for item in checks if item.get("ok")) / len(checks)) * 100.0, 2)
+    try:
+        return round(float(readiness.get("score_pct", 0.0) or 0.0), 2)
+    except Exception:
+        return 0.0
+
+
+def _history_trend(portfolio_id: str) -> Dict[str, Any]:
+    rows = _read_jsonl(_history_path(portfolio_id), limit=1000)
+    if not rows:
+        return {
+            "latest_progress_pct": 0.0,
+            "progress_delta_24h": 0.0,
+            "direction": "flat",
+            "history": [],
+        }
+    latest = rows[-1]
+    latest_progress = float(latest.get("progress_pct", 0.0) or 0.0)
+    now = _parse_iso(latest.get("ts", "")) or datetime.now(timezone.utc)
+    baseline = rows[0]
+    for row in reversed(rows):
+        ts = _parse_iso(str(row.get("ts", "") or ""))
+        if ts is None:
+            continue
+        if (now - ts).total_seconds() >= 24 * 3600:
+            baseline = row
+            break
+    delta = latest_progress - float(baseline.get("progress_pct", 0.0) or 0.0)
+    direction = "flat"
+    if delta > 3:
+        direction = "improving"
+    elif delta < -3:
+        direction = "worsening"
+    return {
+        "latest_progress_pct": round(latest_progress, 2),
+        "progress_delta_24h": round(delta, 2),
+        "direction": direction,
+        "history": rows[-288:],
+    }
+
+
+def _load_deploy_state() -> Dict[str, Any]:
+    if not _deploy_state_path.exists():
+        return {"enabled": bool(getattr(config, "DEPLOY_WATCHER_ENABLED", False)), "configured": bool(getattr(config, "DEPLOY_WATCHER_ENABLED", False))}
+    try:
+        return json.loads(_deploy_state_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {"enabled": bool(getattr(config, "DEPLOY_WATCHER_ENABLED", False)), "configured": bool(getattr(config, "DEPLOY_WATCHER_ENABLED", False)), "error": "failed_to_parse_state"}
+
+
+def _maybe_send_daily_digest(summaries: List[Dict[str, Any]], snapshots: List[Dict[str, Any]]) -> None:
+    global _daily_digest_sent_date
+    if not getattr(config, "DISCORD_DAILY_DIGEST_ENABLED", True):
+        return
+    now = datetime.now(timezone.utc)
+    target_hour = int(getattr(config, "DISCORD_DAILY_DIGEST_UTC_HOUR", 18))
+    today = now.date().isoformat()
+    if now.hour < target_hour or _daily_digest_sent_date == today:
+        return
+    lines = [f"Daily portfolio summary {today} UTC"]
+    for item in summaries:
+        snapshot = next((snap for snap in snapshots if snap["summary"]["portfolio_id"] == item["portfolio_id"]), None)
+        trend = ((snapshot or {}).get("state") or {}).get("trend") or {}
+        lines.append(
+            f"- {item.get('label')}: readiness={item.get('readiness')} progress={item.get('progress_pct', 0):.1f}% "
+            f"delta24h={trend.get('progress_delta_24h', 0):+.1f} pnl={item.get('realized_pnl', 0):.2f} {item.get('currency', '')} "
+            f"open={item.get('open_count', 0)}"
+        )
+    if _notifier.send_daily_digest(lines):
+        _daily_digest_sent_date = today
 
 
 def _trade_identifier(trade: Dict[str, Any]) -> str:
@@ -149,6 +280,7 @@ def _emit_snapshot_notifications(snapshots: List[Dict[str, Any]]) -> None:
     for item in snapshots:
         summary = item["summary"]
         state = item["state"]
+        readiness = state.get("readiness") or {}
         portfolio_id = summary["portfolio_id"]
         previous = _snapshot_cache.get(portfolio_id, {})
         previous_running = bool(previous.get("running"))
@@ -233,18 +365,21 @@ def _emit_snapshot_notifications(snapshots: List[Dict[str, Any]]) -> None:
                         f"{(model.get('metrics') or {}).get('strict_gate_pass')}"
                     ),
                 )
+        _append_history_if_due(summary, state, readiness, previous)
         _snapshot_cache[portfolio_id] = {
             "running": summary.get("running"),
             "readiness": summary.get("readiness"),
             "status": summary.get("status"),
             "closed_trade_ids": sorted(current_closed_trade_ids),
             "models": current_models,
+            "last_history_write": previous.get("last_history_write"),
         }
 
     digest_interval = max(5, int(config.DISCORD_DIGEST_INTERVAL_MINUTES)) * 60
     if now - _digest_sent_at >= digest_interval:
         _notifier.send_digest([item["summary"] for item in snapshots])
         _digest_sent_at = now
+    _maybe_send_daily_digest([item["summary"] for item in snapshots], snapshots)
 
 
 async def _notification_loop() -> None:
@@ -307,6 +442,8 @@ def _build_snapshot(portfolio_id: str) -> Dict[str, Any]:
         summary_status = "error"
     elif summary_status == "running":
         summary_status = "idle"
+    trend = _history_trend(portfolio_id)
+    blocker_count = len((readiness.get("blockers_v2") or readiness.get("blockers") or []))
     summary = PortfolioSummary(
         portfolio_id=spec.portfolio_id,
         label=spec.label,
@@ -323,6 +460,10 @@ def _build_snapshot(portfolio_id: str) -> Dict[str, Any]:
         open_count=open_count,
         readiness=_readiness_label(readiness),
         last_heartbeat_ts=heartbeat.get("ts"),
+        progress_pct=trend.get("latest_progress_pct", 0.0),
+        trend_direction=trend.get("direction", "flat"),
+        progress_delta_24h=trend.get("progress_delta_24h", 0.0),
+        blocker_count=blocker_count,
         status=summary_status,
         process_pid=pid,
         errors=[raw_state.get("error")] if raw_state.get("error") else [],
@@ -359,6 +500,7 @@ def _build_snapshot(portfolio_id: str) -> Dict[str, Any]:
         raw_state=raw_state,
         control_mode=spec.control_mode,
         error=raw_state.get("error"),
+        trend=trend,
     )
     return {"summary": summary.to_dict(), "state": state.to_dict()}
 
@@ -438,7 +580,14 @@ def api_portfolio_readiness(portfolio_id: str) -> Dict[str, Any]:
 
 @app.get("/api/notifications/state")
 def api_notifications_state() -> Dict[str, Any]:
-    return _notifier.state()
+    payload = _notifier.state()
+    payload["deploy_watcher"] = _load_deploy_state()
+    return payload
+
+
+@app.get("/api/deploy/state")
+def api_deploy_state() -> Dict[str, Any]:
+    return _load_deploy_state()
 
 
 @app.post("/api/notifications/discord/test")

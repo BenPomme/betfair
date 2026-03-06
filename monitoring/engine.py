@@ -111,6 +111,9 @@ class TradingEngine:
         self._last_prediction_ts: Optional[float] = None
         self._last_architect_ts: Optional[float] = None
         self._poller_metrics: Dict[str, Any] = {}
+        self._last_good_scan_ts: Optional[float] = None
+        self._last_good_snapshot_ts: Optional[float] = None
+        self._last_market_refresh_ts: Optional[float] = None
         self._architect_state: Dict[str, Any] = {
             "enabled": config.ARCHITECT_ENABLED,
             "last_run_ts": None,
@@ -158,6 +161,10 @@ class TradingEngine:
             return
         with self._lock:
             self._poller_metrics = dict(payload)
+            if int(payload.get("books_received", 0) or 0) > 0:
+                self._last_good_scan_ts = time.time()
+            if int(payload.get("snapshots_set", 0) or 0) > 0:
+                self._last_good_snapshot_ts = time.time()
 
     def on_opportunity(self, opp: Any, scored: Optional[Any] = None) -> None:
         """Called when an opportunity is detected."""
@@ -350,6 +357,9 @@ class TradingEngine:
             self._last_prediction_ts = None
             self._last_architect_ts = None
             self._poller_metrics = {}
+            self._last_good_scan_ts = None
+            self._last_good_snapshot_ts = None
+            self._last_market_refresh_ts = None
             self._architect_state = {
                 "enabled": config.ARCHITECT_ENABLED,
                 "last_run_ts": None,
@@ -622,6 +632,68 @@ class TradingEngine:
                 except Exception:
                     gates = {"status": "error", "reason": "failed_to_parse_gate_report"}
             poller_metrics = dict(self._poller_metrics)
+            zero_snapshot_cycles = int(poller_metrics.get("zero_snapshot_cycles", 0) or 0)
+            zero_book_cycles = int(poller_metrics.get("zero_book_cycles", 0) or 0)
+            timeout_cycles = int(poller_metrics.get("timeout_cycles", 0) or 0)
+            requested_total = int(poller_metrics.get("requested_markets_total", 0) or 0)
+            books_received = int(poller_metrics.get("books_received", 0) or 0)
+            snapshots_set = int(poller_metrics.get("snapshots_set", 0) or 0)
+            snapshot_coverage_ratio = (snapshots_set / requested_total) if requested_total > 0 else 0.0
+            books_to_snapshots_ratio = (snapshots_set / books_received) if books_received > 0 else 0.0
+            stale_heavy = snapshot_coverage_ratio < max(0.0, 1.0 - float(config.BETFAIR_STALE_HEAVY_THRESHOLD))
+            retire_heavy = zero_snapshot_cycles >= int(config.BETFAIR_ZERO_SNAPSHOT_CYCLE_LIMIT)
+
+            try:
+                from data.betfair_client import inspect_betfair_auth
+
+                auth_info = inspect_betfair_auth()
+            except Exception:
+                auth_info = {
+                    "credentials_present": False,
+                    "valid_cert_pair": False,
+                    "login_mode": "unknown",
+                    "session_status": "unknown",
+                    "primary_failure_reason": "auth_inspection_failed",
+                }
+
+            feed_reasons = []
+            primary_failure_reason = str(auth_info.get("primary_failure_reason", "") or "")
+            if primary_failure_reason:
+                feed_reasons.append(primary_failure_reason)
+            if running and last_scan_age_sec is not None and last_scan_age_sec > float(config.BETFAIR_FEED_STALE_SECONDS):
+                feed_reasons.append("market_universe_stale")
+            if timeout_cycles >= int(config.BETFAIR_TIMEOUT_CYCLE_LIMIT):
+                feed_reasons.append("poller_timeouts")
+            if zero_book_cycles >= int(config.BETFAIR_ZERO_BOOK_CYCLE_LIMIT):
+                feed_reasons.append("zero_books_received")
+            if zero_snapshot_cycles >= int(config.BETFAIR_ZERO_SNAPSHOT_CYCLE_LIMIT):
+                feed_reasons.append("zero_snapshots_set")
+            if stale_heavy:
+                feed_reasons.append("market_universe_stale")
+            if retire_heavy:
+                feed_reasons.append("market_universe_retired_heavy")
+            if not running and not primary_failure_reason:
+                feed_reasons.append("engine_loop_stopped")
+            feed_reasons = list(dict.fromkeys(feed_reasons))
+
+            if primary_failure_reason:
+                feed_status = "blocked"
+            elif feed_ok:
+                feed_status = "healthy"
+            elif feed_reasons:
+                feed_status = "degraded"
+            else:
+                feed_status = "idle"
+
+            recovery_action_state = "healthy"
+            if primary_failure_reason:
+                recovery_action_state = "auth_blocked"
+            elif "poller_timeouts" in feed_reasons or "zero_books_received" in feed_reasons:
+                recovery_action_state = "relogin_then_restart_candidate"
+            elif "zero_snapshots_set" in feed_reasons or "market_universe_stale" in feed_reasons:
+                recovery_action_state = "refresh_market_universe"
+            elif "engine_loop_stopped" in feed_reasons:
+                recovery_action_state = "restart_runtime"
 
         return {
             "running": running,
@@ -674,6 +746,28 @@ class TradingEngine:
                 "mode": "LIVE" if not config.PAPER_TRADING else "PAPER",
                 "system_ok": system_ok,
                 "feed_ok": feed_ok,
+                "feed_status": feed_status,
+                "primary_failure_reason": primary_failure_reason,
+                "feed_degradation_reasons": feed_reasons,
+                "last_good_scan_ts": (
+                    time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(self._last_good_scan_ts))
+                    if self._last_good_scan_ts is not None
+                    else None
+                ),
+                "last_good_snapshot_ts": (
+                    time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(self._last_good_snapshot_ts))
+                    if self._last_good_snapshot_ts is not None
+                    else None
+                ),
+                "last_market_refresh_ts": (
+                    time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(self._last_market_refresh_ts))
+                    if self._last_market_refresh_ts is not None
+                    else None
+                ),
+                "snapshot_coverage_ratio": round(snapshot_coverage_ratio, 6),
+                "books_to_snapshots_ratio": round(books_to_snapshots_ratio, 6),
+                "poller_timeout_rate": round((timeout_cycles / max(1, int(poller_metrics.get("batches_total", 1) or 1))), 6),
+                "recovery_action_state": recovery_action_state,
                 "prediction_ok": prediction_ok,
                 "architect_ok": architect_ok,
                 "risk_ok": risk_ok,
@@ -689,8 +783,12 @@ class TradingEngine:
                 "last_scan_age_sec": round(last_scan_age_sec, 1) if last_scan_age_sec is not None else None,
                 "last_prediction_age_sec": round(last_pred_age_sec, 1) if last_pred_age_sec is not None else None,
                 "last_architect_age_sec": round(last_arch_age_sec, 1) if last_arch_age_sec is not None else None,
+                "session_status": auth_info.get("session_status"),
+                "login_mode": auth_info.get("login_mode"),
+                "auth_error_code": primary_failure_reason or None,
             },
             "poller": poller_metrics,
+            "auth": auth_info,
             "session": {
                 "start_time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(session_start)) if session_start else None,
                 "uptime_seconds": round(uptime_seconds, 0),
@@ -800,6 +898,7 @@ class TradingEngine:
             with self._lock:
                 self._market_ids = market_ids
                 self._market_metadata = market_metadata
+                self._last_market_refresh_ts = time.time()
                 # Record initial balance
                 self._balance_history.append((
                     time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -913,6 +1012,8 @@ class TradingEngine:
                                     runner_names.pop(mid, None)
                             if added > 0:
                                 logger.info("Market refresh added %d markets (active=%d)", added, len(market_ids))
+                                with self._lock:
+                                    self._last_market_refresh_ts = time.time()
                                 self.record_event(
                                     "market_refresh",
                                     {"added": added, "active_markets": len(market_ids)},

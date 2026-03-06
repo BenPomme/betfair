@@ -201,6 +201,8 @@ class LiveQAAgent:
             health = {}
         system_ok = bool(health.get("system_ok", True))
         risk_ok = bool(health.get("risk_ok", True))
+        feed_status = str(health.get("feed_status", "unknown") or "unknown")
+        recovery_action_state = str(health.get("recovery_action_state", "") or "")
         degraded = bool(running and not system_ok)
         now = datetime.now(timezone.utc)
         if degraded:
@@ -219,6 +221,8 @@ class LiveQAAgent:
             "last_scan_age_sec": health.get("last_scan_age_sec"),
             "last_prediction_age_sec": health.get("last_prediction_age_sec"),
             "last_architect_age_sec": health.get("last_architect_age_sec"),
+            "feed_status": feed_status,
+            "recovery_action_state": recovery_action_state,
         }
 
     def collect_metrics(
@@ -280,12 +284,22 @@ class LiveQAAgent:
             and r.get("system_ok") is False
             and r.get("risk_ok", True) is True
             and degraded_seconds >= float(config.QA_DEGRADED_MIN_AGE_SECONDS)
+            and r.get("recovery_action_state") not in {"auth_blocked"}
         )
         if should_restart:
             actions.append(
                 {
                     "type": "restart_runtime",
                     "reason": "health_degraded_while_running",
+                }
+            )
+        elif r.get("feed_status") == "degraded" and r.get("recovery_action_state") == "refresh_market_universe":
+            actions.append(
+                {
+                    "type": "set_env",
+                    "key": "SCAN_MAX_MARKETS",
+                    "value": "80",
+                    "reason": "feed_degraded_reduce_universe",
                 }
             )
 

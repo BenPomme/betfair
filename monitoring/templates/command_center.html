@@ -457,14 +457,18 @@
 
     function renderNotifications(state) {
       const root = document.getElementById('notifications-panel');
+      const deploy = state.deploy_watcher || {};
       root.innerHTML = `
         <h3>Notifications</h3>
         <div class="grid">
           <div class="metric"><div class="label">Discord</div><div class="value ${state.discord_configured ? 'good' : 'warn'}">${state.discord_configured ? 'Configured' : 'Not configured'}</div></div>
           <div class="metric"><div class="label">Last Event</div><div class="value">${state.last_notification_ts || 'n/a'}</div></div>
           <div class="metric"><div class="label">Last Digest</div><div class="value">${state.last_digest_ts || 'n/a'}</div></div>
+          <div class="metric"><div class="label">Daily Digest</div><div class="value">${state.last_daily_digest_ts || 'n/a'}</div></div>
           <div class="metric"><div class="label">Failures</div><div class="value">${state.notification_failures || 0}</div></div>
+          <div class="metric"><div class="label">Deploy Watcher</div><div class="value ${deploy.enabled ? 'good' : 'warn'}">${deploy.enabled ? 'Enabled' : 'Disabled'}</div></div>
         </div>
+        <div class="muted">Deploy watcher: branch=${deploy.branch || 'n/a'} last_check=${deploy.last_check_ts || 'n/a'} status=${deploy.status || 'n/a'}</div>
         <div class="actions">
           <button onclick="sendDiscordTest()">Send Discord Test</button>
         </div>`;
@@ -495,6 +499,7 @@
             <div class="metric"><div class="label">Open</div><div class="value">${p.open_count}</div></div>
             <div class="metric"><div class="label">Readiness</div><div class="value ${readinessTone(p.readiness)}">${readinessDisplay(p.readiness)}</div></div>
             <div class="metric"><div class="label">Progress</div><div class="value">${progress.pct}%</div></div>
+            <div class="metric"><div class="label">24h Trend</div><div class="value ${p.trend_direction === 'improving' ? 'good' : (p.trend_direction === 'worsening' ? 'bad' : 'muted')}">${p.trend_direction} ${p.progress_delta_24h ? `(${Number(p.progress_delta_24h).toFixed(1)}%)` : ''}</div></div>
           </div>
           <div class="muted">Live-readiness progress ${progress.passed != null ? `${progress.passed}/${progress.total} checks passed` : `${progress.blockers} blockers`}.</div>
           ${progressBar(progress.pct)}
@@ -520,11 +525,11 @@
     function renderCompare(payload) {
       const root = document.getElementById('compare-panel');
       root.innerHTML = `<table>
-        <thead><tr><th>Portfolio</th><th>Mode</th><th>Realized</th><th>Unrealized</th><th>ROI</th><th>Drawdown</th><th>Open</th><th>Readiness</th></tr></thead>
+        <thead><tr><th>Portfolio</th><th>Mode</th><th>Realized</th><th>Unrealized</th><th>ROI</th><th>Drawdown</th><th>Open</th><th>Readiness</th><th>Trend</th></tr></thead>
         <tbody>
           ${(payload.portfolios || []).map(p => `<tr>
             <td>${p.label}</td><td>${p.mode}</td><td>${money(p.realized_pnl, p.currency)}</td><td>${money(p.unrealized_pnl, p.currency)}</td>
-            <td>${pct(p.roi_pct)}</td><td>${pct(p.max_drawdown_pct)}</td><td>${p.open_count}</td><td class="${readinessTone(p.readiness)}">${readinessDisplay(p.readiness)}</td>
+            <td>${pct(p.roi_pct)}</td><td>${pct(p.max_drawdown_pct)}</td><td>${p.open_count}</td><td class="${readinessTone(p.readiness)}">${readinessDisplay(p.readiness)}</td><td>${p.trend_direction} ${p.progress_delta_24h ? `(${Number(p.progress_delta_24h).toFixed(1)}%)` : ''}</td>
           </tr>`).join('')}
         </tbody>
       </table>`;
@@ -533,7 +538,7 @@
     function renderPortfolioTable(portfolios, readinessMap) {
       const root = document.getElementById('portfolios-panel');
       root.innerHTML = `<table>
-        <thead><tr><th>Portfolio</th><th>Category</th><th>Status</th><th>Currency</th><th>Bankroll</th><th>Realized</th><th>ROI</th><th>Open</th><th>Readiness</th><th>Progress</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Portfolio</th><th>Category</th><th>Status</th><th>Currency</th><th>Bankroll</th><th>Realized</th><th>ROI</th><th>Open</th><th>Readiness</th><th>Progress</th><th>Trend</th><th>Actions</th></tr></thead>
         <tbody>
           ${(portfolios || []).map(p => {
             const progress = readinessProgress(readinessMap[p.portfolio_id] || {});
@@ -548,6 +553,7 @@
             <td>${p.open_count}</td>
             <td class="${readinessTone(p.readiness)}">${readinessDisplay(p.readiness)}</td>
             <td>${progress.pct}%</td>
+            <td>${p.trend_direction} ${p.progress_delta_24h ? `(${Number(p.progress_delta_24h).toFixed(1)}%)` : ''}</td>
             <td>${p.control_mode === 'local_managed'
               ? `<button onclick="controlPortfolio('${p.portfolio_id}','start')">Start</button>
                  <button onclick="controlPortfolio('${p.portfolio_id}','stop')">Stop</button>
@@ -569,6 +575,7 @@
           <div class="metric"><div class="label">Progress</div><div class="value">${progress.pct}%</div></div>
           <div class="metric"><div class="label">Checks Passed</div><div class="value">${progress.passed != null ? `${progress.passed}/${progress.total}` : 'n/a'}</div></div>
           <div class="metric"><div class="label">Open Blockers</div><div class="value">${progress.blockers}</div></div>
+          <div class="metric"><div class="label">Confidence</div><div class="value">${readiness.confidence || 'n/a'}</div></div>
         </div>
         ${progressBar(progress.pct)}
         <div class="panel" style="margin-top:12px;">
@@ -591,6 +598,7 @@
       const trades = state.recent_trades || [];
       const events = state.recent_events || [];
       const models = state.models || [];
+      const trend = state.trend || {};
       root.innerHTML = `
         <div class="grid">
           <div class="metric"><div class="label">Balance</div><div class="value">${money(account.current_balance, account.currency || 'USD')}</div></div>
@@ -599,6 +607,7 @@
           <div class="metric"><div class="label">Fees</div><div class="value">${money(account.fees_paid, account.currency || 'USD')}</div></div>
           <div class="metric"><div class="label">Slippage</div><div class="value">${Number(account.slippage_cost || 0).toFixed(4)}</div></div>
           <div class="metric"><div class="label">Drawdown</div><div class="value">${pct(account.drawdown_pct)}</div></div>
+          <div class="metric"><div class="label">24h Trend</div><div class="value ${trend.direction === 'improving' ? 'good' : (trend.direction === 'worsening' ? 'bad' : 'muted')}">${trend.direction || 'flat'} ${trend.progress_delta_24h ? `(${Number(trend.progress_delta_24h).toFixed(1)}%)` : ''}</div></div>
         </div>
         <div class="two-col">
           <div class="panel">
