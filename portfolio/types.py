@@ -77,6 +77,8 @@ class PortfolioSummary:
     trend_direction: str = "flat"
     progress_delta_24h: float = 0.0
     blocker_count: int = 0
+    eta_to_readiness: Optional[str] = None
+    eta_hours: Optional[float] = None
     status: str = "idle"
     process_pid: Optional[int] = None
     errors: List[str] = field(default_factory=list)

@@ -24,6 +24,8 @@ from funding.ml.learning_quality import FundingLearningQuality
 logger = logging.getLogger(__name__)
 
 PREDICTION_LOG_PATH = Path("data/funding_models/prediction_log.jsonl")
+QUALITY_STATE_PATH = "data/funding/state/funding_online_learner_quality.json"
+META_PATH = Path("data/funding_models/funding_predictor_meta.json")
 SETTLEMENT_HOURS = {0, 8, 16}
 
 
@@ -61,11 +63,11 @@ class FundingOnlineLearner:
         self._quality = FundingLearningQuality(
             model_id="funding_online_learner",
             model_family="funding",
-            state_path="data/funding/state/funding_online_learner_quality.json",
+            state_path=QUALITY_STATE_PATH,
         )
 
         # Load current model AUC if available
-        meta_path = Path("data/funding_models/funding_predictor_meta.json")
+        meta_path = META_PATH
         if meta_path.exists():
             try:
                 meta = json.loads(meta_path.read_text())
@@ -539,3 +541,55 @@ def log_prediction(
     }
     with open(PREDICTION_LOG_PATH, "a") as f:
         f.write(json.dumps(entry) + "\n")
+
+
+class SharedFundingLearnerView:
+    """Read-only view over the shared funding learner artifacts."""
+
+    def __init__(self) -> None:
+        self._running = False
+        self._quality = FundingLearningQuality(
+            model_id="funding_online_learner",
+            model_family="funding",
+            state_path=QUALITY_STATE_PATH,
+        )
+
+    async def run(self) -> None:
+        self._running = True
+        while self._running:
+            await asyncio.sleep(60)
+
+    def stop(self) -> None:
+        self._running = False
+
+    def drain_events(self) -> List[Dict[str, Any]]:
+        return []
+
+    def get_state(self) -> Dict[str, Any]:
+        quality_state = self._quality.state()
+        gate_mult, gate_edge_bump = self._quality.gate_policy()
+        current_auc = 0.0
+        if META_PATH.exists():
+            try:
+                meta = json.loads(META_PATH.read_text(encoding="utf-8"))
+                current_auc = float((meta.get("metrics") or {}).get("direction_auc", 0.0) or 0.0)
+            except Exception:
+                current_auc = 0.0
+        return {
+            "running": self._running,
+            "shared_reader": True,
+            "current_auc": round(current_auc, 4),
+            "retrain_count": None,
+            "last_retrain_time": None,
+            "last_retrain_result": "shared_reader",
+            "next_retrain_hours": None,
+            "retrain_interval_hours": config.FUNDING_RETRAIN_INTERVAL_HOURS,
+            "min_auc_threshold": config.FUNDING_RETRAIN_MIN_AUC,
+            "prediction_accuracy": 0.0,
+            "prediction_total": 0,
+            "total_realized_pnl": 0.0,
+            "gate_multiplier": round(gate_mult, 4),
+            "gate_edge_bump": round(gate_edge_bump, 6),
+            "retrain_history": [],
+            **quality_state,
+        }

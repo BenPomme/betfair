@@ -457,12 +457,26 @@ DEPLOY_WATCHER_AUTO_RESTART_DASHBOARD: bool = (
 DEPLOY_WATCHER_AUTOSTART: bool = os.getenv("DEPLOY_WATCHER_AUTOSTART", "true").lower() == "true"
 DEPLOY_WATCHER_AUTO_RESTART_PORTFOLIOS: str = os.getenv(
     "DEPLOY_WATCHER_AUTO_RESTART_PORTFOLIOS",
-    "betfair_core,hedge_validation,cascade_alpha,contrarian_legacy",
+    "betfair_core,hedge_validation,hedge_research,cascade_alpha,contrarian_legacy",
 )
 BETFAIR_PORTFOLIO_ID: str = os.getenv("BETFAIR_PORTFOLIO_ID", "betfair_core")
 HEDGE_PORTFOLIO_ID: str = os.getenv("HEDGE_PORTFOLIO_ID", "hedge_validation")
 HEDGE_PORTFOLIO_INITIAL_BALANCE_USD: Decimal = Decimal(
     os.getenv("HEDGE_PORTFOLIO_INITIAL_BALANCE_USD", "50000")
+)
+HEDGE_RESEARCH_PORTFOLIO_ID: str = os.getenv("HEDGE_RESEARCH_PORTFOLIO_ID", "hedge_research")
+HEDGE_RESEARCH_ENABLED: bool = os.getenv("HEDGE_RESEARCH_ENABLED", "true").lower() == "true"
+HEDGE_RESEARCH_INITIAL_BALANCE_USD: Decimal = Decimal(
+    os.getenv("HEDGE_RESEARCH_INITIAL_BALANCE_USD", "25000")
+)
+HEDGE_RESEARCH_STATE_PATH: str = os.getenv(
+    "HEDGE_RESEARCH_STATE_PATH", "data/state/funding_positions_research.json"
+)
+HEDGE_RESEARCH_ENTRY_WINDOW_MINUTES: int = int(
+    os.getenv("HEDGE_RESEARCH_ENTRY_WINDOW_MINUTES", "120")
+)
+FUNDING_SHARED_LEARNER_READ_ONLY: bool = (
+    os.getenv("FUNDING_SHARED_LEARNER_READ_ONLY", "false").lower() == "true"
 )
 
 # === CASCADE ALPHA PORTFOLIO ===

@@ -195,19 +195,21 @@
 
     <section class="section" id="section-betfair_core"><h2>Betfair Core</h2><div id="betfair_core-body"></div></section>
     <section class="section" id="section-hedge_validation"><h2>Hedge Validation</h2><div id="hedge_validation-body"></div></section>
+    <section class="section" id="section-hedge_research"><h2>Hedge Research</h2><div id="hedge_research-body"></div></section>
     <section class="section" id="section-cascade_alpha"><h2>Cascade Alpha</h2><div id="cascade_alpha-body"></div></section>
     <section class="section" id="section-mev_scout_sol"><h2>MEV Scout</h2><div id="mev_scout_sol-body"></div></section>
     <section class="section" id="section-contrarian_legacy"><h2>Contrarian Legacy</h2><div id="contrarian_legacy-body"></div></section>
   </div>
 
   <script>
-    const portfolioOrder = ["betfair_core", "hedge_validation", "cascade_alpha", "mev_scout_sol", "contrarian_legacy"];
+    const portfolioOrder = ["betfair_core", "hedge_validation", "hedge_research", "cascade_alpha", "mev_scout_sol", "contrarian_legacy"];
     const labels = {
       overview: "Overview",
       portfolios: "Portfolios",
       compare: "Compare",
       betfair_core: "Betfair",
       hedge_validation: "Hedge Validation",
+      hedge_research: "Hedge Research",
       cascade_alpha: "Cascade Alpha",
       mev_scout_sol: "MEV Scout",
       contrarian_legacy: "Contrarian"
@@ -352,6 +354,23 @@
             <div class="muted">Healthy direction means: more closed hedges, more funding events captured, rejection rate falling, and strict gate eventually turning true.</div>
           </div>`;
       }
+      if (portfolioId === 'hedge_research') {
+        const learner = (models[0] || {}).metrics || {};
+        const audit = raw.settlement_audit || {};
+        return `
+          <div class="panel">
+            <h3>Hedge Research Direction</h3>
+            <div class="grid">
+              ${metricCard('Closed Hedges', raw.closed_hedges || 0)}
+              ${metricCard('Funding Events', audit.realized_funding_events || 0)}
+              ${metricCard('Entry Window', `${raw.entry_window_minutes || raw.config_entry_window_minutes || 120}m`)}
+              ${metricCard('Shared Learner Writer', yesNo(raw.shared_learner_writer))}
+              ${metricCard('Current AUC', compactNumber(learner.current_auc))}
+              ${metricCard('Strict Gate Pass', yesNo(learner.strict_gate_pass))}
+            </div>
+            <div class="muted">Healthy direction means: this looser book is generating more settled funding labels and improving the shared learner that the strict hedge validation reads.</div>
+          </div>`;
+      }
       if (portfolioId === 'contrarian_legacy') {
         const learner = (models[0] || {}).metrics || {};
         const quality = raw.training_quality || {};
@@ -417,11 +436,13 @@
         const metrics = m.metrics || {};
         return `<tr>
           <td>${m.model_id}</td>
+          <td>${metrics.settled_count ?? m.settled_count ?? 0}/${m.settled_target ?? 'n/a'}</td>
           <td>${Number(m.shadow_realized_pnl || 0).toFixed(2)}</td>
           <td>${pct(m.shadow_roi_pct)}</td>
           <td>${metrics.current_auc != null ? compactNumber(metrics.current_auc) : 'n/a'}</td>
           <td>${metrics.strict_gate_pass == null ? 'n/a' : yesNo(metrics.strict_gate_pass)}</td>
-          <td>${metrics.last_retrain_result || metrics.provider_mode || 'n/a'}</td>
+          <td>${m.eta_to_readiness || 'unknown'}</td>
+          <td>${metrics.strict_gate_reason || metrics.last_retrain_result || metrics.provider_mode || 'n/a'}</td>
         </tr>`;
       }).join('');
     }
@@ -449,7 +470,7 @@
 
     function buildNav() {
       const nav = document.getElementById('nav');
-      nav.innerHTML = ["overview", "portfolios", "compare", "betfair_core", "hedge_validation", "contrarian_legacy", "cascade_alpha", "mev_scout_sol"].map(id =>
+      nav.innerHTML = ["overview", "portfolios", "compare", "betfair_core", "hedge_validation", "hedge_research", "contrarian_legacy", "cascade_alpha", "mev_scout_sol"].map(id =>
         `<button data-section="${id}">${labels[id]}</button>`
       ).join('');
       nav.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => showSection(btn.dataset.section)));
@@ -499,6 +520,7 @@
             <div class="metric"><div class="label">Open</div><div class="value">${p.open_count}</div></div>
             <div class="metric"><div class="label">Readiness</div><div class="value ${readinessTone(p.readiness)}">${readinessDisplay(p.readiness)}</div></div>
             <div class="metric"><div class="label">Progress</div><div class="value">${progress.pct}%</div></div>
+            <div class="metric"><div class="label">ETA</div><div class="value">${p.eta_to_readiness || 'unknown'}</div></div>
             <div class="metric"><div class="label">24h Trend</div><div class="value ${p.trend_direction === 'improving' ? 'good' : (p.trend_direction === 'worsening' ? 'bad' : 'muted')}">${p.trend_direction} ${p.progress_delta_24h ? `(${Number(p.progress_delta_24h).toFixed(1)}%)` : ''}</div></div>
           </div>
           <div class="muted">Live-readiness progress ${progress.passed != null ? `${progress.passed}/${progress.total} checks passed` : `${progress.blockers} blockers`}.</div>
@@ -538,7 +560,7 @@
     function renderPortfolioTable(portfolios, readinessMap) {
       const root = document.getElementById('portfolios-panel');
       root.innerHTML = `<table>
-        <thead><tr><th>Portfolio</th><th>Category</th><th>Status</th><th>Currency</th><th>Bankroll</th><th>Realized</th><th>ROI</th><th>Open</th><th>Readiness</th><th>Progress</th><th>Trend</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Portfolio</th><th>Category</th><th>Status</th><th>Currency</th><th>Bankroll</th><th>Realized</th><th>ROI</th><th>Open</th><th>Readiness</th><th>Progress</th><th>ETA</th><th>Trend</th><th>Actions</th></tr></thead>
         <tbody>
           ${(portfolios || []).map(p => {
             const progress = readinessProgress(readinessMap[p.portfolio_id] || {});
@@ -553,6 +575,7 @@
             <td>${p.open_count}</td>
             <td class="${readinessTone(p.readiness)}">${readinessDisplay(p.readiness)}</td>
             <td>${progress.pct}%</td>
+            <td>${p.eta_to_readiness || 'unknown'}</td>
             <td>${p.trend_direction} ${p.progress_delta_24h ? `(${Number(p.progress_delta_24h).toFixed(1)}%)` : ''}</td>
             <td>${p.control_mode === 'local_managed'
               ? `<button onclick="controlPortfolio('${p.portfolio_id}','start')">Start</button>
@@ -575,6 +598,7 @@
           <div class="metric"><div class="label">Progress</div><div class="value">${progress.pct}%</div></div>
           <div class="metric"><div class="label">Checks Passed</div><div class="value">${progress.passed != null ? `${progress.passed}/${progress.total}` : 'n/a'}</div></div>
           <div class="metric"><div class="label">Open Blockers</div><div class="value">${progress.blockers}</div></div>
+          <div class="metric"><div class="label">ETA To Trust</div><div class="value">${readiness.eta_to_readiness || readiness.eta || 'unknown'}</div></div>
           <div class="metric"><div class="label">Confidence</div><div class="value">${readiness.confidence || 'n/a'}</div></div>
         </div>
         ${progressBar(progress.pct)}
@@ -607,6 +631,7 @@
           <div class="metric"><div class="label">Fees</div><div class="value">${money(account.fees_paid, account.currency || 'USD')}</div></div>
           <div class="metric"><div class="label">Slippage</div><div class="value">${Number(account.slippage_cost || 0).toFixed(4)}</div></div>
           <div class="metric"><div class="label">Drawdown</div><div class="value">${pct(account.drawdown_pct)}</div></div>
+          <div class="metric"><div class="label">ETA To Trust</div><div class="value">${trend.eta_to_readiness || 'unknown'}</div></div>
           <div class="metric"><div class="label">24h Trend</div><div class="value ${trend.direction === 'improving' ? 'good' : (trend.direction === 'worsening' ? 'bad' : 'muted')}">${trend.direction || 'flat'} ${trend.progress_delta_24h ? `(${Number(trend.progress_delta_24h).toFixed(1)}%)` : ''}</div></div>
         </div>
         <div class="two-col">
@@ -630,7 +655,7 @@
         <div class="two-col">
           <div class="panel">
             <h3>Model Health</h3>
-            <table><thead><tr><th>Model</th><th>Shadow P&L</th><th>ROI</th><th>AUC</th><th>Gate</th><th>Last Update</th></tr></thead><tbody>
+            <table><thead><tr><th>Model</th><th>Settled</th><th>Shadow P&L</th><th>ROI</th><th>AUC</th><th>Gate</th><th>ETA</th><th>Why not ready</th></tr></thead><tbody>
               ${renderModelHealth(models)}
             </tbody></table>
           </div>

@@ -18,7 +18,7 @@ from funding.data.binance_spot_client import BinanceSpotClient
 from funding.data.market_data_stream import MarketDataStream
 from funding.data.price_cache import FundingPriceCache
 from funding.execution import executor
-from funding.ml.online_learner import FundingOnlineLearner
+from funding.ml.online_learner import FundingOnlineLearner, SharedFundingLearnerView
 from funding.ml.contrarian_learner import ContrarianOnlineLearner
 from funding.strategy import entry_strategy, exit_strategy, symbol_selector
 from funding.strategy.symbol_selector import SymbolSelector
@@ -94,9 +94,12 @@ class FundingEngine:
         self._contrarian_disabled_for_validation = (
             self._validation_mode and self._validation_scope == "hedge_only"
         )
-        self._online_learner = FundingOnlineLearner(
-            watchlist_fn=lambda: self._symbol_selector.watchlist,
-        )
+        if bool(getattr(config, "FUNDING_SHARED_LEARNER_READ_ONLY", False)):
+            self._online_learner = SharedFundingLearnerView()
+        else:
+            self._online_learner = FundingOnlineLearner(
+                watchlist_fn=lambda: self._symbol_selector.watchlist,
+            )
 
         # Callbacks
         self._on_opportunity = on_opportunity

@@ -79,6 +79,10 @@ def _history_path(portfolio_id: str) -> Path:
     return PortfolioStateStore(portfolio_id).runtime_dir / "summary_history.jsonl"
 
 
+def _model_history_path(portfolio_id: str, model_id: str) -> Path:
+    return PortfolioStateStore(portfolio_id).models_dir / model_id / "progress_history.jsonl"
+
+
 def _read_jsonl(path: Path, limit: int = 500) -> List[Dict[str, Any]]:
     if not path.exists():
         return []
@@ -112,6 +116,22 @@ def _append_history_if_due(summary: Dict[str, Any], state: Dict[str, Any], readi
     }
     PortfolioStateStore(summary["portfolio_id"]).append_jsonl(_history_path(summary["portfolio_id"]), row)
     previous["last_history_write"] = now
+    for model in state.get("models") or []:
+        if not isinstance(model, dict) or not model.get("model_id"):
+            continue
+        metrics = dict(model.get("metrics") or {})
+        settled = metrics.get("settled_count", model.get("settled_count", 0))
+        lift = (metrics.get("rolling_200") or {}).get("brier_lift_abs")
+        PortfolioStateStore(summary["portfolio_id"]).append_jsonl(
+            _model_history_path(summary["portfolio_id"], str(model["model_id"])),
+            {
+                "ts": row["ts"],
+                "settled_count": int(settled or 0),
+                "strict_gate_pass": bool(metrics.get("strict_gate_pass", False)),
+                "current_auc": metrics.get("current_auc"),
+                "brier_lift_abs": lift,
+            },
+        )
 
 
 def _parse_iso(ts: str) -> datetime | None:
@@ -142,6 +162,8 @@ def _history_trend(portfolio_id: str) -> Dict[str, Any]:
             "progress_delta_24h": 0.0,
             "direction": "flat",
             "history": [],
+            "eta_hours": None,
+            "eta_to_readiness": "insufficient_history",
         }
     latest = rows[-1]
     latest_progress = float(latest.get("progress_pct", 0.0) or 0.0)
@@ -160,12 +182,101 @@ def _history_trend(portfolio_id: str) -> Dict[str, Any]:
         direction = "improving"
     elif delta < -3:
         direction = "worsening"
+    eta_hours = None
+    eta_text = "insufficient_history"
+    latest_ts = _parse_iso(str(latest.get("ts", "") or ""))
+    baseline_ts = _parse_iso(str(baseline.get("ts", "") or ""))
+    if latest_progress >= 95.0:
+        eta_hours = 0.0
+        eta_text = "ready_now"
+    elif latest_ts is not None and baseline_ts is not None:
+        elapsed_hours = max(0.0, (latest_ts - baseline_ts).total_seconds() / 3600.0)
+        if elapsed_hours > 0:
+            progress_rate = delta / elapsed_hours
+            if progress_rate > 0.15:
+                eta_hours = max(0.0, (95.0 - latest_progress) / progress_rate)
+                eta_text = _format_eta(eta_hours)
+            elif direction == "worsening":
+                eta_text = "moving_away"
+            else:
+                eta_text = "awaiting_more_progress"
     return {
         "latest_progress_pct": round(latest_progress, 2),
         "progress_delta_24h": round(delta, 2),
         "direction": direction,
         "history": rows[-288:],
+        "eta_hours": round(eta_hours, 1) if eta_hours is not None else None,
+        "eta_to_readiness": eta_text,
     }
+
+
+def _format_eta(hours: float | None) -> str:
+    if hours is None:
+        return "unknown"
+    if hours <= 0:
+        return "ready_now"
+    if hours < 1:
+        return "<1h"
+    if hours < 24:
+        return f"{int(round(hours))}h"
+    days = hours / 24.0
+    if days < 14:
+        return f"{days:.1f}d"
+    return f"{days / 7.0:.1f}w"
+
+
+def _model_target_settled(portfolio_id: str) -> int:
+    if portfolio_id == "betfair_core":
+        return int(getattr(config, "PREDICTION_STRICT_GATE_MIN_SETTLED", 100))
+    return int(getattr(config, "FUNDING_STRICT_MIN_SETTLED", 100))
+
+
+def _enrich_models(portfolio_id: str, models: List[Dict[str, Any]], portfolio_eta_hours: float | None) -> List[Dict[str, Any]]:
+    enriched: List[Dict[str, Any]] = []
+    target = _model_target_settled(portfolio_id)
+    for model in models:
+        if not isinstance(model, dict):
+            continue
+        payload = dict(model)
+        metrics = dict(payload.get("metrics") or {})
+        settled = int(metrics.get("settled_count", payload.get("settled_count", 0)) or 0)
+        gate_pass = bool(metrics.get("strict_gate_pass", False))
+        reason = str(metrics.get("strict_gate_reason") or "")
+        eta_hours = None
+        eta_text = "quality_blocker"
+        if gate_pass:
+            eta_hours = 0.0
+            eta_text = "ready_now"
+        else:
+            rows = _read_jsonl(_model_history_path(portfolio_id, str(payload.get("model_id"))), limit=1000)
+            latest = rows[-1] if rows else None
+            baseline = rows[0] if rows else None
+            if latest is not None and baseline is not None:
+                latest_ts = _parse_iso(str(latest.get("ts", "") or ""))
+                baseline_ts = _parse_iso(str(baseline.get("ts", "") or ""))
+                latest_settled = int(latest.get("settled_count", settled) or settled)
+                baseline_settled = int(baseline.get("settled_count", 0) or 0)
+                if latest_ts is not None and baseline_ts is not None:
+                    elapsed_hours = max(0.0, (latest_ts - baseline_ts).total_seconds() / 3600.0)
+                    if elapsed_hours > 0:
+                        settled_rate = (latest_settled - baseline_settled) / elapsed_hours
+                        if latest_settled < target and settled_rate > 0:
+                            eta_hours = max(0.0, (target - latest_settled) / settled_rate)
+                            eta_text = _format_eta(eta_hours)
+                        elif latest_settled >= target and portfolio_eta_hours is not None:
+                            eta_hours = portfolio_eta_hours
+                            eta_text = _format_eta(eta_hours)
+                        elif latest_settled < target:
+                            eta_text = "awaiting_more_outcomes"
+            if reason and eta_text == "quality_blocker":
+                eta_text = f"blocked:{reason}"
+        payload["eta_hours"] = round(eta_hours, 1) if eta_hours is not None else None
+        payload["eta_to_readiness"] = eta_text
+        payload["settled_target"] = target
+        payload["settled_remaining"] = max(0, target - settled)
+        payload["strict_gate_reason"] = reason or None
+        enriched.append(payload)
+    return enriched
 
 
 def _load_deploy_state() -> Dict[str, Any]:
@@ -241,7 +352,8 @@ def _maybe_send_daily_digest(summaries: List[Dict[str, Any]], snapshots: List[Di
             for item in blocked[:3]
         ],
     }
-    if _notifier.send_daily_digest(lines, sections=sections):
+    sender = getattr(_notifier, "send_daily_digest", None)
+    if callable(sender) and sender(lines, sections=sections):
         _daily_digest_sent_date = today
 
 
@@ -512,7 +624,7 @@ def _build_snapshot(portfolio_id: str) -> Dict[str, Any]:
     account = (store.read_account().to_dict() if store.read_account() is not None else _default_account(spec))
     readiness = store.read_readiness() or {}
     heartbeat = store.read_heartbeat() or {}
-    models = store.read_models()
+    raw_models = store.read_models()
     trades = store.read_trades(limit=200)
     events = store.read_events(limit=200)
     balance_history = store.read_balance_history(limit=1000)
@@ -533,6 +645,10 @@ def _build_snapshot(portfolio_id: str) -> Dict[str, Any]:
     elif summary_status == "running":
         summary_status = "idle"
     trend = _history_trend(portfolio_id)
+    readiness = dict(readiness)
+    readiness.setdefault("eta_to_readiness", trend.get("eta_to_readiness"))
+    readiness.setdefault("eta_hours", trend.get("eta_hours"))
+    models = _enrich_models(portfolio_id, raw_models, trend.get("eta_hours"))
     blocker_count = len((readiness.get("blockers_v2") or readiness.get("blockers") or []))
     summary = PortfolioSummary(
         portfolio_id=spec.portfolio_id,
@@ -554,6 +670,8 @@ def _build_snapshot(portfolio_id: str) -> Dict[str, Any]:
         trend_direction=trend.get("direction", "flat"),
         progress_delta_24h=trend.get("progress_delta_24h", 0.0),
         blocker_count=blocker_count,
+        eta_to_readiness=trend.get("eta_to_readiness"),
+        eta_hours=trend.get("eta_hours"),
         status=summary_status,
         process_pid=pid,
         errors=[raw_state.get("error")] if raw_state.get("error") else [],

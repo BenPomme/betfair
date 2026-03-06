@@ -16,7 +16,7 @@ from portfolio.types import ModelShadowAccount, PortfolioRunnerSpec
 logger = logging.getLogger(__name__)
 
 
-class HedgeValidationPortfolioRunner(PortfolioRunnerBase):
+class HedgeResearchPortfolioRunner(PortfolioRunnerBase):
     def __init__(self, spec: PortfolioRunnerSpec):
         super().__init__(spec)
         self._engine: Optional[FundingEngine] = None
@@ -29,24 +29,27 @@ class HedgeValidationPortfolioRunner(PortfolioRunnerBase):
         snapshot.update(
             {
                 "funding_mode": config.FUNDING_MODE,
-                "validation_mode": True,
-                "validation_scope": "hedge_only",
-                "execution_mode": "fail_closed",
-                "max_total_exposure_usd": float(config.FUNDING_MAX_TOTAL_EXPOSURE_USD),
-                "max_open_hedges": int(config.FUNDING_MAX_OPEN_HEDGES),
-                "shared_learner_read_only": True,
-                "state_path": str(config.FUNDING_STATE_PATH),
+                "validation_mode": False,
+                "validation_scope": "research",
+                "execution_mode": "research_fail_closed",
+                "max_total_exposure_usd": float(config.HEDGE_RESEARCH_INITIAL_BALANCE_USD),
+                "entry_window_minutes": int(config.HEDGE_RESEARCH_ENTRY_WINDOW_MINUTES),
+                "shared_learner_read_only": False,
+                "state_path": str(config.HEDGE_RESEARCH_STATE_PATH),
             }
         )
         return snapshot
 
     def _start_engine(self) -> Dict[str, object]:
-        config.FUNDING_VALIDATION_MODE = True
-        config.FUNDING_VALIDATION_SCOPE = "hedge_only"
+        config.FUNDING_VALIDATION_MODE = False
+        config.FUNDING_VALIDATION_SCOPE = "research"
         config.FUNDING_PAPER_REQUIRE_TESTNET_FILLS = True
         config.FUNDING_PAPER_ALLOW_SIM_FALLBACK = False
-        config.FUNDING_SHARED_LEARNER_READ_ONLY = True
+        config.FUNDING_SHARED_LEARNER_READ_ONLY = False
         config.CONTRARIAN_ENABLED = False
+        config.FUNDING_STATE_PATH = str(config.HEDGE_RESEARCH_STATE_PATH)
+        config.FUNDING_ENTRY_WINDOW_MINUTES = int(config.HEDGE_RESEARCH_ENTRY_WINDOW_MINUTES)
+        config.FUNDING_MAX_TOTAL_EXPOSURE_USD = config.HEDGE_RESEARCH_INITIAL_BALANCE_USD
 
         self._engine = FundingEngine()
 
@@ -57,12 +60,12 @@ class HedgeValidationPortfolioRunner(PortfolioRunnerBase):
             try:
                 loop.run_until_complete(self._engine.start())
             except Exception:
-                logger.exception("Hedge funding engine crashed")
+                logger.exception("Hedge research engine crashed")
             finally:
                 self._loop = None
                 loop.close()
 
-        self._thread = threading.Thread(target=_run, daemon=True, name="hedge-validation-runner")
+        self._thread = threading.Thread(target=_run, daemon=True, name="hedge-research-runner")
         self._thread.start()
         return {"ok": True}
 
@@ -74,7 +77,7 @@ class HedgeValidationPortfolioRunner(PortfolioRunnerBase):
                 future = asyncio.run_coroutine_threadsafe(self._engine.stop(), self._loop)
                 future.result(timeout=15.0)
             except Exception:
-                logger.exception("Failed stopping hedge engine gracefully")
+                logger.exception("Failed stopping hedge research engine gracefully")
         if self._thread is not None and self._thread.is_alive():
             self._thread.join(timeout=15.0)
         self._thread = None
@@ -92,17 +95,18 @@ class HedgeValidationPortfolioRunner(PortfolioRunnerBase):
     def _build_model_accounts(self, state: Dict[str, object]) -> List[ModelShadowAccount]:
         learner = state.get("online_learner") or {}
         rolling = learner.get("rolling_200") or {}
+        realized = float(state.get("realized_net_pnl_usd", 0.0) or 0.0)
         return [
             ModelShadowAccount(
                 portfolio_id=self.spec.portfolio_id,
-                model_id="funding_online_learner",
+                model_id="funding_online_learner_shared",
                 shadow_starting_balance=self.spec.initial_balance,
-                shadow_current_balance=self.spec.initial_balance + float(state.get("realized_net_pnl_usd", 0.0) or 0.0),
-                shadow_realized_pnl=float(state.get("realized_net_pnl_usd", 0.0) or 0.0),
+                shadow_current_balance=self.spec.initial_balance + realized,
+                shadow_realized_pnl=realized,
                 shadow_roi_pct=float(rolling.get("roi_pct", state.get("realized_roi_pct", 0.0)) or 0.0),
-                settled_count=int(rolling.get("settled", 0) or 0),
+                settled_count=int(rolling.get("settled", learner.get("prediction_total", 0)) or 0),
                 metrics=dict(learner),
-                selected_for_execution=True,
+                selected_for_execution=bool(learner.get("strict_gate_pass", False)),
             )
         ]
 
@@ -116,7 +120,7 @@ class HedgeValidationPortfolioRunner(PortfolioRunnerBase):
                 "portfolio_id": self.spec.portfolio_id,
                 "running": False,
                 "status": "error",
-                "error": started.get("error", "hedge_start_failed"),
+                "error": started.get("error", "hedge_research_start_failed"),
             }
             account = build_strategy_account(
                 portfolio_id=self.spec.portfolio_id,
@@ -164,13 +168,16 @@ class HedgeValidationPortfolioRunner(PortfolioRunnerBase):
                     trade_count=int(state.get("closed_hedges", 0) or 0),
                     balance_history=self._balance_history,
                 )
-                readiness = state.get("readiness_v2") or evaluate_binance_live_readiness(state)
+                readiness = evaluate_binance_live_readiness(state)
+                readiness["status"] = "paper_validating"
+                readiness.setdefault("warnings", []).append("research_portfolio_feeds_shared_learner")
                 enriched_state = dict(state)
                 enriched_state.update(
                     {
                         "portfolio_id": self.spec.portfolio_id,
                         "status": "running" if state.get("running") else "idle",
                         "control_mode": self.spec.control_mode,
+                        "shared_learner_writer": True,
                     }
                 )
                 events = list((state.get("settlement_audit") or {}).get("recent", [])) + list(state.get("learning_events") or [])
