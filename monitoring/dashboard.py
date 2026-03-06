@@ -608,7 +608,7 @@ def api_cascade_state():
 
 @app.get("/api/strategy-overview")
 def api_strategy_overview():
-    """Combined P&L across all strategies (hedge + contrarian)."""
+    """Portfolio-scoped strategy overview."""
     if _funding_engine is None:
         return {"enabled": False}
     state = _funding_engine.get_state()
@@ -619,10 +619,14 @@ def api_strategy_overview():
     hedge_roi_pct = (hedge_net / assumed_capital * 100.0) if assumed_capital > 0 else 0.0
     contrarian = state.get("contrarian") or {}
     contrarian_pnl = contrarian.get("total_pnl", 0)
-    combined_net = hedge_net + contrarian_pnl
-    combined_roi_pct = (combined_net / assumed_capital * 100.0) if assumed_capital > 0 else 0.0
+    portfolio_scoped = True
+    hedge_only = bool(state.get("contrarian_trading_disabled_for_validation")) or str(state.get("validation_scope", "")).lower() == "hedge_only"
+    combined_net = hedge_net if portfolio_scoped else hedge_net + contrarian_pnl
+    combined_roi_pct = hedge_roi_pct if portfolio_scoped else ((combined_net / assumed_capital * 100.0) if assumed_capital > 0 else 0.0)
     return {
         "enabled": True,
+        "portfolio_scoped": portfolio_scoped,
+        "hedge_only_validation": hedge_only,
         "funding_summary": state.get("funding_summary", {}) or {},
         "assumed_capital_usd": assumed_capital,
         "hedge": {
@@ -638,6 +642,7 @@ def api_strategy_overview():
             "total_pnl": contrarian_pnl,
             "win_rate": contrarian.get("win_rate", 0),
             "trade_count": contrarian.get("trade_count", 0),
+            "separate_portfolio": True,
         },
         "combined_net_pnl": combined_net,
         "combined_roi_pct": combined_roi_pct,

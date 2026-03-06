@@ -217,12 +217,20 @@ def evaluate_binance_live_readiness(state: Dict[str, Any]) -> Dict[str, Any]:
     closed_hedges = _as_int(state.get("closed_hedges"), 0)
     realized_net_pnl_usd = _as_float(state.get("realized_net_pnl_usd"), 0.0)
 
+    hedge_only_scope = str(state.get("validation_scope", "")).lower() == "hedge_only"
+    contrarian_disabled_for_validation = _as_bool(
+        state.get("contrarian_trading_disabled_for_validation"),
+        False,
+    )
+    if hedge_only_scope or contrarian_disabled_for_validation:
+        min_pool = 1
+        min_passing = 1
     learners = []
     ol = state.get("online_learner")
     cl = state.get("contrarian_learner")
     if isinstance(ol, dict):
         learners.append(("funding_online_learner", ol))
-    if isinstance(cl, dict):
+    if isinstance(cl, dict) and not (hedge_only_scope or contrarian_disabled_for_validation):
         learners.append(("contrarian_online_learner", cl))
 
     candidate_models: List[Dict[str, Any]] = []

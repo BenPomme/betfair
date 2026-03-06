@@ -40,6 +40,8 @@ def _funding_state_ready(mode: str = "paper"):
         "realized_net_pnl_usd": 15.0,
         "closed_hedges": 10,
         "validation_mode": True,
+        "validation_scope": "hedge_only",
+        "contrarian_trading_disabled_for_validation": True,
         "execution_mode": "fail_closed",
         "validation_run_id": "run_123",
         "fresh_book_started_at": "2026-03-06T10:00:00+00:00",
@@ -111,3 +113,16 @@ def test_live_readiness_blocks_when_settlement_events_too_low(monkeypatch):
     readiness = evaluate_live_trading_readiness(_betfair_state_ready(paper_mode=True), funding)
     assert readiness["validation_ready"] is False
     assert "settlement_events_minimum" in readiness["binance"]["blockers_v2"]
+
+
+def test_live_readiness_ignores_contrarian_when_hedge_portfolio_is_scoped(monkeypatch):
+    monkeypatch.setattr(config, "PREDICTION_GATE_ENFORCEMENT_MODE", "strict")
+    monkeypatch.setattr(config, "FUNDING_GATE_MODE", "full")
+    funding = _funding_state_ready(mode="paper")
+    funding["contrarian_learner"] = {
+        "strict_gate_pass": False,
+        "rolling_200": {"settled": 200, "roi_pct": -5.0, "brier_lift_abs": -0.2},
+    }
+    readiness = evaluate_live_trading_readiness(_betfair_state_ready(paper_mode=True), funding)
+    assert readiness["validation_ready"] is True
+    assert readiness["binance"]["candidate_models"] == 1

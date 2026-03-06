@@ -1318,11 +1318,15 @@ class FundingEngine:
         contrarian_quality = (
             self._contrarian_learner.get_state() if self._contrarian_learner is not None else {}
         )
+        include_contrarian_in_funding_summary = not self._contrarian_disabled_for_validation
         eligible_count = 0
         strict_total = 0
         weighted_wins = 0.0
         weighted_settled = 0.0
-        for learner_state in [funding_quality, contrarian_quality]:
+        learner_states = [funding_quality]
+        if include_contrarian_in_funding_summary:
+            learner_states.append(contrarian_quality)
+        for learner_state in learner_states:
             if learner_state:
                 strict_total += 1
                 if bool(learner_state.get("strict_gate_pass", False)):
@@ -1439,9 +1443,11 @@ class FundingEngine:
                 ),
                 "realized_roi_pct": float(realized_roi_pct),
                 "validation_mode": self._validation_mode,
+                "validation_scope": self._validation_scope,
                 "execution_mode": self._execution_mode,
                 "validation_run_id": self._validation_run_id or validation_context.get("validation_run_id"),
                 "fresh_book_started_at": self._fresh_book_started_at or validation_context.get("fresh_book_started_at"),
+                "contrarian_trading_disabled_for_validation": self._contrarian_disabled_for_validation,
                 "execution_quality": execution_quality,
                 "settlement_audit": settlement_audit,
                 "cost_breakdown": cost_breakdown,
@@ -1505,6 +1511,8 @@ class FundingEngine:
                 "strict_gate_pass_rate": round(strict_gate_pass_rate, 4),
                 "weighted_win_rate_pct": round(weighted_win_rate_pct, 2),
                 "strict_gate_pass": bool(strict_total > 0 and eligible_count == strict_total),
+                "portfolio_scoped": True,
+                "scope": "hedge_only" if self._contrarian_disabled_for_validation else "multi_strategy",
             },
             "learning_events": self._learning_events[-50:],
             "build_info": {

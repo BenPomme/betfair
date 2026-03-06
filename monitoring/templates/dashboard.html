@@ -1303,6 +1303,8 @@ function renderStrategyOverview(data){
   const combinedRoi=Number(data.combined_roi_pct||0);
   const summary=data.funding_summary||{};
   const assumedCap=Number(data.assumed_capital_usd||0);
+  const portfolioScoped=Boolean(data.portfolio_scoped);
+  const hedgeOnlyValidation=Boolean(data.hedge_only_validation);
 
   $('soHedgePnl').textContent='$'+hedge.toFixed(2);
   $('soHedgePnl').className='val '+(hedge>0?'g':hedge<0?'r':'');
@@ -1310,15 +1312,17 @@ function renderStrategyOverview(data){
 
   $('soContrarianPnl').textContent='$'+contrarian.toFixed(2);
   $('soContrarianPnl').className='val '+(contrarian>0?'g':contrarian<0?'r':'');
-  $('soContrarianPnlSub').textContent=(data.contrarian||{}).trade_count!=null?(data.contrarian||{}).trade_count+' trades':'';
+  $('soContrarianPnlSub').textContent=hedgeOnlyValidation?'separate portfolio, not part of hedge validation':((data.contrarian||{}).trade_count!=null?(data.contrarian||{}).trade_count+' trades':'');
 
-  $('soCombinedPnl').textContent='$'+combined.toFixed(2);
+  $('soCombinedPnl').textContent=portfolioScoped?'SEPARATE':'$'+combined.toFixed(2);
   $('soCombinedPnl').className='val '+(combined>0?'g':combined<0?'r':'');
-  $('soCombinedPnlSub').textContent='ROI '+fmtPct(combinedRoi,2)+' on '+fmtUsd(assumedCap,0)+' • eligible: '+(summary.eligible_models_count||0)+' • strict pass rate: '+Number(summary.strict_gate_pass_rate||0).toFixed(2)+' • weighted win: '+Number(summary.weighted_win_rate_pct||0).toFixed(1)+'%';
+  $('soCombinedPnlSub').textContent=portfolioScoped
+    ? 'Hedge and contrarian are treated as separate portfolios. Hedge metrics are evaluated independently.'
+    : ('ROI '+fmtPct(combinedRoi,2)+' on '+fmtUsd(assumedCap,0)+' • eligible: '+(summary.eligible_models_count||0)+' • strict pass rate: '+Number(summary.strict_gate_pass_rate||0).toFixed(2)+' • weighted win: '+Number(summary.weighted_win_rate_pct||0).toFixed(1)+'%');
 
   const strategies=[
     {name:'Hedge',enabled:true,trade_count:(data.hedge||{}).open_hedges||0,win_rate:0.5,net_pnl:hedge,avg_hold_hours:null},
-    {name:'Contrarian',enabled:true,trade_count:(data.contrarian||{}).trade_count||0,win_rate:Number((data.contrarian||{}).win_rate||0),net_pnl:contrarian,avg_hold_hours:null},
+    {name:'Contrarian',enabled:!hedgeOnlyValidation,trade_count:(data.contrarian||{}).trade_count||0,win_rate:Number((data.contrarian||{}).win_rate||0),net_pnl:contrarian,avg_hold_hours:null},
   ];
   $('soBreakdownBody').innerHTML=strategies.length?strategies.map(s=>{
     const pnl=Number(s.net_pnl||0);
