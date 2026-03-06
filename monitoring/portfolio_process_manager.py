@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 import os
 import signal
 import subprocess
@@ -22,6 +23,20 @@ class PortfolioProcessManager:
     def _pid_running(pid: Optional[int]) -> bool:
         if not pid or pid <= 0:
             return False
+        if os.name == "nt":
+            try:
+                process = ctypes.windll.kernel32.OpenProcess(0x1000, 0, int(pid))
+                if not process:
+                    return False
+                try:
+                    exit_code = ctypes.c_ulong()
+                    if ctypes.windll.kernel32.GetExitCodeProcess(process, ctypes.byref(exit_code)) == 0:
+                        return False
+                    return int(exit_code.value) == 259
+                finally:
+                    ctypes.windll.kernel32.CloseHandle(process)
+            except Exception:
+                return False
         try:
             os.kill(pid, 0)
             return True

@@ -326,8 +326,7 @@ def _load_deploy_state() -> Dict[str, Any]:
         running = False
         if pid:
             try:
-                os.kill(int(pid), 0)
-                running = True
+                running = _process_manager._pid_running(int(pid))
             except Exception:
                 running = False
         payload["running"] = running
