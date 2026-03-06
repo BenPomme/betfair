@@ -18,3 +18,7 @@ monitoring/reports/*.json
 data/candidates/
 data/prediction/
 models/
+
+# Runtime portfolio state and validation archives
+data/portfolios/
+data/state/archive/

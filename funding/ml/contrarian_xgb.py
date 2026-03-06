@@ -124,6 +124,7 @@ class ContrarianXGBoost:
             ValueError: If df is empty, lacks required columns, or has
                         insufficient rows.
         """
+        df = self._sanitize_training_frame(df)
         self._validate_input(df)
 
         self._feature_columns = get_contrarian_feature_columns(df)
@@ -397,6 +398,28 @@ class ContrarianXGBoost:
                 "Input DataFrame index must be a DatetimeIndex. "
                 "Ensure df was built with build_contrarian_features (indexed by funding_time_dt)."
             )
+
+        if not np.isfinite(df["price_return_24h_target"].astype(float).values).all():
+            raise ValueError("price_return_24h_target contains non-finite values after sanitization.")
+
+        dir_values = set(pd.to_numeric(df["direction_24h"], errors="coerce").dropna().astype(int).tolist())
+        if not dir_values.issubset({0, 1}):
+            raise ValueError("direction_24h contains values outside {0,1} after sanitization.")
+
+    def _sanitize_training_frame(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Drop rows with non-finite targets before model fitting."""
+        if df is None:
+            return pd.DataFrame()
+        clean = df.copy()
+        clean["price_return_24h_target"] = pd.to_numeric(
+            clean["price_return_24h_target"], errors="coerce"
+        )
+        clean["direction_24h"] = pd.to_numeric(clean["direction_24h"], errors="coerce")
+        clean = clean.replace([np.inf, -np.inf], np.nan)
+        clean = clean.dropna(subset=["price_return_24h_target", "direction_24h"])
+        clean = clean[np.isfinite(clean["price_return_24h_target"])]
+        clean = clean[clean["direction_24h"].isin([0, 1])]
+        return clean
 
     def _walk_forward_split(
         self,

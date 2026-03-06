@@ -22,10 +22,12 @@ except ImportError:
 if __name__ == "__main__":
     import uvicorn
     reload_enabled = os.getenv("DASHBOARD_RELOAD", "false").lower() == "true"
-    print(f"[dashboard] starting on :8000 reload={reload_enabled}")
+    from config import COMMAND_CENTER_HOST, COMMAND_CENTER_PORT
+
+    print(f"[dashboard] starting command center on :{COMMAND_CENTER_PORT} reload={reload_enabled}")
     uvicorn.run(
-        "monitoring.dashboard:app",
-        host="0.0.0.0",
-        port=8000,
+        "monitoring.command_center:app",
+        host=COMMAND_CENTER_HOST,
+        port=COMMAND_CENTER_PORT,
         reload=reload_enabled,
     )

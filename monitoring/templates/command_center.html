@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Strategy Command Center</title>
+  <style>
+    :root {
+      --bg: #07111a;
+      --panel: rgba(10, 21, 32, 0.84);
+      --panel-2: rgba(16, 31, 44, 0.9);
+      --line: rgba(141, 169, 196, 0.18);
+      --text: #e8f0f7;
+      --muted: #94a9bc;
+      --good: #53c58a;
+      --warn: #f0b85c;
+      --bad: #ef6b6b;
+      --accent: #79c2ff;
+      --accent-2: #ffd27f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Aptos", "Segoe UI Variable", "Trebuchet MS", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(121,194,255,0.14), transparent 28%),
+        radial-gradient(circle at top right, rgba(255,210,127,0.10), transparent 24%),
+        linear-gradient(180deg, #0a1621 0%, #07111a 100%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .shell {
+      width: min(1500px, 96vw);
+      margin: 0 auto;
+      padding: 24px 0 40px;
+    }
+    .hero {
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(2rem, 4vw, 3.2rem);
+      letter-spacing: 0.02em;
+    }
+    .hero p { margin: 6px 0 0; color: var(--muted); }
+    .statusbar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .pill, button {
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 10px 14px;
+      font-size: 0.92rem;
+    }
+    button { cursor: pointer; }
+    button:hover { border-color: rgba(121,194,255,0.45); }
+    nav {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+    nav button.active {
+      background: linear-gradient(90deg, rgba(121,194,255,0.18), rgba(255,210,127,0.14));
+      border-color: rgba(121,194,255,0.35);
+    }
+    .section {
+      display: none;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 18px;
+      backdrop-filter: blur(10px);
+      margin-bottom: 18px;
+      box-shadow: 0 18px 50px rgba(0,0,0,0.18);
+    }
+    .section.active { display: block; }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+    }
+    .card {
+      background: rgba(10, 24, 36, 0.85);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+    }
+    .card h3 { margin: 0 0 4px; }
+    .muted { color: var(--muted); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin: 14px 0 18px;
+    }
+    .metric {
+      padding: 12px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+    }
+    .metric .label { color: var(--muted); font-size: 0.86rem; }
+    .metric .value { font-size: 1.2rem; font-weight: 700; margin-top: 6px; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+    .good { color: var(--good); }
+    .warn { color: var(--warn); }
+    .bad { color: var(--bad); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 0.92rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px 8px;
+      border-bottom: 1px solid rgba(141,169,196,0.12);
+      vertical-align: top;
+    }
+    th { color: var(--muted); font-weight: 600; }
+    .two-col {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 18px;
+    }
+    .panel {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+    }
+    .sparkline {
+      width: 100%;
+      height: 64px;
+      display: block;
+      margin-top: 8px;
+    }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+      font-size: 0.84rem;
+      color: #dbe7f0;
+    }
+    @media (max-width: 980px) {
+      .two-col { grid-template-columns: 1fr; }
+      .hero { flex-direction: column; align-items: start; }
+      .statusbar { justify-content: start; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="hero">
+      <div>
+        <h1>Strategy Command Center</h1>
+        <p>Independent paper portfolios, isolated ledgers, and strategy-specific readiness.</p>
+      </div>
+      <div class="statusbar">
+        <div class="pill" id="boot-pill">Connecting</div>
+        <div class="pill" id="time-pill">--</div>
+      </div>
+    </div>
+
+    <nav id="nav"></nav>
+
+    <section class="section active" id="section-overview">
+      <h2>Overview</h2>
+      <div class="cards" id="overview-cards"></div>
+    </section>
+
+    <section class="section" id="section-portfolios">
+      <h2>Portfolios</h2>
+      <div class="panel" id="portfolios-panel"></div>
+    </section>
+
+    <section class="section" id="section-compare">
+      <h2>Compare</h2>
+      <div class="panel" id="compare-panel"></div>
+    </section>
+
+    <section class="section" id="section-betfair_core"><h2>Betfair Core</h2><div id="betfair_core-body"></div></section>
+    <section class="section" id="section-hedge_validation"><h2>Hedge Validation</h2><div id="hedge_validation-body"></div></section>
+    <section class="section" id="section-cascade_alpha"><h2>Cascade Alpha</h2><div id="cascade_alpha-body"></div></section>
+    <section class="section" id="section-mev_scout_sol"><h2>MEV Scout</h2><div id="mev_scout_sol-body"></div></section>
+    <section class="section" id="section-legacy"><h2>Legacy</h2><div id="legacy-body"></div></section>
+  </div>
+
+  <script>
+    const portfolioOrder = ["betfair_core", "hedge_validation", "cascade_alpha", "mev_scout_sol", "contrarian_legacy"];
+    const labels = {
+      overview: "Overview",
+      portfolios: "Portfolios",
+      compare: "Compare",
+      betfair_core: "Betfair",
+      hedge_validation: "Hedge Validation",
+      cascade_alpha: "Cascade Alpha",
+      mev_scout_sol: "MEV Scout",
+      legacy: "Legacy"
+    };
+
+    async function getJSON(url) {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`${url}: ${res.status}`);
+      return await res.json();
+    }
+
+    async function postJSON(url) {
+      const res = await fetch(url, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail?.error || data.error || `${url}: ${res.status}`);
+      return data;
+    }
+
+    function money(value, currency) {
+      const n = Number(value || 0);
+      return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 2 }).format(n);
+    }
+
+    function pct(value) {
+      return `${Number(value || 0).toFixed(2)}%`;
+    }
+
+    function readinessTone(label) {
+      if (["ready", "validated"].includes(label)) return "good";
+      if (["research_only", "monitoring", "paper_validating"].includes(label)) return "warn";
+      if (["blocked", "unknown"].includes(label)) return "bad";
+      return "muted";
+    }
+
+    function sparkline(points) {
+      if (!points || !points.length) return "";
+      const balances = points.map(p => Number(p.balance || 0));
+      const min = Math.min(...balances);
+      const max = Math.max(...balances);
+      const span = max - min || 1;
+      const coords = balances.map((b, idx) => {
+        const x = (idx / Math.max(1, balances.length - 1)) * 100;
+        const y = 100 - (((b - min) / span) * 100);
+        return `${x},${y}`;
+      }).join(" ");
+      return `<svg class="sparkline" viewBox="0 0 100 100" preserveAspectRatio="none"><polyline fill="none" stroke="#79c2ff" stroke-width="2" points="${coords}" /></svg>`;
+    }
+
+    function showSection(id) {
+      document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
+      const target = document.getElementById(`section-${id}`);
+      if (target) target.classList.add('active');
+      document.querySelectorAll('nav button').forEach(btn => btn.classList.toggle('active', btn.dataset.section === id));
+    }
+
+    function buildNav() {
+      const nav = document.getElementById('nav');
+      nav.innerHTML = ["overview", "portfolios", "compare", "betfair_core", "hedge_validation", "cascade_alpha", "mev_scout_sol", "legacy"].map(id =>
+        `<button data-section="${id}">${labels[id]}</button>`
+      ).join('');
+      nav.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => showSection(btn.dataset.section)));
+    }
+
+    function renderOverview(portfolios, compareSeries) {
+      const root = document.getElementById('overview-cards');
+      root.innerHTML = portfolios.map(p => {
+        const series = compareSeries[p.portfolio_id] || [];
+        const controls = p.control_mode === 'local_managed'
+          ? `<div class="actions">
+              <button onclick="controlPortfolio('${p.portfolio_id}','start')">Start</button>
+              <button onclick="controlPortfolio('${p.portfolio_id}','stop')">Stop</button>
+              <button onclick="controlPortfolio('${p.portfolio_id}','restart')">Restart</button>
+            </div>`
+          : '';
+        return `<div class="card">
+          <div class="muted">${p.category}</div>
+          <h3>${p.label}</h3>
+          <div class="grid">
+            <div class="metric"><div class="label">Status</div><div class="value ${p.running ? 'good' : 'warn'}">${p.running ? 'Running' : 'Idle'}</div></div>
+            <div class="metric"><div class="label">Bankroll</div><div class="value">${money(p.bankroll, p.currency)}</div></div>
+            <div class="metric"><div class="label">Realized P&L</div><div class="value">${money(p.realized_pnl, p.currency)}</div></div>
+            <div class="metric"><div class="label">ROI</div><div class="value">${pct(p.roi_pct)}</div></div>
+            <div class="metric"><div class="label">Open</div><div class="value">${p.open_count}</div></div>
+            <div class="metric"><div class="label">Readiness</div><div class="value ${readinessTone(p.readiness)}">${p.readiness}</div></div>
+          </div>
+          <div class="muted">Heartbeat ${p.last_heartbeat_ts || 'n/a'}</div>
+          ${sparkline(series)}
+          ${controls}
+        </div>`;
+      }).join('');
+    }
+
+    function renderCompare(payload) {
+      const root = document.getElementById('compare-panel');
+      root.innerHTML = `<table>
+        <thead><tr><th>Portfolio</th><th>Mode</th><th>Realized</th><th>Unrealized</th><th>ROI</th><th>Drawdown</th><th>Open</th><th>Readiness</th></tr></thead>
+        <tbody>
+          ${(payload.portfolios || []).map(p => `<tr>
+            <td>${p.label}</td><td>${p.mode}</td><td>${money(p.realized_pnl, p.currency)}</td><td>${money(p.unrealized_pnl, p.currency)}</td>
+            <td>${pct(p.roi_pct)}</td><td>${pct(p.max_drawdown_pct)}</td><td>${p.open_count}</td><td class="${readinessTone(p.readiness)}">${p.readiness}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+    }
+
+    function renderPortfolioTable(portfolios) {
+      const root = document.getElementById('portfolios-panel');
+      root.innerHTML = `<table>
+        <thead><tr><th>Portfolio</th><th>Category</th><th>Status</th><th>Currency</th><th>Bankroll</th><th>Realized</th><th>ROI</th><th>Open</th><th>Readiness</th><th>Actions</th></tr></thead>
+        <tbody>
+          ${(portfolios || []).map(p => `<tr>
+            <td>${p.label}</td>
+            <td>${p.category}</td>
+            <td class="${p.running ? 'good' : 'warn'}">${p.running ? 'Running' : 'Idle'}</td>
+            <td>${p.currency}</td>
+            <td>${money(p.bankroll, p.currency)}</td>
+            <td>${money(p.realized_pnl, p.currency)}</td>
+            <td>${pct(p.roi_pct)}</td>
+            <td>${p.open_count}</td>
+            <td class="${readinessTone(p.readiness)}">${p.readiness}</td>
+            <td>${p.control_mode === 'local_managed'
+              ? `<button onclick="controlPortfolio('${p.portfolio_id}','start')">Start</button>
+                 <button onclick="controlPortfolio('${p.portfolio_id}','stop')">Stop</button>
+                 <button onclick="controlPortfolio('${p.portfolio_id}','restart')">Restart</button>`
+              : '<span class="muted">Disabled</span>'}
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+    }
+
+    function renderState(targetId, state) {
+      const root = document.getElementById(targetId);
+      const account = state.account || {};
+      const readiness = state.readiness || {};
+      const trades = state.recent_trades || [];
+      const events = state.recent_events || [];
+      const models = state.models || [];
+      root.innerHTML = `
+        <div class="grid">
+          <div class="metric"><div class="label">Balance</div><div class="value">${money(account.current_balance, account.currency || 'USD')}</div></div>
+          <div class="metric"><div class="label">Realized P&L</div><div class="value">${money(account.realized_pnl, account.currency || 'USD')}</div></div>
+          <div class="metric"><div class="label">Unrealized P&L</div><div class="value">${money(account.unrealized_pnl, account.currency || 'USD')}</div></div>
+          <div class="metric"><div class="label">Fees</div><div class="value">${money(account.fees_paid, account.currency || 'USD')}</div></div>
+          <div class="metric"><div class="label">Slippage</div><div class="value">${Number(account.slippage_cost || 0).toFixed(4)}</div></div>
+          <div class="metric"><div class="label">Drawdown</div><div class="value">${pct(account.drawdown_pct)}</div></div>
+        </div>
+        <div class="two-col">
+          <div class="panel">
+            <h3>Recent Trades</h3>
+            <table><thead><tr><th>ID/Symbol</th><th>Status</th><th>Setup</th><th>P&L</th></tr></thead><tbody>
+              ${trades.slice(-12).reverse().map(t => `<tr>
+                <td>${t.trade_id || t.symbol || t.market_id || 'n/a'}</td>
+                <td>${t.status || t.close_reason || 'n/a'}</td>
+                <td>${t.setup || t.direction || t.arb_type || 'n/a'}</td>
+                <td>${t.net_pnl_usd != null ? Number(t.net_pnl_usd).toFixed(2) : (t.net_profit_eur != null ? Number(t.net_profit_eur).toFixed(2) : 'n/a')}</td>
+              </tr>`).join('') || '<tr><td colspan="4" class="muted">No trades yet</td></tr>'}
+            </tbody></table>
+          </div>
+          <div class="panel">
+            <h3>Readiness</h3>
+            <pre>${JSON.stringify(readiness, null, 2)}</pre>
+          </div>
+        </div>
+        <div class="two-col">
+          <div class="panel">
+            <h3>Model Shadow Accounts</h3>
+            <table><thead><tr><th>Model</th><th>Shadow P&L</th><th>ROI</th><th>Selected</th></tr></thead><tbody>
+              ${models.map(m => `<tr><td>${m.model_id}</td><td>${Number(m.shadow_realized_pnl || 0).toFixed(2)}</td><td>${pct(m.shadow_roi_pct)}</td><td>${m.selected_for_execution ? 'Yes' : 'No'}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No model accounts</td></tr>'}
+            </tbody></table>
+          </div>
+          <div class="panel">
+            <h3>Recent Events</h3>
+            <table><thead><tr><th>Kind</th><th>Detail</th></tr></thead><tbody>
+              ${events.slice(-12).reverse().map(e => `<tr><td>${e.kind || e.reason || e.symbol || 'event'}</td><td>${JSON.stringify(e.data || e).slice(0, 180)}</td></tr>`).join('') || '<tr><td colspan="2" class="muted">No events yet</td></tr>'}
+            </tbody></table>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Raw State Snapshot</h3>
+          <pre>${JSON.stringify(state.raw_state || {}, null, 2)}</pre>
+        </div>`;
+    }
+
+    async function controlPortfolio(id, action) {
+      try {
+        document.getElementById('boot-pill').textContent = `${action} ${id}`;
+        await postJSON(`/api/portfolios/${id}/${action}`);
+        setTimeout(refreshAll, 1500);
+      } catch (err) {
+        document.getElementById('boot-pill').textContent = `Error: ${err.message}`;
+      }
+    }
+    window.controlPortfolio = controlPortfolio;
+
+    async function refreshAll() {
+      try {
+        const portfolioPayload = await getJSON('/api/portfolios');
+        const comparePayload = await getJSON('/api/compare/portfolios');
+        renderOverview(portfolioPayload.portfolios || [], comparePayload.series || {});
+        renderPortfolioTable(portfolioPayload.portfolios || []);
+        renderCompare(comparePayload);
+        for (const portfolioId of portfolioOrder) {
+          if (portfolioId === 'contrarian_legacy') continue;
+          const state = await getJSON(`/api/portfolios/${portfolioId}/state`).catch(() => null);
+          if (state) renderState(`${portfolioId}-body`, state);
+        }
+        const legacy = await getJSON('/api/portfolios/contrarian_legacy/state').catch(() => null);
+        if (legacy) renderState('legacy-body', legacy);
+        document.getElementById('boot-pill').textContent = `Git ${portfolioPayload.git_sha}`;
+        document.getElementById('time-pill').textContent = new Date().toLocaleTimeString();
+      } catch (err) {
+        document.getElementById('boot-pill').textContent = `Load error: ${err.message}`;
+      }
+    }
+
+    buildNav();
+    refreshAll();
+    setInterval(refreshAll, 10000);
+  </script>
+</body>
+</html>

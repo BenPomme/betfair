@@ -12,6 +12,7 @@ Targets:
   - direction_24h: binary (1 if forward 24h return > 0, else 0)
 """
 
+import json
 import logging
 from pathlib import Path
 from typing import List, Optional
@@ -30,6 +31,7 @@ from funding.ml.feature_engineer import (
 logger = logging.getLogger(__name__)
 
 DATA_DIR = Path("data/funding_history")
+CONTRARIAN_QUARANTINE_PATH = Path("data/funding/state/contrarian_symbol_quarantine.jsonl")
 
 # Thresholds for extremity flags
 EXTREME_POSITIVE_THRESHOLD = 0.0005
@@ -38,6 +40,30 @@ LS_EXTREME_LONG = 2.0
 LS_EXTREME_SHORT = 0.5
 FEAR_GREED_EXTREME_FEAR = 25
 FEAR_GREED_EXTREME_GREED = 75
+
+
+def _record_symbol_quarantine(symbol: str, reason: str, details: Optional[dict] = None) -> None:
+    CONTRARIAN_QUARANTINE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"symbol": symbol, "reason": reason, "details": details or {}}
+    with CONTRARIAN_QUARANTINE_PATH.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload) + "\n")
+
+
+def load_quarantined_symbols() -> set[str]:
+    if not CONTRARIAN_QUARANTINE_PATH.exists():
+        return set()
+    symbols: set[str] = set()
+    for line in CONTRARIAN_QUARANTINE_PATH.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except Exception:
+            continue
+        symbol = str(payload.get("symbol", "")).strip().upper()
+        if symbol:
+            symbols.add(symbol)
+    return symbols
 
 
 def _parse_mixed_timestamp(series: pd.Series) -> pd.Series:
@@ -304,7 +330,9 @@ def _price_features(rates_df: pd.DataFrame, klines_df: pd.DataFrame) -> pd.DataF
     feats = pd.DataFrame(index=rates_df.index)
 
     # Use mark_price from funding rates (already 8h-aligned)
-    price = rates_df["mark_price"]
+    price = pd.to_numeric(rates_df["mark_price"], errors="coerce")
+    price = price.replace([np.inf, -np.inf], np.nan)
+    price = price.where(price > 0, np.nan)
 
     feats["price_return_8h"] = price.pct_change(1)
     feats["price_return_24h"] = price.pct_change(3)   # 3 × 8h
@@ -356,11 +384,11 @@ def _targets(rates_df: pd.DataFrame) -> pd.DataFrame:
 
     # Forward 24h (3 × 8h periods): price at t+3 relative to price at t
     forward_24h = price.shift(-3)
-    feats["price_return_24h_target"] = (forward_24h - price) / price
+    feats["price_return_24h_target"] = ((forward_24h - price) / price).replace([np.inf, -np.inf], np.nan)
 
     # Forward 72h (9 × 8h periods)
     forward_72h = price.shift(-9)
-    feats["price_return_72h_target"] = (forward_72h - price) / price
+    feats["price_return_72h_target"] = ((forward_72h - price) / price).replace([np.inf, -np.inf], np.nan)
 
     feats["direction_24h"] = (feats["price_return_24h_target"] > 0).astype(int)
     # Mark rows where the target is NaN (end of series) with NaN on direction too
@@ -411,6 +439,17 @@ def build_contrarian_features(
     base = rates_df[["funding_time_dt", "funding_rate", "mark_price"]].copy()
     base = base.set_index("funding_time_dt")
     base = base[~base.index.duplicated(keep="last")].sort_index()
+    base["mark_price"] = pd.to_numeric(base["mark_price"], errors="coerce")
+    invalid_price_mask = (~np.isfinite(base["mark_price"])) | (base["mark_price"] <= 0)
+    if invalid_price_mask.any():
+        invalid_count = int(invalid_price_mask.sum())
+        logger.warning(
+            "%s: quarantining symbol due to %d non-positive/non-finite mark_price rows",
+            symbol,
+            invalid_count,
+        )
+        _record_symbol_quarantine(symbol, "invalid_mark_price", {"invalid_rows": invalid_count})
+        return pd.DataFrame()
 
     index = base.index
 
@@ -443,7 +482,10 @@ def build_contrarian_features(
     )
 
     # Drop rows that have NaN targets (end of series, no future prices available)
+    df = df.replace([np.inf, -np.inf], np.nan)
     df = df.dropna(subset=["price_return_24h_target", "direction_24h"])
+    df = df[np.isfinite(df["price_return_24h_target"])]
+    df = df[df["direction_24h"].isin([0, 1])]
 
     df["symbol"] = symbol
 
@@ -472,6 +514,9 @@ def build_contrarian_features_all(
     Returns:
         Combined DataFrame for all symbols, sorted by index (funding_time_dt).
     """
+    quarantined = load_quarantined_symbols()
+    symbols = [sym for sym in symbols if str(sym).upper() not in quarantined]
+
     # Build multi-symbol funding rate frame for dispersion
     all_rates_frames = []
     for sym in symbols:

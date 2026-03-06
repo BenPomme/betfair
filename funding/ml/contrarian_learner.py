@@ -15,12 +15,14 @@ Runs as an asyncio task inside FundingEngine:
 import asyncio
 import json
 import logging
+import math
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set
 
 import config
+from funding.ml.contrarian_features import load_quarantined_symbols
 from funding.ml.learning_quality import FundingLearningQuality
 
 logger = logging.getLogger(__name__)
@@ -543,9 +545,40 @@ class ContrarianOnlineLearner:
         if reject is not None:
             return reject
         self._events.extend(self._quality.update_feature_drift(sample_features, symbol="*"))
-        label_cols = [c for c in df.columns if str(c) in {"target", "label", "target_direction"}]
+        label_cols = [
+            c
+            for c in df.columns
+            if str(c) in {
+                "target",
+                "label",
+                "target_direction",
+                "price_return_24h_target",
+                "direction_24h",
+            }
+        ]
         for col in label_cols:
             for val in df[col].tail(200).values.tolist():
+                if str(col) == "price_return_24h_target":
+                    try:
+                        if not math.isfinite(float(val)):
+                            return {
+                                "kind": "funding_update_rejected",
+                                "model_id": "contrarian_online_learner",
+                                "symbol": "*",
+                                "context": "contrarian_retrain_data",
+                                "reason": "non_finite_regression_target",
+                                "label": str(val),
+                            }
+                    except Exception:
+                        return {
+                            "kind": "funding_update_rejected",
+                            "model_id": "contrarian_online_learner",
+                            "symbol": "*",
+                            "context": "contrarian_retrain_data",
+                            "reason": "non_numeric_regression_target",
+                            "label": str(val),
+                        }
+                    continue
                 if val not in (0, 1):
                     return {
                         "kind": "funding_update_rejected",
@@ -571,7 +604,9 @@ class ContrarianOnlineLearner:
             result = self._watchlist_fn()
             if result:
                 max_symbols = max(1, int(getattr(config, "FUNDING_CONTRARIAN_RETRAIN_MAX_SYMBOLS", 20)))
-                return list(result)[:max_symbols]
+                quarantined = load_quarantined_symbols()
+                filtered = [sym for sym in list(result) if str(sym).upper() not in quarantined]
+                return filtered[:max_symbols]
         except Exception:
             pass
 
@@ -579,7 +614,9 @@ class ContrarianOnlineLearner:
         rates_dir = Path("data/funding_history/funding_rates")
         if rates_dir.exists():
             max_symbols = max(1, int(getattr(config, "FUNDING_CONTRARIAN_RETRAIN_MAX_SYMBOLS", 20)))
-            return [f.stem for f in rates_dir.glob("*.csv")][:max_symbols]
+            quarantined = load_quarantined_symbols()
+            discovered = [f.stem for f in rates_dir.glob("*.csv") if f.stem.upper() not in quarantined]
+            return discovered[:max_symbols]
         return []
 
     def _get_or_create_selector(self) -> Any:
