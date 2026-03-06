@@ -63,6 +63,7 @@ class NotificationManager:
         message: str,
         payload: Optional[Dict[str, Any]] = None,
         dedupe_key: Optional[str] = None,
+        allow_unlisted: bool = False,
     ) -> bool:
         if not config.NOTIFICATIONS_ENABLED:
             return False
@@ -72,7 +73,7 @@ class NotificationManager:
         if config.DISCORD_NOTIFY_CRITICAL_ONLY and severity != "critical":
             return False
         allowed = {p.strip() for p in str(config.DISCORD_NOTIFY_PORTFOLIOS).split(",") if p.strip()}
-        if allowed and portfolio_id not in allowed:
+        if allowed and portfolio_id not in allowed and not allow_unlisted:
             return False
         key = dedupe_key or hashlib.sha1(
             f"{portfolio_id}|{severity}|{event_type}|{title}|{message}".encode("utf-8")

@@ -66,11 +66,89 @@ def _collect_snapshots() -> List[Dict[str, Any]]:
     return [_build_snapshot(spec.portfolio_id) for spec in list_portfolios()]
 
 
+def _trade_identifier(trade: Dict[str, Any]) -> str:
+    for key in ("trade_id", "id", "bet_id", "order_id", "position_id"):
+        value = trade.get(key)
+        if value:
+            return str(value)
+    symbol = trade.get("symbol", "?")
+    closed_at = trade.get("closed_at") or trade.get("exit_time") or trade.get("settled_at") or trade.get("updated_at")
+    side = trade.get("side", "?")
+    return f"{symbol}:{side}:{closed_at}"
+
+
+def _trade_closed(trade: Dict[str, Any]) -> bool:
+    status = str(trade.get("status", "") or "").upper()
+    if status in {"CLOSED", "SETTLED", "EXITED", "FILLED"}:
+        return True
+    return bool(trade.get("closed_at") or trade.get("exit_time") or trade.get("settled_at"))
+
+
+def _trade_pnl_and_ccy(trade: Dict[str, Any], summary: Dict[str, Any]) -> tuple[float, str]:
+    for key in ("net_pnl_usd", "realized_pnl_usd", "realized_pnl", "pnl", "total_pnl_eur"):
+        value = trade.get(key)
+        if value is None:
+            continue
+        try:
+            pnl = float(value)
+            currency = "USD" if "usd" in key.lower() else str(summary.get("currency", ""))
+            return pnl, currency
+        except Exception:
+            continue
+    return 0.0, str(summary.get("currency", ""))
+
+
+def _closed_trade_message(trade: Dict[str, Any], summary: Dict[str, Any]) -> tuple[str, str, str]:
+    pnl, currency = _trade_pnl_and_ccy(trade, summary)
+    label = trade.get("symbol") or trade.get("market_name") or trade.get("selection") or "trade"
+    side = trade.get("side") or trade.get("direction") or "n/a"
+    reason = trade.get("close_reason") or trade.get("result") or trade.get("status") or "closed"
+    severity = "info" if pnl >= 0 else "warning"
+    title = f"{summary.get('label')} trade closed"
+    message = f"{label} {side} pnl={pnl:.2f} {currency} reason={reason}"
+    return severity, title, message
+
+
+def _model_metric_bundle(model: Dict[str, Any]) -> Dict[str, Any]:
+    metrics = dict(model.get("metrics") or {})
+    return {
+        "last_retrain_time": metrics.get("last_retrain_time"),
+        "last_retrain_result": metrics.get("last_retrain_result"),
+        "current_auc": metrics.get("current_auc"),
+        "strict_gate_pass": metrics.get("strict_gate_pass"),
+        "strict_gate_reason": metrics.get("strict_gate_reason"),
+        "rolling_200_brier_lift": ((metrics.get("rolling_200") or {}).get("brier_lift_abs")),
+        "settled_count": metrics.get("settled_count", model.get("settled_count")),
+    }
+
+
+def _model_update_message(model: Dict[str, Any], previous: Dict[str, Any]) -> tuple[str, str, str] | None:
+    current = _model_metric_bundle(model)
+    changed = current.get("last_retrain_time") and current.get("last_retrain_time") != previous.get("last_retrain_time")
+    gate_changed = current.get("strict_gate_pass") != previous.get("strict_gate_pass")
+    if not changed and not gate_changed:
+        return None
+    model_id = model.get("model_id", "model")
+    result = current.get("last_retrain_result") or "updated"
+    auc = current.get("current_auc")
+    brier_lift = current.get("rolling_200_brier_lift")
+    settled = current.get("settled_count")
+    gate = current.get("strict_gate_pass")
+    severity = "info" if result == "accepted" or gate else "warning"
+    title = f"Model update: {model_id}"
+    message = (
+        f"result={result} auc={auc} gate={gate} settled={settled} "
+        f"rolling_200_brier_lift={brier_lift}"
+    )
+    return severity, title, message
+
+
 def _emit_snapshot_notifications(snapshots: List[Dict[str, Any]]) -> None:
     global _digest_sent_at
     now = time.time()
     for item in snapshots:
         summary = item["summary"]
+        state = item["state"]
         portfolio_id = summary["portfolio_id"]
         previous = _snapshot_cache.get(portfolio_id, {})
         previous_running = bool(previous.get("running"))
@@ -104,10 +182,63 @@ def _emit_snapshot_notifications(snapshots: List[Dict[str, Any]]) -> None:
                 message="Portfolio entered error state",
                 dedupe_key=f"{portfolio_id}:error",
             )
+        current_closed_trade_ids = {
+            _trade_identifier(trade)
+            for trade in (state.get("recent_trades") or [])
+            if isinstance(trade, dict) and _trade_closed(trade)
+        }
+        previous_closed_trade_ids = set(previous.get("closed_trade_ids") or [])
+        if previous:
+            for trade in state.get("recent_trades") or []:
+                if not isinstance(trade, dict) or not _trade_closed(trade):
+                    continue
+                trade_id = _trade_identifier(trade)
+                if trade_id in previous_closed_trade_ids:
+                    continue
+                severity, title, message = _closed_trade_message(trade, summary)
+                _notifier.send_event(
+                    portfolio_id=portfolio_id,
+                    severity=severity,
+                    event_type="trade_closed",
+                    title=title,
+                    message=message,
+                    payload=trade,
+                    dedupe_key=f"{portfolio_id}:trade_closed:{trade_id}",
+                )
+        current_models = {
+            str(model.get("model_id")): _model_metric_bundle(model)
+            for model in (state.get("models") or [])
+            if isinstance(model, dict) and model.get("model_id")
+        }
+        previous_models = previous.get("models") or {}
+        if previous:
+            for model in state.get("models") or []:
+                if not isinstance(model, dict) or not model.get("model_id"):
+                    continue
+                model_id = str(model.get("model_id"))
+                update = _model_update_message(model, previous_models.get(model_id, {}))
+                if not update:
+                    continue
+                severity, title, message = update
+                _notifier.send_event(
+                    portfolio_id=portfolio_id,
+                    severity=severity,
+                    event_type="model_update",
+                    title=title,
+                    message=message,
+                    payload={"model_id": model_id, "metrics": model.get("metrics") or {}},
+                    dedupe_key=(
+                        f"{portfolio_id}:model_update:{model_id}:"
+                        f"{(model.get('metrics') or {}).get('last_retrain_time')}:"
+                        f"{(model.get('metrics') or {}).get('strict_gate_pass')}"
+                    ),
+                )
         _snapshot_cache[portfolio_id] = {
             "running": summary.get("running"),
             "readiness": summary.get("readiness"),
             "status": summary.get("status"),
+            "closed_trade_ids": sorted(current_closed_trade_ids),
+            "models": current_models,
         }
 
     digest_interval = max(5, int(config.DISCORD_DIGEST_INTERVAL_MINUTES)) * 60
@@ -319,6 +450,7 @@ def api_notifications_discord_test() -> Dict[str, Any]:
         title="Discord test notification",
         message="Strategy Command Center test alert",
         dedupe_key=f"discord_test:{int(time.time())}",
+        allow_unlisted=True,
     )
     return {"ok": ok, "state": _notifier.state()}
 

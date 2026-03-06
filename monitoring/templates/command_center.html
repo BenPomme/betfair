@@ -235,11 +235,195 @@
       return `${Number(value || 0).toFixed(2)}%`;
     }
 
+    function readinessDisplay(label) {
+      const mapping = {
+        blocked: 'Not Live Ready',
+        research_only: 'Research Only',
+        paper_validating: 'Paper Validating',
+        candidate: 'Live Candidate',
+        ready_disabled: 'Ready, Live Disabled',
+        live_ready: 'Live Ready',
+        ready: 'Live Ready',
+        validated: 'Validated Paper',
+        monitoring: 'Monitoring',
+        unknown: 'Unknown'
+      };
+      return mapping[label] || label || 'Unknown';
+    }
+
     function readinessTone(label) {
-      if (["ready", "validated"].includes(label)) return "good";
+      if (["ready", "validated", "live_ready", "candidate", "ready_disabled"].includes(label)) return "good";
       if (["research_only", "monitoring", "paper_validating"].includes(label)) return "warn";
       if (["blocked", "unknown"].includes(label)) return "bad";
       return "muted";
+    }
+
+    function readinessProgress(readiness) {
+      const checks = readiness?.checks_v2 || readiness?.checks || [];
+      const blockers = readiness?.blockers_v2 || readiness?.blockers || [];
+      if (checks.length) {
+        const passed = checks.filter(c => c && c.ok).length;
+        return {
+          pct: Math.round((passed / checks.length) * 100),
+          passed,
+          total: checks.length,
+          blockers: blockers.length,
+        };
+      }
+      if (typeof readiness?.score_pct === 'number') {
+        return {
+          pct: Math.round(Number(readiness.score_pct || 0)),
+          passed: null,
+          total: null,
+          blockers: blockers.length,
+        };
+      }
+      return { pct: blockers.length ? 0 : 50, passed: null, total: null, blockers: blockers.length };
+    }
+
+    function progressBar(pctValue) {
+      const pct = Math.max(0, Math.min(100, Number(pctValue || 0)));
+      return `
+        <div style="margin-top:8px;">
+          <div style="height:10px;border-radius:999px;background:rgba(255,255,255,0.06);overflow:hidden;border:1px solid var(--line);">
+            <div style="width:${pct}%;height:100%;background:linear-gradient(90deg, rgba(121,194,255,0.85), rgba(255,210,127,0.8));"></div>
+          </div>
+        </div>`;
+    }
+
+    function topBlockers(readiness) {
+      const blockers = readiness?.blockers_v2 || readiness?.blockers || [];
+      return blockers.slice(0, 3);
+    }
+
+    function metricCard(label, value) {
+      return `<div class="metric"><div class="label">${label}</div><div class="value">${value}</div></div>`;
+    }
+
+    function yesNo(value) {
+      return value ? 'Yes' : 'No';
+    }
+
+    function compactNumber(value) {
+      return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+    }
+
+    function renderDirectionPanel(portfolioId, state) {
+      const raw = state.raw_state || {};
+      const models = state.models || [];
+      if (portfolioId === 'betfair_core') {
+        const auth = raw.auth || {};
+        const health = raw.health || {};
+        const predictionSummary = raw.prediction_summary || {};
+        const modelCount = models.length;
+        const matureModels = models.filter(m => (m.metrics || {}).strict_gate_pass).length;
+        const learningTracked = models.reduce((acc, m) => acc + Number((m.metrics || {}).learning_tracked || 0), 0);
+        const learningSettled = models.reduce((acc, m) => acc + Number((m.metrics || {}).learning_settled || 0), 0);
+        return `
+          <div class="panel">
+            <h3>Betfair Direction</h3>
+            <div class="grid">
+              ${metricCard('Auth Mode', auth.login_mode || 'n/a')}
+              ${metricCard('Feed Status', health.feed_status || 'n/a')}
+              ${metricCard('Models Loaded', modelCount)}
+              ${metricCard('Strict-Pass Models', matureModels)}
+              ${metricCard('Learning Tracked', learningTracked)}
+              ${metricCard('Learning Settled', learningSettled)}
+            </div>
+            <div class="muted">Healthy direction means: certificate auth ready, feed healthy, more settled bets, and strict-pass model count increasing from zero.</div>
+            <div class="muted" style="margin-top:8px;">Prediction summary: active=${predictionSummary.active_model_count || 0}, leader=${predictionSummary.leader_model_id || 'n/a'}.</div>
+          </div>`;
+      }
+      if (portfolioId === 'hedge_validation') {
+        const learner = (models[0] || {}).metrics || {};
+        const audit = raw.settlement_audit || {};
+        const rejectionRate = Number((raw.execution_quality || {}).rejection_rate || 0) * 100;
+        return `
+          <div class="panel">
+            <h3>Hedge Direction</h3>
+            <div class="grid">
+              ${metricCard('Closed Hedges', raw.closed_hedges || 0)}
+              ${metricCard('Funding Events', audit.realized_funding_events || 0)}
+              ${metricCard('Reject Rate', pct(rejectionRate))}
+              ${metricCard('Current AUC', compactNumber(learner.current_auc))}
+              ${metricCard('Strict Gate Pass', yesNo(learner.strict_gate_pass))}
+              ${metricCard('Next Settlement', raw.next_settlement_utc || 'n/a')}
+            </div>
+            <div class="muted">Healthy direction means: more closed hedges, more funding events captured, rejection rate falling, and strict gate eventually turning true.</div>
+          </div>`;
+      }
+      if (portfolioId === 'contrarian_legacy') {
+        const learner = (models[0] || {}).metrics || {};
+        const quality = raw.training_quality || {};
+        return `
+          <div class="panel">
+            <h3>Contrarian Direction</h3>
+            <div class="grid">
+              ${metricCard('Unique Symbols', quality.unique_symbol_count ?? 'n/a')}
+              ${metricCard('Quarantined Symbols', raw.quarantined_symbol_count || 0)}
+              ${metricCard('AUC', compactNumber(learner.current_auc))}
+              ${metricCard('Prediction Saturation', pct((learner.prediction_saturation_rate || 0) * 100))}
+              ${metricCard('Strict Gate Pass', yesNo(learner.strict_gate_pass))}
+              ${metricCard('Settled', learner.settled_count || 0)}
+            </div>
+            <div class="muted">Healthy direction means: broader symbol coverage, fewer concentrated duplicate trades, more settled outcomes, and gate quality moving above baseline.</div>
+          </div>`;
+      }
+      if (portfolioId === 'cascade_alpha') {
+        const rawTrades = state.recent_trades || [];
+        const closed = rawTrades.filter(t => (t.status || '').toUpperCase() === 'CLOSED');
+        const wins = closed.filter(t => Number(t.net_pnl_usd || 0) >= 0).length;
+        const avgPnl = closed.length ? closed.reduce((a, t) => a + Number(t.net_pnl_usd || 0), 0) / closed.length : 0;
+        const avgSlip = closed.length ? closed.reduce((a, t) => a + Number(t.slippage_bps || 0), 0) / closed.length : 0;
+        return `
+          <div class="panel">
+            <h3>Cascade Direction</h3>
+            <div class="grid">
+              ${metricCard('Signals Seen', raw.signal_count || 0)}
+              ${metricCard('Closed Trades', closed.length)}
+              ${metricCard('Win Rate', closed.length ? pct((wins / closed.length) * 100) : 'n/a')}
+              ${metricCard('Avg Trade P&L', compactNumber(avgPnl))}
+              ${metricCard('Avg Slippage Bps', compactNumber(avgSlip))}
+              ${metricCard('Watchlist Size', raw.watchlist_size || 0)}
+            </div>
+            <div class="muted">Healthy direction means: more closed trades, better win rate, and net trade P&L improving after fees and slippage.</div>
+          </div>`;
+      }
+      if (portfolioId === 'mev_scout_sol') {
+        const learner = raw.learner || {};
+        const progress = raw.training_progress || {};
+        return `
+          <div class="panel">
+            <h3>MEV Direction</h3>
+            <div class="grid">
+              ${metricCard('Provider Mode', raw.provider_mode || 'none')}
+              ${metricCard('Observed Events', learner.observed_events || 0)}
+              ${metricCard('Whales Seen', learner.whale_events || 0)}
+              ${metricCard('Labeled Opportunities', learner.settled_count || 0)}
+              ${metricCard('Win Rate', learner.settled_count ? pct(learner.win_rate) : 'n/a')}
+              ${metricCard('Avg Realized Edge', compactNumber(learner.avg_realized_edge_usd))}
+            </div>
+            <div class="muted">Healthy direction means: provider configured, events arriving, labeled opportunities accumulating toward ${progress.min_labeled_target || 20}, and average realized shadow edge staying positive.</div>
+          </div>`;
+      }
+      return '';
+    }
+
+    function renderModelHealth(models) {
+      if (!models.length) {
+        return '<tr><td colspan="6" class="muted">No model accounts</td></tr>';
+      }
+      return models.map(m => {
+        const metrics = m.metrics || {};
+        return `<tr>
+          <td>${m.model_id}</td>
+          <td>${Number(m.shadow_realized_pnl || 0).toFixed(2)}</td>
+          <td>${pct(m.shadow_roi_pct)}</td>
+          <td>${metrics.current_auc != null ? compactNumber(metrics.current_auc) : 'n/a'}</td>
+          <td>${metrics.strict_gate_pass == null ? 'n/a' : yesNo(metrics.strict_gate_pass)}</td>
+          <td>${metrics.last_retrain_result || metrics.provider_mode || 'n/a'}</td>
+        </tr>`;
+      }).join('');
     }
 
     function sparkline(points) {
@@ -286,10 +470,13 @@
         </div>`;
     }
 
-    function renderOverview(portfolios, compareSeries) {
+    function renderOverview(portfolios, compareSeries, readinessMap) {
       const root = document.getElementById('overview-cards');
       root.innerHTML = portfolios.map(p => {
         const series = compareSeries[p.portfolio_id] || [];
+        const readiness = readinessMap[p.portfolio_id] || {};
+        const progress = readinessProgress(readiness);
+        const blockers = topBlockers(readiness);
         const controls = p.control_mode === 'local_managed'
           ? `<div class="actions">
               <button onclick="controlPortfolio('${p.portfolio_id}','start')">Start</button>
@@ -306,8 +493,12 @@
             <div class="metric"><div class="label">Realized P&L</div><div class="value">${money(p.realized_pnl, p.currency)}</div></div>
             <div class="metric"><div class="label">ROI</div><div class="value">${pct(p.roi_pct)}</div></div>
             <div class="metric"><div class="label">Open</div><div class="value">${p.open_count}</div></div>
-            <div class="metric"><div class="label">Readiness</div><div class="value ${readinessTone(p.readiness)}">${p.readiness}</div></div>
+            <div class="metric"><div class="label">Readiness</div><div class="value ${readinessTone(p.readiness)}">${readinessDisplay(p.readiness)}</div></div>
+            <div class="metric"><div class="label">Progress</div><div class="value">${progress.pct}%</div></div>
           </div>
+          <div class="muted">Live-readiness progress ${progress.passed != null ? `${progress.passed}/${progress.total} checks passed` : `${progress.blockers} blockers`}.</div>
+          ${progressBar(progress.pct)}
+          ${blockers.length ? `<div class="muted" style="margin-top:8px;">Top blockers: ${blockers.join(', ')}</div>` : '<div class="muted" style="margin-top:8px;">No active blockers in current readiness snapshot.</div>'}
           <div class="muted">Heartbeat ${p.last_heartbeat_ts || 'n/a'}</div>
           ${sparkline(series)}
           ${controls}
@@ -333,18 +524,20 @@
         <tbody>
           ${(payload.portfolios || []).map(p => `<tr>
             <td>${p.label}</td><td>${p.mode}</td><td>${money(p.realized_pnl, p.currency)}</td><td>${money(p.unrealized_pnl, p.currency)}</td>
-            <td>${pct(p.roi_pct)}</td><td>${pct(p.max_drawdown_pct)}</td><td>${p.open_count}</td><td class="${readinessTone(p.readiness)}">${p.readiness}</td>
+            <td>${pct(p.roi_pct)}</td><td>${pct(p.max_drawdown_pct)}</td><td>${p.open_count}</td><td class="${readinessTone(p.readiness)}">${readinessDisplay(p.readiness)}</td>
           </tr>`).join('')}
         </tbody>
       </table>`;
     }
 
-    function renderPortfolioTable(portfolios) {
+    function renderPortfolioTable(portfolios, readinessMap) {
       const root = document.getElementById('portfolios-panel');
       root.innerHTML = `<table>
-        <thead><tr><th>Portfolio</th><th>Category</th><th>Status</th><th>Currency</th><th>Bankroll</th><th>Realized</th><th>ROI</th><th>Open</th><th>Readiness</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Portfolio</th><th>Category</th><th>Status</th><th>Currency</th><th>Bankroll</th><th>Realized</th><th>ROI</th><th>Open</th><th>Readiness</th><th>Progress</th><th>Actions</th></tr></thead>
         <tbody>
-          ${(portfolios || []).map(p => `<tr>
+          ${(portfolios || []).map(p => {
+            const progress = readinessProgress(readinessMap[p.portfolio_id] || {});
+            return `<tr>
             <td>${p.label}</td>
             <td>${p.category}</td>
             <td class="${p.running ? 'good' : 'warn'}">${p.running ? 'Running' : 'Idle'}</td>
@@ -353,20 +546,46 @@
             <td>${money(p.realized_pnl, p.currency)}</td>
             <td>${pct(p.roi_pct)}</td>
             <td>${p.open_count}</td>
-            <td class="${readinessTone(p.readiness)}">${p.readiness}</td>
+            <td class="${readinessTone(p.readiness)}">${readinessDisplay(p.readiness)}</td>
+            <td>${progress.pct}%</td>
             <td>${p.control_mode === 'local_managed'
               ? `<button onclick="controlPortfolio('${p.portfolio_id}','start')">Start</button>
                  <button onclick="controlPortfolio('${p.portfolio_id}','stop')">Stop</button>
                  <button onclick="controlPortfolio('${p.portfolio_id}','restart')">Restart</button>`
               : '<span class="muted">Disabled</span>'}
             </td>
-          </tr>`).join('')}
+          </tr>`}).join('')}
         </tbody>
       </table>`;
     }
 
+    function readinessPanel(readiness) {
+      const progress = readinessProgress(readiness);
+      const blockers = topBlockers(readiness);
+      const checks = readiness?.checks_v2 || readiness?.checks || [];
+      return `
+        <div class="grid">
+          <div class="metric"><div class="label">Live-Readiness Status</div><div class="value ${readinessTone((readiness.status || '').toLowerCase() || (readiness.blockers?.length ? 'blocked' : 'monitoring'))}">${readinessDisplay((readiness.status || '').toLowerCase() || (readiness.blockers?.length ? 'blocked' : 'monitoring'))}</div></div>
+          <div class="metric"><div class="label">Progress</div><div class="value">${progress.pct}%</div></div>
+          <div class="metric"><div class="label">Checks Passed</div><div class="value">${progress.passed != null ? `${progress.passed}/${progress.total}` : 'n/a'}</div></div>
+          <div class="metric"><div class="label">Open Blockers</div><div class="value">${progress.blockers}</div></div>
+        </div>
+        ${progressBar(progress.pct)}
+        <div class="panel" style="margin-top:12px;">
+          <h4 style="margin:0 0 8px;">What is holding this back</h4>
+          ${blockers.length ? `<div class="muted">${blockers.join(', ')}</div>` : '<div class="muted">No active blockers.</div>'}
+        </div>
+        <div class="panel" style="margin-top:12px;">
+          <h4 style="margin:0 0 8px;">Checks</h4>
+          <table><thead><tr><th>Check</th><th>Result</th><th>Reason</th></tr></thead><tbody>
+            ${checks.slice(0, 12).map(c => `<tr><td>${c.name || 'check'}</td><td class="${c.ok ? 'good' : 'bad'}">${c.ok ? 'Pass' : 'Fail'}</td><td>${c.reason || 'n/a'}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">No structured checks published yet</td></tr>'}
+          </tbody></table>
+        </div>`;
+    }
+
     function renderState(targetId, state) {
       const root = document.getElementById(targetId);
+      const portfolioId = state.portfolio_id;
       const account = state.account || {};
       const readiness = state.readiness || {};
       const trades = state.recent_trades || [];
@@ -394,15 +613,16 @@
             </tbody></table>
           </div>
           <div class="panel">
-            <h3>Readiness</h3>
-            <pre>${JSON.stringify(readiness, null, 2)}</pre>
+            <h3>Progress To Live Trust</h3>
+            ${readinessPanel(readiness)}
           </div>
         </div>
+        ${renderDirectionPanel(portfolioId, state)}
         <div class="two-col">
           <div class="panel">
-            <h3>Model Shadow Accounts</h3>
-            <table><thead><tr><th>Model</th><th>Shadow P&L</th><th>ROI</th><th>Selected</th></tr></thead><tbody>
-              ${models.map(m => `<tr><td>${m.model_id}</td><td>${Number(m.shadow_realized_pnl || 0).toFixed(2)}</td><td>${pct(m.shadow_roi_pct)}</td><td>${m.selected_for_execution ? 'Yes' : 'No'}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No model accounts</td></tr>'}
+            <h3>Model Health</h3>
+            <table><thead><tr><th>Model</th><th>Shadow P&L</th><th>ROI</th><th>AUC</th><th>Gate</th><th>Last Update</th></tr></thead><tbody>
+              ${renderModelHealth(models)}
             </tbody></table>
           </div>
           <div class="panel">
@@ -435,8 +655,8 @@
         const comparePayload = await getJSON('/api/compare/portfolios');
         const notificationState = await getJSON('/api/notifications/state').catch(() => ({}));
         renderNotifications(notificationState);
-        renderOverview(portfolioPayload.portfolios || [], comparePayload.series || {});
-        renderPortfolioTable(portfolioPayload.portfolios || []);
+        renderOverview(portfolioPayload.portfolios || [], comparePayload.series || {}, comparePayload.readiness || {});
+        renderPortfolioTable(portfolioPayload.portfolios || [], comparePayload.readiness || {});
         renderCompare(comparePayload);
         for (const portfolioId of portfolioOrder) {
           const state = await getJSON(`/api/portfolios/${portfolioId}/state`).catch(() => null);

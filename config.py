@@ -43,7 +43,7 @@ DISCORD_DIGEST_ENABLED: bool = os.getenv("DISCORD_DIGEST_ENABLED", "true").lower
 DISCORD_DIGEST_INTERVAL_MINUTES: int = int(os.getenv("DISCORD_DIGEST_INTERVAL_MINUTES", "30"))
 DISCORD_NOTIFY_CRITICAL_ONLY: bool = os.getenv("DISCORD_NOTIFY_CRITICAL_ONLY", "false").lower() == "true"
 DISCORD_NOTIFY_PORTFOLIOS: str = os.getenv(
-    "DISCORD_NOTIFY_PORTFOLIOS", "betfair_core,hedge_validation,cascade_alpha,mev_scout_sol,contrarian_legacy"
+    "DISCORD_NOTIFY_PORTFOLIOS", "betfair_core,hedge_validation,cascade_alpha,mev_scout_sol,contrarian_legacy,command_center"
 )
 NOTIFICATIONS_ENABLED: bool = os.getenv("NOTIFICATIONS_ENABLED", "true").lower() == "true"
 NOTIFY_DEDUPE_WINDOW_SECONDS: int = int(os.getenv("NOTIFY_DEDUPE_WINDOW_SECONDS", "600"))
@@ -487,6 +487,12 @@ MEV_SCOUT_SOL_YELLOWSTONE_URL: str = os.getenv("MEV_SCOUT_SOL_YELLOWSTONE_URL", 
 MEV_SCOUT_SOL_JITO_REGION: str = os.getenv("MEV_SCOUT_SOL_JITO_REGION", "auto")
 MEV_SCOUT_SOL_MIN_WHALE_USD: Decimal = Decimal(
     os.getenv("MEV_SCOUT_SOL_MIN_WHALE_USD", "250000")
+)
+MEV_SCOUT_SOL_REPLAY_PATH: str = os.getenv("MEV_SCOUT_SOL_REPLAY_PATH", "")
+MEV_SCOUT_SOL_MAX_EVENTS_PER_POLL: int = int(os.getenv("MEV_SCOUT_SOL_MAX_EVENTS_PER_POLL", "25"))
+MEV_SCOUT_SOL_LABEL_DELAY_SECONDS: int = int(os.getenv("MEV_SCOUT_SOL_LABEL_DELAY_SECONDS", "120"))
+MEV_SCOUT_SOL_MIN_EXPECTED_EDGE_USD: Decimal = Decimal(
+    os.getenv("MEV_SCOUT_SOL_MIN_EXPECTED_EDGE_USD", "5")
 )
 
 # === LEGACY PORTFOLIOS ===

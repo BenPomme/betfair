@@ -70,8 +70,8 @@ class MevScoutSolPortfolioRunner(PortfolioRunnerBase):
                     shadow_current_balance=float(state.get("shadow_balance_usd", self.spec.initial_balance) or self.spec.initial_balance),
                     shadow_realized_pnl=float(state.get("shadow_realized_pnl_usd", 0.0) or 0.0),
                     shadow_roi_pct=((float(state.get("shadow_realized_pnl_usd", 0.0) or 0.0) / self.spec.initial_balance) * 100.0) if self.spec.initial_balance else 0.0,
-                    settled_count=int(state.get("opportunity_count", 0) or 0),
-                    metrics={"latency_ms": state.get("latency_ms"), "provider_configured": state.get("provider_configured")},
+                    settled_count=int((state.get("learner") or {}).get("settled_count", state.get("opportunity_count", 0)) or 0),
+                    metrics=state.get("learner") or {"latency_ms": state.get("latency_ms"), "provider_configured": state.get("provider_configured")},
                     selected_for_execution=False,
                 )
                 self.publish_snapshot(

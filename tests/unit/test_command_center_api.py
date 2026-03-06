@@ -113,3 +113,124 @@ def test_command_center_notification_endpoints(tmp_path, monkeypatch):
 
     assert "discord_configured" in state
     assert "notification_failures" in state
+
+
+def test_emit_snapshot_notifications_sends_closed_trade_alert(monkeypatch):
+    sent = []
+    monkeypatch.setattr(
+        command_center,
+        "_notifier",
+        type(
+            "Notifier",
+            (),
+            {
+                "send_event": staticmethod(lambda **kwargs: sent.append(kwargs) or True),
+                "send_digest": staticmethod(lambda *_args, **_kwargs: True),
+            },
+        )(),
+    )
+    command_center._snapshot_cache.clear()
+
+    first = {
+        "summary": {
+            "portfolio_id": "cascade_alpha",
+            "label": "Cascade Alpha",
+            "running": True,
+            "readiness": "paper_validating",
+            "status": "running",
+            "currency": "USD",
+        },
+        "state": {
+            "recent_trades": [],
+            "models": [],
+        },
+    }
+    second = {
+        "summary": dict(first["summary"]),
+        "state": {
+            "recent_trades": [
+                {
+                    "trade_id": "cascade-1",
+                    "symbol": "TESTUSDT",
+                    "side": "LONG",
+                    "status": "CLOSED",
+                    "net_pnl_usd": 12.5,
+                    "close_reason": "take_profit",
+                }
+            ],
+            "models": [],
+        },
+    }
+
+    command_center._emit_snapshot_notifications([first])
+    command_center._emit_snapshot_notifications([second])
+
+    assert any(item["event_type"] == "trade_closed" for item in sent)
+
+
+def test_emit_snapshot_notifications_sends_model_update_alert(monkeypatch):
+    sent = []
+    monkeypatch.setattr(
+        command_center,
+        "_notifier",
+        type(
+            "Notifier",
+            (),
+            {
+                "send_event": staticmethod(lambda **kwargs: sent.append(kwargs) or True),
+                "send_digest": staticmethod(lambda *_args, **_kwargs: True),
+            },
+        )(),
+    )
+    command_center._snapshot_cache.clear()
+
+    first = {
+        "summary": {
+            "portfolio_id": "hedge_validation",
+            "label": "Hedge Validation",
+            "running": True,
+            "readiness": "blocked",
+            "status": "running",
+            "currency": "USD",
+        },
+        "state": {
+            "recent_trades": [],
+            "models": [
+                {
+                    "model_id": "funding_online_learner",
+                    "metrics": {
+                        "last_retrain_time": "2026-03-06T10:00:00Z",
+                        "last_retrain_result": "accepted",
+                        "current_auc": 0.7,
+                        "strict_gate_pass": False,
+                        "rolling_200": {"brier_lift_abs": 0.01},
+                        "settled_count": 10,
+                    },
+                }
+            ],
+        },
+    }
+    second = {
+        "summary": dict(first["summary"]),
+        "state": {
+            "recent_trades": [],
+            "models": [
+                {
+                    "model_id": "funding_online_learner",
+                    "metrics": {
+                        "last_retrain_time": "2026-03-06T11:00:00Z",
+                        "last_retrain_result": "accepted",
+                        "current_auc": 0.8,
+                        "strict_gate_pass": True,
+                        "rolling_200": {"brier_lift_abs": 0.05},
+                        "settled_count": 20,
+                    },
+                }
+            ],
+        },
+    }
+
+    command_center._emit_snapshot_notifications([first])
+    command_center._emit_snapshot_notifications([second])
+
+    assert any(item["event_type"] == "model_update" for item in sent)
