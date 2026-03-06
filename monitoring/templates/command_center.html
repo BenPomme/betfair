@@ -447,6 +447,29 @@
       }).join('');
     }
 
+    function renderModelCards(models) {
+      if (!models.length) return '';
+      return `
+        <div class="cards" style="margin:14px 0 18px;">
+          ${models.map(m => {
+            const metrics = m.metrics || {};
+            return `<div class="card">
+              <div class="muted">${metrics.model_kind || 'model'}</div>
+              <h3>${m.model_id}</h3>
+              <div class="grid">
+                ${metricCard('Settled', `${metrics.settled_bets ?? metrics.settled_count ?? m.settled_count ?? 0}/${m.settled_target ?? 'n/a'}`)}
+                ${metricCard('Open', metrics.open_positions ?? metrics.learning_open_markets ?? 0)}
+                ${metricCard('Shadow P&L', Number(m.shadow_realized_pnl || 0).toFixed(2))}
+                ${metricCard('ROI', pct(m.shadow_roi_pct))}
+                ${metricCard('Gate', metrics.strict_gate_pass == null ? 'n/a' : yesNo(metrics.strict_gate_pass))}
+                ${metricCard('ETA', m.eta_to_readiness || 'unknown')}
+              </div>
+              <div class="muted">Why not ready: ${metrics.strict_gate_reason || metrics.last_retrain_result || 'n/a'}</div>
+            </div>`;
+          }).join('')}
+        </div>`;
+    }
+
     function sparkline(points) {
       if (!points || !points.length) return "";
       const balances = points.map(p => Number(p.balance || 0));
@@ -634,6 +657,7 @@
           <div class="metric"><div class="label">ETA To Trust</div><div class="value">${trend.eta_to_readiness || 'unknown'}</div></div>
           <div class="metric"><div class="label">24h Trend</div><div class="value ${trend.direction === 'improving' ? 'good' : (trend.direction === 'worsening' ? 'bad' : 'muted')}">${trend.direction || 'flat'} ${trend.progress_delta_24h ? `(${Number(trend.progress_delta_24h).toFixed(1)}%)` : ''}</div></div>
         </div>
+        ${portfolioId === 'betfair_core' ? `<div class="panel"><h3>Betfair Model Accounts</h3>${renderModelCards(models)}</div>` : ''}
         <div class="two-col">
           <div class="panel">
             <h3>Recent Trades</h3>
