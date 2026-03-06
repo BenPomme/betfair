@@ -317,6 +317,7 @@
         const auth = raw.auth || {};
         const health = raw.health || {};
         const predictionSummary = raw.prediction_summary || {};
+        const league = raw.prediction_league_summary || {};
         const modelCount = models.length;
         const matureModels = models.filter(m => (m.metrics || {}).strict_gate_pass).length;
         const learningTracked = models.reduce((acc, m) => acc + Number((m.metrics || {}).learning_tracked || 0), 0);
@@ -331,9 +332,13 @@
               ${metricCard('Strict-Pass Models', matureModels)}
               ${metricCard('Learning Tracked', learningTracked)}
               ${metricCard('Learning Settled', learningSettled)}
+              ${metricCard('Prediction League P&L', money(league.realized_pnl_eur || 0, 'EUR'))}
+              ${metricCard('Prediction League ROI', pct(league.avg_roi_pct || 0))}
+              ${metricCard('Prediction Open Positions', league.open_positions || 0)}
             </div>
             <div class="muted">Healthy direction means: certificate auth ready, feed healthy, more settled bets, and strict-pass model count increasing from zero.</div>
-            <div class="muted" style="margin-top:8px;">Prediction summary: active=${predictionSummary.active_model_count || 0}, leader=${predictionSummary.leader_model_id || 'n/a'}.</div>
+            <div class="muted" style="margin-top:8px;">Core arbitrage book and prediction league are separate. Core P&L can be zero while model accounts are still actively learning and trading.</div>
+            <div class="muted" style="margin-top:8px;">Prediction summary: active=${predictionSummary.active_model_count || 0}, leader=${predictionSummary.leader_model_id || 'n/a'}, best model by realized P&L=${league.best_model_id || 'n/a'}.</div>
           </div>`;
       }
       if (portfolioId === 'hedge_validation') {
@@ -656,6 +661,8 @@
           <div class="metric"><div class="label">Drawdown</div><div class="value">${pct(account.drawdown_pct)}</div></div>
           <div class="metric"><div class="label">ETA To Trust</div><div class="value">${trend.eta_to_readiness || 'unknown'}</div></div>
           <div class="metric"><div class="label">24h Trend</div><div class="value ${trend.direction === 'improving' ? 'good' : (trend.direction === 'worsening' ? 'bad' : 'muted')}">${trend.direction || 'flat'} ${trend.progress_delta_24h ? `(${Number(trend.progress_delta_24h).toFixed(1)}%)` : ''}</div></div>
+          ${portfolioId === 'betfair_core' ? `<div class="metric"><div class="label">Prediction League P&L</div><div class="value">${money(((state.raw_state || {}).prediction_league_summary || {}).realized_pnl_eur || 0, 'EUR')}</div></div>` : ''}
+          ${portfolioId === 'betfair_core' ? `<div class="metric"><div class="label">Prediction League Open</div><div class="value">${(((state.raw_state || {}).prediction_league_summary || {}).open_positions || 0)}</div></div>` : ''}
         </div>
         ${portfolioId === 'betfair_core' ? `<div class="panel"><h3>Betfair Model Accounts</h3>${renderModelCards(models)}</div>` : ''}
         <div class="two-col">

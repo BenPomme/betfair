@@ -39,22 +39,54 @@ class BetfairPortfolioRunner(PortfolioRunnerBase):
         for model_id, payload in prediction_models.items():
             if not isinstance(payload, dict):
                 continue
-            balance = float(payload.get("balance_eur", config.PREDICTION_INITIAL_BALANCE_EUR) or config.PREDICTION_INITIAL_BALANCE_EUR)
-            starting = float(config.PREDICTION_INITIAL_BALANCE_EUR)
+            starting = float(payload.get("initial_balance_eur", config.PREDICTION_INITIAL_BALANCE_EUR) or config.PREDICTION_INITIAL_BALANCE_EUR)
+            realized_pnl = float(payload.get("total_pnl_eur", 0.0) or 0.0)
+            equity = starting + realized_pnl
+            metrics = dict(payload)
+            metrics.setdefault("cash_balance_eur", float(payload.get("balance_eur", starting) or starting))
             models.append(
                 ModelShadowAccount(
                     portfolio_id=self.spec.portfolio_id,
                     model_id=str(model_id),
                     shadow_starting_balance=starting,
-                    shadow_current_balance=balance,
-                    shadow_realized_pnl=balance - starting,
+                    shadow_current_balance=equity,
+                    shadow_realized_pnl=realized_pnl,
                     shadow_roi_pct=float(payload.get("roi_pct", 0.0) or 0.0),
                     settled_count=int(payload.get("settled_bets", 0) or 0),
-                    metrics=dict(payload),
+                    metrics=metrics,
                     selected_for_execution=bool(payload.get("strict_gate_pass", False)),
                 )
             )
         return models
+
+    def _prediction_league_summary(self, state: Dict[str, object]) -> Dict[str, object]:
+        prediction_models = state.get("prediction_models") or {}
+        models = [payload for payload in prediction_models.values() if isinstance(payload, dict)]
+        if not models:
+            return {
+                "model_count": 0,
+                "active_models": 0,
+                "realized_pnl_eur": 0.0,
+                "avg_roi_pct": 0.0,
+                "open_positions": 0,
+                "settled_bets": 0,
+                "learning_settled": 0,
+                "best_model_id": None,
+                "best_model_pnl_eur": 0.0,
+            }
+        best_model = max(models, key=lambda item: float(item.get("total_pnl_eur", 0.0) or 0.0))
+        active_models = sum(1 for item in models if int(item.get("open_positions", 0) or 0) > 0 or int(item.get("settled_bets", 0) or 0) > 0)
+        return {
+            "model_count": len(models),
+            "active_models": active_models,
+            "realized_pnl_eur": round(sum(float(item.get("total_pnl_eur", 0.0) or 0.0) for item in models), 4),
+            "avg_roi_pct": round(sum(float(item.get("roi_pct", 0.0) or 0.0) for item in models) / len(models), 4),
+            "open_positions": int(sum(int(item.get("open_positions", 0) or 0) for item in models)),
+            "settled_bets": int(sum(int(item.get("settled_bets", 0) or 0) for item in models)),
+            "learning_settled": int(sum(int(item.get("learning_settled", 0) or 0) for item in models)),
+            "best_model_id": best_model.get("model_id"),
+            "best_model_pnl_eur": float(best_model.get("total_pnl_eur", 0.0) or 0.0),
+        }
 
     def run(self) -> None:
         self.install_signal_handlers()
@@ -107,6 +139,7 @@ class BetfairPortfolioRunner(PortfolioRunnerBase):
                         "portfolio_id": self.spec.portfolio_id,
                         "status": "running" if state.get("running") else "idle",
                         "control_mode": self.spec.control_mode,
+                        "prediction_league_summary": self._prediction_league_summary(state),
                     }
                 )
                 self.publish_snapshot(
