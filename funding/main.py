@@ -64,6 +64,14 @@ class FundingEngine:
             api_secret=futures_secret,
             base_url=futures_url,
         )
+        spot_url = config.BINANCE_SPOT_TESTNET_URL if is_paper else config.BINANCE_SPOT_PROD_URL
+        spot_key = config.BINANCE_SPOT_TESTNET_API_KEY if is_paper else config.BINANCE_SPOT_API_KEY
+        spot_secret = config.BINANCE_SPOT_TESTNET_API_SECRET if is_paper else config.BINANCE_SPOT_API_SECRET
+        self._spot_client = BinanceSpotClient(
+            api_key=spot_key,
+            api_secret=spot_secret,
+            base_url=spot_url,
+        )
 
         # Data layer
         self._price_cache = FundingPriceCache(max_age_seconds=10)
@@ -200,6 +208,15 @@ class FundingEngine:
         self._contrarian_last_cycle_at: Optional[str] = None
         self._contrarian_last_cycle_diag: Dict[str, object] = {}
         self._learning_events: List[Dict[str, object]] = []
+        self._hedge_capital_context: Dict[str, object] = {
+            "configured_capital_usd": float(config.FUNDING_MAX_TOTAL_EXPOSURE_USD),
+            "deployable_capital_usd": float(config.FUNDING_MAX_TOTAL_EXPOSURE_USD),
+            "remaining_exposure_usd": float(config.FUNDING_MAX_TOTAL_EXPOSURE_USD),
+            "suggested_position_size_usd": float(
+                min(config.FUNDING_MAX_POSITION_USD, config.FUNDING_MAX_TOTAL_EXPOSURE_USD)
+            ),
+            "capital_source": "configured_cap",
+        }
         logger.info(
             "Funding engine boot: mode=%s gate_mode=%s build_ts=%s",
             config.FUNDING_MODE,
@@ -311,6 +328,62 @@ class FundingEngine:
             self._contrarian_signal_count, self._contrarian_trade_count,
         )
 
+    async def _compute_hedge_capital_context(
+        self,
+        current_exposure: Decimal,
+        open_hedges: int,
+    ) -> Dict[str, object]:
+        configured_capital = Decimal(str(config.FUNDING_MAX_TOTAL_EXPOSURE_USD))
+        spot_balance = Decimal("0")
+        futures_wallet_balance = Decimal("0")
+        capital_source = "configured_cap"
+
+        try:
+            async with async_timeout(10.0):
+                spot_balance = await self._spot_client.get_account_balance("USDT")
+        except Exception as e:
+            logger.debug("Could not fetch spot balance for hedge sizing: %s", e)
+
+        try:
+            async with async_timeout(10.0):
+                account = await self._futures_client.get_account()
+                futures_wallet_balance = Decimal(str(account.get("totalWalletBalance", "0")))
+        except Exception as e:
+            logger.debug("Could not fetch futures wallet for hedge sizing: %s", e)
+
+        leverage = Decimal(str(max(1, int(config.FUNDING_LEVERAGE))))
+        futures_notional_capacity = futures_wallet_balance * leverage
+        deployable_capital = configured_capital
+        if spot_balance > Decimal("0") and futures_wallet_balance > Decimal("0"):
+            deployable_capital = min(configured_capital, spot_balance, futures_notional_capacity)
+            capital_source = "wallet_balances"
+        elif spot_balance > Decimal("0"):
+            deployable_capital = min(configured_capital, spot_balance)
+            capital_source = "spot_wallet"
+        elif futures_wallet_balance > Decimal("0"):
+            deployable_capital = min(configured_capital, futures_notional_capacity)
+            capital_source = "futures_wallet"
+
+        remaining_exposure = max(Decimal("0"), deployable_capital - current_exposure)
+        remaining_slots = max(0, int(config.FUNDING_MAX_OPEN_HEDGES) - int(open_hedges))
+        suggested_position = opportunity_scanner.proportional_position_size(
+            remaining_exposure=remaining_exposure,
+            remaining_slots=max(1, remaining_slots),
+            max_position=config.FUNDING_MAX_POSITION_USD,
+        )
+        return {
+            "configured_capital_usd": float(configured_capital),
+            "deployable_capital_usd": float(deployable_capital),
+            "spot_balance_usd": float(spot_balance),
+            "futures_wallet_balance_usd": float(futures_wallet_balance),
+            "futures_notional_capacity_usd": float(futures_notional_capacity),
+            "current_exposure_usd": float(current_exposure),
+            "remaining_exposure_usd": float(remaining_exposure),
+            "remaining_slots": remaining_slots,
+            "suggested_position_size_usd": float(suggested_position),
+            "capital_source": capital_source,
+        }
+
     async def _scan_loop(self) -> None:
         """Periodic scan for opportunities and execute entries/exits."""
         # Wait for cache to warm up
@@ -351,6 +424,14 @@ class FundingEngine:
         # Evaluate entries
         pm = executor.get_position_manager()
         open_positions = pm.open_positions()
+        current_exposure = sum(p.notional_value() for p in open_positions)
+        self._hedge_capital_context = await self._compute_hedge_capital_context(
+            current_exposure=current_exposure,
+            open_hedges=len(open_positions),
+        )
+        deployable_capital = Decimal(str(
+            self._hedge_capital_context.get("deployable_capital_usd", config.FUNDING_MAX_TOTAL_EXPOSURE_USD)
+        ))
 
         funding_gate_mult = 1.0
         funding_edge_bump = 0.0
@@ -382,7 +463,17 @@ class FundingEngine:
             , ml_min_predicted_rate=float(config.FUNDING_ML_MIN_PREDICTED_RATE) + funding_edge_bump * 0.001
         )
 
+        planned_exposure = current_exposure
+        planned_open_hedges = len(open_positions)
         for opp, size in entries:
+            dynamic_size = opportunity_scanner.proportional_position_size(
+                remaining_exposure=max(Decimal("0"), deployable_capital - planned_exposure),
+                remaining_slots=max(1, int(config.FUNDING_MAX_OPEN_HEDGES) - planned_open_hedges),
+                max_position=config.FUNDING_MAX_POSITION_USD,
+            )
+            size = min(Decimal(str(size)), dynamic_size)
+            if size <= Decimal("0"):
+                continue
             if funding_gate_mult <= 0:
                 continue
             if funding_gate_mult < 1.0:
@@ -400,10 +491,24 @@ class FundingEngine:
                     expected_funding_payment=opp.expected_funding_payment * Decimal(str(funding_gate_mult)),
                     timestamp=opp.timestamp,
                 )
+            else:
+                opp = FundingOpportunity(
+                    symbol=opp.symbol,
+                    current_rate=opp.current_rate,
+                    predicted_rate=opp.predicted_rate,
+                    annualized_yield=opp.annualized_yield,
+                    entry_price_spot=opp.entry_price_spot,
+                    entry_price_perp=opp.entry_price_perp,
+                    position_size=size,
+                    expected_funding_payment=(size * opp.current_rate).quantize(Decimal("0.01")),
+                    timestamp=opp.timestamp,
+                )
             filters = self._symbol_selector.get_exchange_filters(opp.symbol)
             result = await executor.execute_entry(opp, filters)
             if result:
                 self._trade_count += 1
+                planned_exposure += size
+                planned_open_hedges += 1
                 if self._on_trade:
                     self._on_trade("entry", result)
 
@@ -443,6 +548,11 @@ class FundingEngine:
             return
 
         logger.info("Recording funding settlements for %d positions", len(open_positions))
+        funding_info = {}
+        try:
+            funding_info = await self._futures_client.get_funding_info()
+        except Exception as e:
+            logger.warning("Failed to fetch funding caps before settlement recording: %s", e)
 
         for pos in open_positions:
             snapshot = self._price_cache.get_snapshot(pos.symbol)
@@ -457,8 +567,25 @@ class FundingEngine:
                     continue
 
             if snapshot:
+                effective_rate = snapshot.funding_rate
+                info = funding_info.get(pos.symbol) if funding_info else None
+                if info:
+                    rate_cap = Decimal(str(info.get("adjusted_funding_rate_cap", effective_rate)))
+                    rate_floor = Decimal(str(info.get("adjusted_funding_rate_floor", effective_rate)))
+                    if effective_rate > rate_cap:
+                        logger.warning(
+                            "Clamping funding rate for %s from %s to cap %s",
+                            pos.symbol, effective_rate, rate_cap,
+                        )
+                        effective_rate = rate_cap
+                    elif effective_rate < rate_floor:
+                        logger.warning(
+                            "Clamping funding rate for %s from %s to floor %s",
+                            pos.symbol, effective_rate, rate_floor,
+                        )
+                        effective_rate = rate_floor
                 notional = pos.quantity_perp * snapshot.mark_price
-                payment = (notional * snapshot.funding_rate).quantize(Decimal("0.01"))
+                payment = (notional * effective_rate).quantize(Decimal("0.01"))
                 pm.record_funding(pos.symbol, payment)
 
                 if self._on_funding:
@@ -1044,7 +1171,9 @@ class FundingEngine:
         total_funding_collected = sum(p.funding_collected for p in all_positions)
         total_fees_paid = sum(p.trading_fees_paid for p in all_positions)
         realized_net_pnl = total_funding_collected - total_fees_paid
-        assumed_capital = Decimal(str(config.FUNDING_MAX_TOTAL_EXPOSURE_USD))
+        assumed_capital = Decimal(str(
+            self._hedge_capital_context.get("deployable_capital_usd", config.FUNDING_MAX_TOTAL_EXPOSURE_USD)
+        ))
         capital_base = assumed_capital if assumed_capital > Decimal("0") else max(total_exposure, Decimal("1"))
         deployed_usage_pct = (total_exposure / capital_base * Decimal("100")) if capital_base > Decimal("0") else Decimal("0")
         realized_roi_pct = (realized_net_pnl / capital_base * Decimal("100")) if capital_base > Decimal("0") else Decimal("0")
@@ -1082,6 +1211,7 @@ class FundingEngine:
             "projected_next_settlement_pnl_usd": float(projected_next_settlement_pnl),
             "projected_next_settlement_roi_pct": float(projected_next_settlement_roi_pct),
             "positions": enriched_open_positions,
+            "hedge_capital_context": self._hedge_capital_context,
             "online_learner": self._online_learner.get_state(),
             "contrarian_learner": (
                 self._contrarian_learner.get_state()

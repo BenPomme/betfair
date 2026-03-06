@@ -49,6 +49,25 @@ class FundingPaperExecutor:
                 "FundingPaperExecutor running in local-sim mode (testnet API keys missing)."
             )
 
+    @staticmethod
+    def _execution_uses_maker_fees() -> bool:
+        """Current hedge executor submits market orders for both legs."""
+        return False
+
+    def _estimate_entry_fees(self, notional: Decimal) -> Decimal:
+        return fee_calculator.trading_fees_round_trip(
+            notional,
+            maker=self._execution_uses_maker_fees(),
+            bnb_discount=config.FUNDING_BNB_DISCOUNT,
+        ) / Decimal("2")
+
+    def _estimate_exit_fees(self, notional: Decimal) -> Decimal:
+        return fee_calculator.trading_fees_round_trip(
+            notional,
+            maker=self._execution_uses_maker_fees(),
+            bnb_discount=config.FUNDING_BNB_DISCOUNT,
+        ) / Decimal("2")
+
     async def open_hedge(
         self,
         opportunity: FundingOpportunity,
@@ -124,7 +143,7 @@ class FundingPaperExecutor:
 
             # Calculate trading fees
             notional = spot_qty * spot_fill_price
-            fees = fee_calculator.trading_fees_round_trip(notional) / Decimal("2")  # Entry only
+            fees = self._estimate_entry_fees(notional)
 
             # Create position
             position = HedgePosition(
@@ -199,7 +218,7 @@ class FundingPaperExecutor:
 
             # Exit trading fees
             notional = position.quantity_spot * spot_exit_price
-            exit_fees = fee_calculator.trading_fees_round_trip(notional) / Decimal("2")
+            exit_fees = self._estimate_exit_fees(notional)
 
             self._positions.close_position(
                 symbol=symbol,
@@ -232,7 +251,7 @@ class FundingPaperExecutor:
         spot_fill_price = opportunity.entry_price_spot
         perp_fill_price = opportunity.entry_price_perp
         notional = spot_qty * spot_fill_price
-        fees = fee_calculator.trading_fees_round_trip(notional) / Decimal("2")
+        fees = self._estimate_entry_fees(notional)
         position = HedgePosition(
             symbol=opportunity.symbol,
             entry_price_spot=spot_fill_price,
@@ -253,7 +272,7 @@ class FundingPaperExecutor:
         perp_exit_price = position.entry_price_perp
         price_pnl = Decimal("0")
         notional = position.quantity_spot * spot_exit_price
-        exit_fees = fee_calculator.trading_fees_round_trip(notional) / Decimal("2")
+        exit_fees = self._estimate_exit_fees(notional)
         closed = self._positions.close_position(
             symbol=position.symbol,
             exit_price_spot=spot_exit_price,

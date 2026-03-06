@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 
-from funding.core.opportunity_scanner import scan_opportunities
+from funding.core.opportunity_scanner import proportional_position_size, scan_opportunities
 from funding.core.schemas import FundingSnapshot
 
 
@@ -111,3 +111,19 @@ class TestScanOpportunities:
         """No snapshots should return empty list."""
         result = scan_opportunities({}, {})
         assert result == []
+
+    def test_proportional_position_size_splits_remaining_budget(self):
+        result = proportional_position_size(
+            remaining_exposure=Decimal("50000"),
+            remaining_slots=10,
+            max_position=Decimal("5000"),
+        )
+        assert result == Decimal("5000.00")
+
+    def test_proportional_position_size_respects_remaining_exposure(self):
+        result = proportional_position_size(
+            remaining_exposure=Decimal("3600"),
+            remaining_slots=4,
+            max_position=Decimal("5000"),
+        )
+        assert result == Decimal("900.00")

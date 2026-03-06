@@ -22,6 +22,25 @@ from funding.core.schemas import FundingOpportunity, FundingSnapshot
 logger = logging.getLogger(__name__)
 
 
+def proportional_position_size(
+    remaining_exposure: Decimal,
+    remaining_slots: int,
+    max_position: Optional[Decimal] = None,
+) -> Decimal:
+    """Equal-weight the remaining hedge budget across remaining slots.
+
+    This keeps new entries proportional to the remaining deployable capital
+    instead of blindly using a fixed notional for every symbol.
+    """
+    if remaining_exposure <= Decimal("0") or remaining_slots <= 0:
+        return Decimal("0")
+    max_position = max_position or config.FUNDING_MAX_POSITION_USD
+    suggested = (remaining_exposure / Decimal(str(remaining_slots))).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    return min(max_position, suggested)
+
+
 def scan_opportunities(
     snapshots: Dict[str, FundingSnapshot],
     volume_data: Dict[str, Decimal],

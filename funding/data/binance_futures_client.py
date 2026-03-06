@@ -140,6 +140,13 @@ class BinanceFuturesClient:
             for item in result
         ]
 
+    async def get_account(self) -> dict:
+        """Fetch futures account information, including wallet balance."""
+        def _call():
+            return self._client.account()
+
+        return await asyncio.to_thread(_call)
+
     async def get_exchange_info(self) -> List[dict]:
         """Fetch exchange info: tradeable perpetual symbols with filters."""
         def _call():
