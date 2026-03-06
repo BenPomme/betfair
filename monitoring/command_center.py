@@ -103,7 +103,7 @@ def _append_history_if_due(summary: Dict[str, Any], state: Dict[str, Any], readi
     last_write = float(previous.get("last_history_write", 0.0) or 0.0)
     if last_write and (now - last_write) < interval:
         return
-    progress = _progress_from_readiness(readiness)
+    progress = _progress_from_readiness(readiness, summary.get("portfolio_id"), state)
     blockers = readiness.get("blockers_v2") or readiness.get("blockers") or []
     row = {
         "ts": _utc_now_iso(),
@@ -144,14 +144,52 @@ def _parse_iso(ts: str) -> datetime | None:
         return None
 
 
-def _progress_from_readiness(readiness: Dict[str, Any]) -> float:
+def _clamp(value: float, low: float = 0.0, high: float = 100.0) -> float:
+    return max(low, min(high, value))
+
+
+def _progress_from_readiness(readiness: Dict[str, Any], portfolio_id: str | None = None, state: Dict[str, Any] | None = None) -> float:
     checks = readiness.get("checks_v2") or readiness.get("checks") or []
     if checks:
         return round((sum(1 for item in checks if item.get("ok")) / len(checks)) * 100.0, 2)
     try:
-        return round(float(readiness.get("score_pct", 0.0) or 0.0), 2)
+        score = readiness.get("score_pct")
+        if score is not None:
+            return round(float(score or 0.0), 2)
     except Exception:
-        return 0.0
+        pass
+    state = state or {}
+    raw_state = dict(state.get("raw_state") or {})
+    models = list(state.get("models") or [])
+    if portfolio_id == "contrarian_legacy":
+        training_quality = dict(raw_state.get("training_quality") or {})
+        unique_symbols = float(training_quality.get("unique_symbol_count", 0) or 0)
+        largest_symbol_share = float(training_quality.get("largest_symbol_share", 1.0) or 1.0)
+        duplicate_rate = float(training_quality.get("duplicate_signature_rate", 1.0) or 1.0)
+        closed_trades = float((state.get("account") or {}).get("trade_count", raw_state.get("trade_count", 0)) or 0)
+        gate_pass = bool(((models[0].get("metrics") if models else {}) or {}).get("strict_gate_pass", False))
+        target_symbols = max(1.0, float(getattr(config, "CONTRARIAN_REQUIRE_MIN_UNIQUE_SYMBOLS", 8)))
+        target_trades = 20.0
+        concentration_limit = float(getattr(config, "CONTRARIAN_MAX_SYMBOL_CONCENTRATION", 0.35) or 0.35)
+        duplicate_limit = float(getattr(config, "CONTRARIAN_MAX_DUPLICATE_SIGNATURE_RATE", 0.10) or 0.10)
+        progress = 0.0
+        progress += min(closed_trades / target_trades, 1.0) * 40.0
+        progress += min(unique_symbols / target_symbols, 1.0) * 25.0
+        concentration_score = 1.0 if largest_symbol_share <= concentration_limit else max(0.0, 1.0 - ((largest_symbol_share - concentration_limit) / max(1e-6, 1.0 - concentration_limit)))
+        duplicate_score = 1.0 if duplicate_rate <= duplicate_limit else max(0.0, 1.0 - ((duplicate_rate - duplicate_limit) / max(1e-6, 1.0 - duplicate_limit)))
+        progress += concentration_score * 15.0
+        progress += duplicate_score * 10.0
+        progress += 10.0 if gate_pass else 0.0
+        return round(_clamp(progress), 2)
+    if portfolio_id == "mev_scout_sol":
+        learner = dict(raw_state.get("learner") or {})
+        observed = float(learner.get("observed_events", 0) or 0)
+        labeled = float(learner.get("settled_count", 0) or 0)
+        target = float((raw_state.get("training_progress") or {}).get("min_labeled_target", 20) or 20)
+        provider = bool(raw_state.get("provider_configured", False))
+        progress = (20.0 if provider else 0.0) + min(observed / 100.0, 1.0) * 30.0 + min(labeled / max(1.0, target), 1.0) * 50.0
+        return round(_clamp(progress), 2)
+    return 0.0
 
 
 def _history_trend(portfolio_id: str) -> Dict[str, Any]:
@@ -645,6 +683,9 @@ def _build_snapshot(portfolio_id: str) -> Dict[str, Any]:
     elif summary_status == "running":
         summary_status = "idle"
     trend = _history_trend(portfolio_id)
+    current_progress = _progress_from_readiness(readiness, portfolio_id, {"raw_state": raw_state, "models": raw_models, "account": account})
+    if current_progress > float(trend.get("latest_progress_pct", 0.0) or 0.0):
+        trend["latest_progress_pct"] = round(current_progress, 2)
     readiness = dict(readiness)
     readiness.setdefault("eta_to_readiness", trend.get("eta_to_readiness"))
     readiness.setdefault("eta_hours", trend.get("eta_hours"))
