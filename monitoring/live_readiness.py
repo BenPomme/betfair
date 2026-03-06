@@ -206,6 +206,16 @@ def evaluate_binance_live_readiness(state: Dict[str, Any]) -> Dict[str, Any]:
     min_model_window_settled = _as_int(getattr(config, "LIVE_READY_BINANCE_MIN_MODEL_WINDOW_SETTLED", 200), 200)
     min_realized_roi = _as_float(getattr(config, "LIVE_READY_BINANCE_MIN_REALIZED_ROI_PCT", 0.0), 0.0)
     require_full_gate_mode = _as_bool(getattr(config, "LIVE_READY_REQUIRE_FULL_FUNDING_GATE", True), True)
+    validation_mode = _as_bool(state.get("validation_mode"), False)
+    execution_mode = str(state.get("execution_mode", "")).lower()
+    validation_run_id = str(state.get("validation_run_id", "") or "")
+    fresh_book_started_at = state.get("fresh_book_started_at")
+    execution_quality = state.get("execution_quality") or {}
+    settlement_audit = state.get("settlement_audit") or {}
+    paper_rejections = state.get("paper_rejections") or {}
+    positions = state.get("positions") or []
+    closed_hedges = _as_int(state.get("closed_hedges"), 0)
+    realized_net_pnl_usd = _as_float(state.get("realized_net_pnl_usd"), 0.0)
 
     learners = []
     ol = state.get("online_learner")
@@ -236,6 +246,18 @@ def evaluate_binance_live_readiness(state: Dict[str, Any]) -> Dict[str, Any]:
     avg_lift_200 = _avg([m["rolling_200_brier_lift"] for m in passing_models])
     min_window_settled = min([m["rolling_200_settled"] for m in passing_models], default=0)
     realized_roi_pct = _as_float(state.get("realized_roi_pct"), 0.0)
+    avg_realized_slippage_bps = _as_float(execution_quality.get("avg_realized_slippage_bps"), 0.0)
+    rejection_rate_v2 = _as_float(execution_quality.get("rejection_rate", paper_rejections.get("rate", 0.0)), 0.0)
+    simulated_fill_count = _as_int(execution_quality.get("simulated_fill_count"), 0)
+    orphaned_single_leg_incidents = _as_int(execution_quality.get("orphaned_single_leg_incidents"), 0)
+    stale_open_positions = _as_int(execution_quality.get("stale_open_positions"), 0)
+    realized_funding_events = _as_int(settlement_audit.get("realized_funding_events"), 0)
+    funding_cap_applied_count = _as_int(settlement_audit.get("funding_cap_applied_count"), 0)
+    min_closed_hedges = _as_int(getattr(config, "FUNDING_VALIDATION_MIN_CLOSED_HEDGES", 8), 8)
+    min_settlement_events = _as_int(getattr(config, "FUNDING_VALIDATION_MIN_SETTLEMENT_EVENTS", 12), 12)
+    min_net_pnl_usd = _as_float(getattr(config, "FUNDING_VALIDATION_MIN_NET_PNL_USD", 0.0), 0.0)
+    max_reject_rate = _as_float(getattr(config, "FUNDING_VALIDATION_MAX_REJECT_RATE", 0.35), 0.35)
+    max_slippage_bps = _as_float(getattr(config, "FUNDING_VALIDATION_MAX_SLIPPAGE_BPS", 12.0), 12.0)
 
     checks = [
         _check("engine_running", running, running, True, "Funding runtime must be active"),
@@ -299,17 +321,100 @@ def evaluate_binance_live_readiness(state: Dict[str, Any]) -> Dict[str, Any]:
         ),
     ]
 
+    v2_checks = [
+        _check("validation_mode_active", validation_mode, validation_mode, True, "Validation mode must be active"),
+        _check(
+            "execution_mode_fail_closed",
+            execution_mode == "fail_closed",
+            execution_mode,
+            "fail_closed",
+            "Paper execution must fail closed during validation",
+        ),
+        _check(
+            "fresh_validation_run",
+            bool(validation_run_id and fresh_book_started_at),
+            {"run_id": validation_run_id, "fresh_book_started_at": fresh_book_started_at},
+            True,
+            "A fresh validation run must be active",
+        ),
+        _check(
+            "closed_hedges_minimum",
+            closed_hedges >= min_closed_hedges,
+            closed_hedges,
+            f">={min_closed_hedges}",
+            "Need enough closed hedges in the clean validation book",
+        ),
+        _check(
+            "settlement_events_minimum",
+            realized_funding_events >= min_settlement_events,
+            realized_funding_events,
+            f">={min_settlement_events}",
+            "Need enough realized funding events",
+        ),
+        _check(
+            "net_pnl_non_negative_after_friction",
+            realized_net_pnl_usd >= min_net_pnl_usd,
+            round(realized_net_pnl_usd, 4),
+            f">={min_net_pnl_usd}",
+            "Net hedge PnL must remain non-negative after costs",
+        ),
+        _check(
+            "avg_slippage_within_limit",
+            avg_realized_slippage_bps <= max_slippage_bps,
+            round(avg_realized_slippage_bps, 4),
+            f"<={max_slippage_bps}",
+            "Average realized slippage is too high",
+        ),
+        _check(
+            "rejection_rate_within_limit",
+            rejection_rate_v2 <= max_reject_rate,
+            round(rejection_rate_v2, 4),
+            f"<={max_reject_rate}",
+            "Too many paper executions are being rejected",
+        ),
+        _check(
+            "no_simulated_fills",
+            simulated_fill_count == 0,
+            simulated_fill_count,
+            0,
+            "Validation run cannot contain simulated fills",
+        ),
+        _check(
+            "no_funding_cap_anomalies",
+            funding_cap_applied_count == 0,
+            funding_cap_applied_count,
+            0,
+            "Funding cap clamps indicate unstable paper accounting",
+        ),
+        _check(
+            "no_orphaned_single_legs",
+            orphaned_single_leg_incidents == 0,
+            orphaned_single_leg_incidents,
+            0,
+            "Single-leg unwind failures block live trust",
+        ),
+        _check(
+            "no_stale_open_positions",
+            stale_open_positions == 0,
+            stale_open_positions,
+            0,
+            "Open hedge positions exceeded max hold without closure",
+        ),
+    ]
+
     validation_ready = all(c["ok"] for c in checks)
+    readiness_v2_ready = all(c["ok"] for c in v2_checks)
     can_switch_to_live = bool(validation_ready and paper_mode)
     blockers = [c["name"] for c in checks if not c["ok"]]
+    blockers_v2 = [c["name"] for c in v2_checks if not c["ok"]]
     if validation_ready and not paper_mode:
         blockers.append("already_live_mode")
 
     return {
         "system": "binance",
         "mode": mode,
-        "validation_ready": validation_ready,
-        "can_switch_to_live_now": can_switch_to_live,
+        "validation_ready": bool(validation_ready and readiness_v2_ready),
+        "can_switch_to_live_now": bool(can_switch_to_live and readiness_v2_ready),
         "score_pct": _score(checks),
         "confidence": _label_from_score(_score(checks)),
         "candidate_models": len(candidate_models),
@@ -320,6 +425,10 @@ def evaluate_binance_live_readiness(state: Dict[str, Any]) -> Dict[str, Any]:
         "realized_roi_pct": round(realized_roi_pct, 4),
         "checks": checks,
         "blockers": blockers,
+        "readiness_v2": readiness_v2_ready,
+        "execution_confidence": _label_from_score(_score(v2_checks)),
+        "checks_v2": v2_checks,
+        "blockers_v2": blockers_v2,
     }
 
 

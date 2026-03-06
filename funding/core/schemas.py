@@ -43,6 +43,22 @@ class FundingOpportunity:
     position_size: Decimal         # notional USD
     expected_funding_payment: Decimal  # single settlement payment
     timestamp: datetime
+    next_funding_time: Optional[datetime] = None
+    snapshot_age_seconds: Decimal = Decimal("0")
+    spot_bid: Optional[Decimal] = None
+    spot_ask: Optional[Decimal] = None
+    perp_bid: Optional[Decimal] = None
+    perp_ask: Optional[Decimal] = None
+    spot_spread_bps: Decimal = Decimal("0")
+    perp_spread_bps: Decimal = Decimal("0")
+    basis_bps: Decimal = Decimal("0")
+    estimated_round_trip_cost_bps: Decimal = Decimal("0")
+    net_expected_edge_usd: Decimal = Decimal("0")
+    spot_bid_depth_usd: Decimal = Decimal("0")
+    spot_ask_depth_usd: Decimal = Decimal("0")
+    perp_bid_depth_usd: Decimal = Decimal("0")
+    perp_ask_depth_usd: Decimal = Decimal("0")
+    rejection_reason: Optional[str] = None
 
 
 @dataclass
@@ -66,6 +82,27 @@ class HedgePosition:
     exit_price_spot: Decimal = Decimal("0")
     exit_price_perp: Decimal = Decimal("0")
     exit_pnl: Decimal = Decimal("0")
+    validation_run_id: str = ""
+    fill_source: str = "unknown"
+    entry_order_id_spot: Optional[str] = None
+    entry_order_id_perp: Optional[str] = None
+    exit_order_id_spot: Optional[str] = None
+    exit_order_id_perp: Optional[str] = None
+    entry_basis_bps: Decimal = Decimal("0")
+    exit_basis_bps: Decimal = Decimal("0")
+    entry_slippage_bps_spot: Decimal = Decimal("0")
+    entry_slippage_bps_perp: Decimal = Decimal("0")
+    exit_slippage_bps_spot: Decimal = Decimal("0")
+    exit_slippage_bps_perp: Decimal = Decimal("0")
+    entry_fee_spot: Decimal = Decimal("0")
+    entry_fee_perp: Decimal = Decimal("0")
+    exit_fee_spot: Decimal = Decimal("0")
+    exit_fee_perp: Decimal = Decimal("0")
+    expected_funding_payment: Decimal = Decimal("0")
+    realized_funding_events: int = 0
+    missed_funding_events: int = 0
+    funding_cap_applied: bool = False
+    rejection_reason: Optional[str] = None
 
     def notional_value(self) -> Decimal:
         """Current notional value of the position (spot side)."""
@@ -96,6 +133,27 @@ class HedgePosition:
             "exit_price_spot": str(self.exit_price_spot),
             "exit_price_perp": str(self.exit_price_perp),
             "exit_pnl": str(self.exit_pnl),
+            "validation_run_id": self.validation_run_id,
+            "fill_source": self.fill_source,
+            "entry_order_id_spot": self.entry_order_id_spot,
+            "entry_order_id_perp": self.entry_order_id_perp,
+            "exit_order_id_spot": self.exit_order_id_spot,
+            "exit_order_id_perp": self.exit_order_id_perp,
+            "entry_basis_bps": str(self.entry_basis_bps),
+            "exit_basis_bps": str(self.exit_basis_bps),
+            "entry_slippage_bps_spot": str(self.entry_slippage_bps_spot),
+            "entry_slippage_bps_perp": str(self.entry_slippage_bps_perp),
+            "exit_slippage_bps_spot": str(self.exit_slippage_bps_spot),
+            "exit_slippage_bps_perp": str(self.exit_slippage_bps_perp),
+            "entry_fee_spot": str(self.entry_fee_spot),
+            "entry_fee_perp": str(self.entry_fee_perp),
+            "exit_fee_spot": str(self.exit_fee_spot),
+            "exit_fee_perp": str(self.exit_fee_perp),
+            "expected_funding_payment": str(self.expected_funding_payment),
+            "realized_funding_events": self.realized_funding_events,
+            "missed_funding_events": self.missed_funding_events,
+            "funding_cap_applied": self.funding_cap_applied,
+            "rejection_reason": self.rejection_reason,
         }
 
     @classmethod
@@ -120,6 +178,27 @@ class HedgePosition:
             exit_price_spot=Decimal(d.get("exit_price_spot", "0")),
             exit_price_perp=Decimal(d.get("exit_price_perp", "0")),
             exit_pnl=Decimal(d.get("exit_pnl", "0")),
+            validation_run_id=d.get("validation_run_id", ""),
+            fill_source=d.get("fill_source", "unknown"),
+            entry_order_id_spot=d.get("entry_order_id_spot"),
+            entry_order_id_perp=d.get("entry_order_id_perp"),
+            exit_order_id_spot=d.get("exit_order_id_spot"),
+            exit_order_id_perp=d.get("exit_order_id_perp"),
+            entry_basis_bps=Decimal(d.get("entry_basis_bps", "0")),
+            exit_basis_bps=Decimal(d.get("exit_basis_bps", "0")),
+            entry_slippage_bps_spot=Decimal(d.get("entry_slippage_bps_spot", "0")),
+            entry_slippage_bps_perp=Decimal(d.get("entry_slippage_bps_perp", "0")),
+            exit_slippage_bps_spot=Decimal(d.get("exit_slippage_bps_spot", "0")),
+            exit_slippage_bps_perp=Decimal(d.get("exit_slippage_bps_perp", "0")),
+            entry_fee_spot=Decimal(d.get("entry_fee_spot", "0")),
+            entry_fee_perp=Decimal(d.get("entry_fee_perp", "0")),
+            exit_fee_spot=Decimal(d.get("exit_fee_spot", "0")),
+            exit_fee_perp=Decimal(d.get("exit_fee_perp", "0")),
+            expected_funding_payment=Decimal(d.get("expected_funding_payment", "0")),
+            realized_funding_events=int(d.get("realized_funding_events", 0)),
+            missed_funding_events=int(d.get("missed_funding_events", 0)),
+            funding_cap_applied=bool(d.get("funding_cap_applied", False)),
+            rejection_reason=d.get("rejection_reason"),
         )
 
 

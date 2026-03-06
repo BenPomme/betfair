@@ -4,6 +4,7 @@ Wraps binance-connector Spot class with Decimal conversion and async support.
 """
 import asyncio
 import logging
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, Optional
 
@@ -39,6 +40,19 @@ class BinanceSpotClient:
 
         result = await asyncio.to_thread(_call)
         return _to_decimal(result["price"])
+
+    async def get_order_book(self, symbol: str, limit: int = 20) -> dict:
+        """Fetch spot order book for a symbol."""
+        def _call():
+            return self._client.depth(symbol=symbol, limit=limit)
+
+        result = await asyncio.to_thread(_call)
+        return {
+            "lastUpdateId": result.get("lastUpdateId", 0),
+            "timestamp": datetime.now(timezone.utc),
+            "bids": result.get("bids", []),
+            "asks": result.get("asks", []),
+        }
 
     async def place_order(
         self,

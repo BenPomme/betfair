@@ -275,6 +275,17 @@
   <!-- Funding Health -->
   <div class="health" id="fHealthRow"></div>
 
+  <div class="grid2" style="margin-bottom:.75rem">
+    <div class="card">
+      <h2>Validation Run</h2>
+      <div id="fValidationBanner" style="font-family:var(--mono);font-size:.78rem;color:var(--text2)">—</div>
+    </div>
+    <div class="card">
+      <h2>Execution Quality</h2>
+      <div id="fExecutionSummary" style="font-family:var(--mono);font-size:.78rem;color:var(--text2)">—</div>
+    </div>
+  </div>
+
   <!-- Funding KPIs -->
   <div class="kpi">
     <div class="k"><div class="lbl">Open Hedges</div><div class="val b" id="fkHedges">0</div><div class="sub" id="fkHedgesSub"></div></div>
@@ -340,6 +351,14 @@
         <tbody id="fPositionsBody"></tbody>
       </table>
     </div>
+  </div>
+
+  <div class="card" style="overflow:auto;margin-bottom:.75rem">
+    <h2>Hedge Validation Audit</h2>
+    <table>
+      <thead><tr><th>Symbol</th><th>Opened</th><th>Expected Funding</th><th>Realized Funding</th><th>Fees</th><th>Slippage</th><th>Net P&L</th><th>Basis</th><th>Status</th><th>Run</th></tr></thead>
+      <tbody id="fAuditBody"></tbody>
+    </table>
   </div>
 
   <!-- Config -->
@@ -1024,6 +1043,29 @@ function renderFundingPnlHistory(history){
   fundPnlChart.update('none');
 }
 
+function renderFundingAudit(positions, runId){
+  const rows=(positions||[]).slice().sort((a,b)=>String(b.entry_time||'').localeCompare(String(a.entry_time||''))).slice(0,20);
+  $('fAuditBody').innerHTML=rows.map(p=>{
+    const funding=Number(p.funding_collected||0);
+    const fees=Number(p.trading_fees_paid||0);
+    const net=funding+Number(p.exit_pnl||0)-fees;
+    const slip=Math.abs(Number(p.entry_slippage_bps_spot||0))+Math.abs(Number(p.entry_slippage_bps_perp||0))+Math.abs(Number(p.exit_slippage_bps_spot||0))+Math.abs(Number(p.exit_slippage_bps_perp||0));
+    const basis=Math.abs(Number(p.entry_basis_bps||0))+Math.abs(Number(p.exit_basis_bps||0));
+    return `<tr>
+      <td style="color:var(--text)">${esc(p.symbol||'—')}</td>
+      <td style="color:var(--text3)">${String(p.entry_time||'').substring(0,16)}</td>
+      <td>${fmtUsd(Number(p.expected_funding_payment||0),4)}</td>
+      <td class="${funding>=0?'g':'r'}">${fmtUsd(funding,4)}</td>
+      <td class="r">${fmtUsd(fees,4)}</td>
+      <td>${slip.toFixed(2)}bps</td>
+      <td class="${net>0?'g':net<0?'r':''}">${fmtUsd(net,4)}</td>
+      <td>${basis.toFixed(2)}bps</td>
+      <td>${esc(p.status||'—')}</td>
+      <td style="color:var(--text3)">${esc(p.validation_run_id||runId||'—')}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="10" style="color:var(--text3);text-align:center">No hedge audit entries yet</td></tr>';
+}
+
 function renderFunding(fs){
   // Status
   const running=fs.running;
@@ -1073,6 +1115,27 @@ function renderFunding(fs){
   $('fkScans').textContent=fs.scan_count||0;
   $('fkTrades').textContent=fs.trade_count||0;
   renderFundingPnlHistory(fs.pnl_history||[]);
+  const eq=fs.execution_quality||{};
+  const sa=fs.settlement_audit||{};
+  const cr=fs.cost_breakdown||{};
+  const pr=fs.paper_rejections||{};
+  const readiness=fs.readiness_v2||{};
+  $('fValidationBanner').textContent=
+    'scope='+(fs.validation_scope||'hedge_only')+
+    ' | validation='+(fs.validation_mode===true?'on':'off')+
+    ' | run='+(fs.validation_run_id||'—')+
+    ' | fresh='+(fs.fresh_book_started_at?String(fs.fresh_book_started_at).substring(0,19).replace('T',' '):'—')+
+    ' | contrarian='+(fs.contrarian_trading_disabled_for_validation?'disabled':'enabled');
+  $('fExecutionSummary').textContent=
+    'mode='+(fs.execution_mode||'—')+
+    ' | readiness_v2='+(readiness && readiness.readiness_v2===true?'PASS':'FAIL')+
+    ' | closed='+(fs.closed_hedges||0)+
+    ' | settlements='+(sa.realized_funding_events||0)+
+    ' | missed='+(sa.missed_funding_events||0)+
+    ' | reject='+(Number(pr.rate||0)*100).toFixed(1)+'%'+
+    ' | slip='+(Number(eq.avg_realized_slippage_bps||0)).toFixed(2)+'bps'+
+    ' | friction='+fmtUsd(Number(cr.total_estimated_friction_usd||0),2)+
+    ' | simulated='+(eq.simulated_fill_count||0);
 
   // Positions table
   const positions=fs.positions||[];
@@ -1093,6 +1156,7 @@ function renderFunding(fs){
       <td>${p.status||'—'}<div style="font-size:.62rem;color:${fc>=0?'var(--green)':'var(--red)'}">collected ${fmtUsd(fc,4)}</div></td>
     </tr>`;
   }).join('')||(positions.length===0?'<tr><td colspan="6" style="color:var(--text3);text-align:center">No open positions</td></tr>':'');
+  renderFundingAudit(fs.all_positions||[], fs.validation_run_id||'');
 }
 
 async function fetchFundingState(){
@@ -1206,7 +1270,7 @@ async function fetchFundingMLStatus(){
     $('fOlHistoryBody').innerHTML=hist.slice().reverse().map(h=>
       `<tr><td>${(h.time||'').substring(5,19).replace('T',' ')}</td><td>${h.old_auc}</td><td>${h.new_auc}</td><td>${h.data_rows}</td><td style="color:var(${h.result==='accepted'?'--green':'--red'})">${h.result}</td></tr>`
     ).join('');
-    if(cl && cl.rolling_100){
+    if(cl && cl.rolling_100 && !Boolean(s.validation_scope==='hedge_only' || s.contrarian_trading_disabled_for_validation)){
       const cgate=Boolean(cl.strict_gate_pass)?'PASS':'FAIL';
       const c100=cl.rolling_100||{};
       const c200=cl.rolling_200||{};

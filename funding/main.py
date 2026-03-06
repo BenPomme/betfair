@@ -4,6 +4,7 @@ Orchestrates: watchlist → WebSocket → scan → entry/exit → funding tracki
 """
 import asyncio
 import logging
+import uuid
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -11,7 +12,7 @@ from typing import Callable, Dict, List, Optional
 
 import config
 from funding.core import opportunity_scanner, risk_manager
-from funding.core.schemas import DirectionalSide, FundingOpportunity, FundingSnapshot, HedgePosition
+from funding.core.schemas import DirectionalSide, FundingOpportunity, FundingSnapshot, HedgePosition, HedgeStatus
 from funding.data.binance_futures_client import BinanceFuturesClient
 from funding.data.binance_spot_client import BinanceSpotClient
 from funding.data.market_data_stream import MarketDataStream
@@ -19,7 +20,7 @@ from funding.data.price_cache import FundingPriceCache
 from funding.execution import executor
 from funding.ml.online_learner import FundingOnlineLearner
 from funding.ml.contrarian_learner import ContrarianOnlineLearner
-from funding.strategy import entry_strategy, exit_strategy
+from funding.strategy import entry_strategy, exit_strategy, symbol_selector
 from funding.strategy.symbol_selector import SymbolSelector
 from funding.utils.async_compat import async_timeout
 
@@ -80,6 +81,19 @@ class FundingEngine:
             price_cache=self._price_cache,
         )
         self._symbol_selector = SymbolSelector(self._futures_client)
+        self._validation_mode = bool(config.FUNDING_VALIDATION_MODE)
+        self._validation_scope = str(getattr(config, "FUNDING_VALIDATION_SCOPE", "hedge_only")).lower()
+        self._validation_run_id = ""
+        self._fresh_book_started_at: Optional[str] = None
+        self._archived_state_path: Optional[str] = None
+        self._execution_mode = (
+            "fail_closed"
+            if self._validation_mode or config.FUNDING_PAPER_REQUIRE_TESTNET_FILLS
+            else "best_effort"
+        )
+        self._contrarian_disabled_for_validation = (
+            self._validation_mode and self._validation_scope == "hedge_only"
+        )
         self._online_learner = FundingOnlineLearner(
             watchlist_fn=lambda: self._symbol_selector.watchlist,
         )
@@ -114,7 +128,7 @@ class FundingEngine:
         # --- Optional contrarian strategy ---
         self._contrarian_strategy: Optional[ContrarianStrategy] = None
         self._directional_executor: Optional[DirectionalExecutor] = None
-        if config.CONTRARIAN_ENABLED:
+        if config.CONTRARIAN_ENABLED and not self._contrarian_disabled_for_validation:
             # Attempt to load a pre-trained model from disk; fall back to None
             # (ContrarianStrategy degrades gracefully when model=None).
             _contrarian_model = None
@@ -155,7 +169,7 @@ class FundingEngine:
 
         # --- Optional contrarian online learner ---
         self._contrarian_learner: Optional[ContrarianOnlineLearner] = None
-        if config.CONTRARIAN_ENABLED:
+        if config.CONTRARIAN_ENABLED and not self._contrarian_disabled_for_validation:
             self._contrarian_learner = ContrarianOnlineLearner(
                 watchlist_fn=lambda: self._symbol_selector.watchlist,
                 model_selector=None,   # lazily created inside the learner
@@ -229,6 +243,23 @@ class FundingEngine:
         logger.info("Starting funding engine (mode=%s)", config.FUNDING_MODE)
         self._running = True
         risk_manager.reset_circuit_breaker()
+
+        pm = executor.get_position_manager()
+        if self._validation_mode and self._validation_scope == "hedge_only":
+            self._validation_run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "_" + uuid.uuid4().hex[:8]
+            archived = pm.begin_validation_run(
+                self._validation_run_id,
+                manifest={
+                    "engine_build_ts": _ENGINE_BUILD_TS,
+                    "mode": config.FUNDING_MODE,
+                    "capital_base": float(config.FUNDING_MAX_TOTAL_EXPOSURE_USD),
+                    "scope": self._validation_scope,
+                    "execution_mode": self._execution_mode,
+                },
+            )
+            validation_context = pm.get_validation_context()
+            self._fresh_book_started_at = validation_context.get("fresh_book_started_at")
+            self._archived_state_path = str(archived) if archived else None
 
         # Initialize watchlist
         watchlist = await self._symbol_selector.refresh()
@@ -384,6 +415,117 @@ class FundingEngine:
             "capital_source": capital_source,
         }
 
+    @staticmethod
+    def _count_settlement_events_between(start: datetime, end: datetime) -> int:
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=timezone.utc)
+        if end <= start:
+            return 0
+        count = 0
+        cursor = start.replace(minute=0, second=0, microsecond=0)
+        while cursor <= end:
+            if cursor > start and cursor <= end and cursor.hour in SETTLEMENT_HOURS:
+                count += 1
+            cursor += timedelta(hours=1)
+        return count
+
+    async def _build_validation_opportunity(
+        self,
+        opp: FundingOpportunity,
+    ) -> Optional[FundingOpportunity]:
+        if not self._validation_mode:
+            return opp
+
+        rejection = entry_strategy.validation_rejection_reason(opp)
+        if rejection is not None:
+            executor.get_position_manager().log_rejection(rejection, opp.symbol, {
+                "snapshot_age_seconds": str(opp.snapshot_age_seconds),
+                "next_funding_time": opp.next_funding_time.isoformat() if opp.next_funding_time else None,
+            })
+            return None
+
+        try:
+            spot_book = await self._spot_client.get_order_book(opp.symbol, limit=20)
+            perp_book = await self._futures_client.get_order_book(opp.symbol, limit=20)
+        except Exception as exc:
+            executor.get_position_manager().log_rejection(
+                "missing_spot_market",
+                opp.symbol,
+                {"error": str(exc)},
+            )
+            return None
+
+        spot_metrics = symbol_selector.compute_book_metrics(spot_book)
+        perp_metrics = symbol_selector.compute_book_metrics(perp_book)
+        ok, reason, details = symbol_selector.qualify_symbol_for_trading(
+            opp.symbol,
+            opp.position_size,
+            opp.expected_funding_payment,
+            spot_metrics,
+            perp_metrics,
+        )
+        if not ok:
+            executor.get_position_manager().log_rejection(reason, opp.symbol, {
+                k: str(v) for k, v in details.items()
+            })
+            return None
+
+        return FundingOpportunity(
+            symbol=opp.symbol,
+            current_rate=opp.current_rate,
+            predicted_rate=opp.predicted_rate,
+            annualized_yield=opp.annualized_yield,
+            entry_price_spot=spot_metrics["mid"],
+            entry_price_perp=perp_metrics["mid"],
+            position_size=opp.position_size,
+            expected_funding_payment=opp.expected_funding_payment,
+            timestamp=opp.timestamp,
+            next_funding_time=opp.next_funding_time,
+            snapshot_age_seconds=opp.snapshot_age_seconds,
+            spot_bid=details["spot_bid"],
+            spot_ask=details["spot_ask"],
+            perp_bid=details["perp_bid"],
+            perp_ask=details["perp_ask"],
+            spot_spread_bps=details["spot_spread_bps"],
+            perp_spread_bps=details["perp_spread_bps"],
+            basis_bps=details["basis_bps"],
+            estimated_round_trip_cost_bps=details["estimated_cost_bps"],
+            net_expected_edge_usd=details["net_expected_edge_usd"],
+            spot_bid_depth_usd=details["spot_bid_depth_usd"],
+            spot_ask_depth_usd=details["spot_ask_depth_usd"],
+            perp_bid_depth_usd=details["perp_bid_depth_usd"],
+            perp_ask_depth_usd=details["perp_ask_depth_usd"],
+        )
+
+    async def _qualify_opportunities_for_validation(
+        self,
+        opportunities: List[FundingOpportunity],
+    ) -> List[FundingOpportunity]:
+        if not self._validation_mode:
+            return opportunities
+
+        qualified: List[dict] = []
+        for opp in opportunities[:15]:
+            enriched = await self._build_validation_opportunity(opp)
+            if enriched is None:
+                continue
+            qualified.append({
+                "opportunity": enriched,
+                "net_expected_edge_usd": enriched.net_expected_edge_usd,
+                "liquidity_score": min(
+                    enriched.spot_bid_depth_usd,
+                    enriched.spot_ask_depth_usd,
+                    enriched.perp_bid_depth_usd,
+                    enriched.perp_ask_depth_usd,
+                ),
+                "basis_bps": enriched.basis_bps,
+                "combined_spread_bps": enriched.spot_spread_bps + enriched.perp_spread_bps,
+            })
+        ranked = symbol_selector.rank_qualified_opportunities(qualified)
+        return [item["opportunity"] for item in ranked]
+
     async def _scan_loop(self) -> None:
         """Periodic scan for opportunities and execute entries/exits."""
         # Wait for cache to warm up
@@ -415,6 +557,7 @@ class FundingEngine:
         opportunities = opportunity_scanner.scan_opportunities(
             snapshots, volume_data, watchlist=watchlist
         )
+        opportunities = await self._qualify_opportunities_for_validation(opportunities)
         self._opportunity_count += len(opportunities)
 
         for opp in opportunities:
@@ -519,6 +662,13 @@ class FundingEngine:
         for symbol in exits:
             result = await executor.execute_exit(symbol)
             if result:
+                if result.entry_time is not None and result.exit_time is not None:
+                    expected_events = self._count_settlement_events_between(result.entry_time, result.exit_time)
+                    missed_events = max(0, expected_events - int(result.realized_funding_events))
+                    pm.update_position(
+                        symbol,
+                        missed_funding_events=missed_events,
+                    )
                 self._trade_count += 1
                 if self._on_trade:
                     self._on_trade("exit", result)
@@ -569,6 +719,7 @@ class FundingEngine:
             if snapshot:
                 effective_rate = snapshot.funding_rate
                 info = funding_info.get(pos.symbol) if funding_info else None
+                cap_applied = False
                 if info:
                     rate_cap = Decimal(str(info.get("adjusted_funding_rate_cap", effective_rate)))
                     rate_floor = Decimal(str(info.get("adjusted_funding_rate_floor", effective_rate)))
@@ -578,15 +729,33 @@ class FundingEngine:
                             pos.symbol, effective_rate, rate_cap,
                         )
                         effective_rate = rate_cap
+                        cap_applied = True
                     elif effective_rate < rate_floor:
                         logger.warning(
                             "Clamping funding rate for %s from %s to floor %s",
                             pos.symbol, effective_rate, rate_floor,
                         )
                         effective_rate = rate_floor
+                        cap_applied = True
                 notional = pos.quantity_perp * snapshot.mark_price
                 payment = (notional * effective_rate).quantize(Decimal("0.01"))
-                pm.record_funding(pos.symbol, payment)
+                pm.record_funding(
+                    pos.symbol,
+                    payment,
+                    expected_payment=payment,
+                    cap_applied=cap_applied,
+                )
+                pm.log_settlement_audit({
+                    "symbol": pos.symbol,
+                    "position_id": pos.id,
+                    "effective_rate": str(effective_rate),
+                    "raw_rate": str(snapshot.funding_rate),
+                    "payment": str(payment),
+                    "cap_applied": cap_applied,
+                    "expected_funding_payment": str(pos.expected_funding_payment),
+                    "realized_funding_events": int(pos.realized_funding_events),
+                    "missed_funding_events": int(pos.missed_funding_events),
+                })
 
                 if self._on_funding:
                     self._on_funding(pos.symbol, payment)
@@ -878,6 +1047,9 @@ class FundingEngine:
         Otherwise create ContrarianStrategy + DirectionalExecutor + OnlineLearner
         and register their async tasks.
         """
+        if self._contrarian_disabled_for_validation:
+            logger.info("Skipping contrarian enablement because validation scope is hedge-only")
+            return
         from funding.ml.model_selector import ModelSelector
 
         model = None
@@ -1171,6 +1343,45 @@ class FundingEngine:
         total_funding_collected = sum(p.funding_collected for p in all_positions)
         total_fees_paid = sum(p.trading_fees_paid for p in all_positions)
         realized_net_pnl = total_funding_collected - total_fees_paid
+        closed_positions = [p for p in all_positions if p.status == HedgeStatus.CLOSED]
+        validation_context = pm.get_validation_context()
+        rejection_entries = pm.get_recent_rejections(limit=500)
+        rejection_counts: Dict[str, int] = {}
+        for entry in rejection_entries:
+            reason = str(entry.get("reason", "unknown"))
+            rejection_counts[reason] = rejection_counts.get(reason, 0) + 1
+        settlement_entries = pm.get_recent_settlement_audit(limit=500)
+        simulated_fill_count = sum(1 for p in all_positions if p.fill_source == "simulated")
+        stale_open_positions = [
+            p for p in open_positions
+            if p.entry_time is not None
+            and (now_utc - (p.entry_time if p.entry_time.tzinfo else p.entry_time.replace(tzinfo=timezone.utc))).total_seconds() / 3600.0
+            > float(config.FUNDING_MAX_HOLD_HOURS)
+        ]
+        slippage_totals: List[float] = []
+        slippage_cost_proxy = Decimal("0")
+        basis_drag_proxy = Decimal("0")
+        for p in all_positions:
+            total_slippage_bps = sum(
+                abs(Decimal(str(v)))
+                for v in (
+                    p.entry_slippage_bps_spot,
+                    p.entry_slippage_bps_perp,
+                    p.exit_slippage_bps_spot,
+                    p.exit_slippage_bps_perp,
+                )
+            )
+            slippage_totals.append(float(total_slippage_bps))
+            notional = p.notional_value()
+            slippage_cost_proxy += notional * total_slippage_bps / Decimal("10000")
+            basis_drag_proxy += notional * (abs(p.entry_basis_bps) + abs(p.exit_basis_bps)) / Decimal("10000")
+        avg_realized_slippage_bps = sum(slippage_totals) / len(slippage_totals) if slippage_totals else 0.0
+        successful_entries = len(all_positions)
+        total_entry_attempts = successful_entries + len(rejection_entries)
+        rejection_rate = (len(rejection_entries) / total_entry_attempts) if total_entry_attempts > 0 else 0.0
+        realized_funding_events = sum(int(p.realized_funding_events) for p in all_positions)
+        missed_funding_events = sum(int(p.missed_funding_events) for p in all_positions)
+        cap_applied_count = sum(1 for p in all_positions if bool(p.funding_cap_applied))
         assumed_capital = Decimal(str(
             self._hedge_capital_context.get("deployable_capital_usd", config.FUNDING_MAX_TOTAL_EXPOSURE_USD)
         ))
@@ -1183,6 +1394,64 @@ class FundingEngine:
             if capital_base > Decimal("0")
             else Decimal("0")
         )
+        execution_quality = {
+            "execution_mode": self._execution_mode,
+            "simulated_fill_count": simulated_fill_count,
+            "avg_realized_slippage_bps": round(avg_realized_slippage_bps, 4),
+            "rejection_rate": round(rejection_rate, 4),
+            "rejection_count": len(rejection_entries),
+            "orphaned_single_leg_incidents": rejection_counts.get("unwind_failed", 0),
+            "stale_open_positions": len(stale_open_positions),
+            "zero_simulated_fills": simulated_fill_count == 0,
+        }
+        settlement_audit = {
+            "realized_funding_events": realized_funding_events,
+            "missed_funding_events": missed_funding_events,
+            "funding_cap_applied_count": cap_applied_count,
+            "recent": settlement_entries[-20:],
+        }
+        cost_breakdown = {
+            "total_fees_paid_usd": float(total_fees_paid),
+            "estimated_slippage_cost_usd": float(slippage_cost_proxy.quantize(Decimal("0.01"))),
+            "estimated_basis_drag_usd": float(basis_drag_proxy.quantize(Decimal("0.01"))),
+            "total_estimated_friction_usd": float(
+                (total_fees_paid + slippage_cost_proxy + basis_drag_proxy).quantize(Decimal("0.01"))
+            ),
+        }
+        paper_rejections = {
+            "count": len(rejection_entries),
+            "rate": round(rejection_rate, 4),
+            "reasons": rejection_counts,
+            "recent": rejection_entries[-20:],
+        }
+        readiness_v2 = None
+        try:
+            from monitoring.live_readiness import evaluate_binance_live_readiness
+
+            readiness_v2 = evaluate_binance_live_readiness({
+                "running": self._running,
+                "mode": config.FUNDING_MODE,
+                "ws_connected": self._stream.is_connected,
+                "trading_halted": risk_manager.trading_halted,
+                "online_learner": self._online_learner.get_state(),
+                "contrarian_learner": (
+                    self._contrarian_learner.get_state() if self._contrarian_learner is not None else None
+                ),
+                "realized_roi_pct": float(realized_roi_pct),
+                "validation_mode": self._validation_mode,
+                "execution_mode": self._execution_mode,
+                "validation_run_id": self._validation_run_id or validation_context.get("validation_run_id"),
+                "fresh_book_started_at": self._fresh_book_started_at or validation_context.get("fresh_book_started_at"),
+                "execution_quality": execution_quality,
+                "settlement_audit": settlement_audit,
+                "cost_breakdown": cost_breakdown,
+                "paper_rejections": paper_rejections,
+                "positions": [p.to_dict() for p in all_positions],
+                "realized_net_pnl_usd": float(realized_net_pnl),
+                "closed_hedges": len(closed_positions),
+            })
+        except Exception:
+            readiness_v2 = None
 
         return {
             "mode": config.FUNDING_MODE,
@@ -1211,7 +1480,20 @@ class FundingEngine:
             "projected_next_settlement_pnl_usd": float(projected_next_settlement_pnl),
             "projected_next_settlement_roi_pct": float(projected_next_settlement_roi_pct),
             "positions": enriched_open_positions,
+            "all_positions": [p.to_dict() for p in all_positions],
             "hedge_capital_context": self._hedge_capital_context,
+            "validation_run_id": self._validation_run_id or validation_context.get("validation_run_id"),
+            "validation_mode": self._validation_mode,
+            "validation_scope": self._validation_scope,
+            "execution_mode": self._execution_mode,
+            "fresh_book_started_at": self._fresh_book_started_at or validation_context.get("fresh_book_started_at"),
+            "archived_state_path": self._archived_state_path or validation_context.get("archived_state_path"),
+            "execution_quality": execution_quality,
+            "settlement_audit": settlement_audit,
+            "cost_breakdown": cost_breakdown,
+            "paper_rejections": paper_rejections,
+            "readiness_v2": readiness_v2,
+            "closed_hedges": len(closed_positions),
             "online_learner": self._online_learner.get_state(),
             "contrarian_learner": (
                 self._contrarian_learner.get_state()
@@ -1233,6 +1515,7 @@ class FundingEngine:
             "sentiment_collector": sentiment_state,
             "depth_collector": depth_state,
             "contrarian": contrarian_state,
+            "contrarian_trading_disabled_for_validation": self._contrarian_disabled_for_validation,
             "regime": regime_state,
             "orchestrator": (
                 self._orchestrator.get_state()

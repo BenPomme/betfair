@@ -115,6 +115,8 @@ def scan_opportunities(
             position_size=position_size,
             expected_funding_payment=expected_payment,
             timestamp=now,
+            next_funding_time=snapshot.next_funding_time,
+            snapshot_age_seconds=Decimal(str(max(0.0, (now - snapshot.timestamp).total_seconds()))),
         ))
 
     # Sort by annualized yield descending (best opportunities first)

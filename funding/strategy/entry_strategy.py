@@ -78,6 +78,27 @@ def _minutes_to_next_settlement(now: Optional[datetime] = None) -> int:
     return delta
 
 
+def validation_rejection_reason(opp: FundingOpportunity, now: Optional[datetime] = None) -> Optional[str]:
+    """Return the validation-mode entry rejection reason for an opportunity."""
+    if not bool(getattr(config, "FUNDING_VALIDATION_MODE", False)):
+        return None
+    now = now or datetime.now(timezone.utc)
+    snapshot_age = Decimal(str(getattr(opp, "snapshot_age_seconds", Decimal("0"))))
+    max_snapshot_age = Decimal(str(getattr(config, "FUNDING_VALIDATION_MAX_SNAPSHOT_AGE_SECONDS", 5)))
+    if snapshot_age > max_snapshot_age:
+        return "stale_snapshot"
+
+    next_funding_time = getattr(opp, "next_funding_time", None)
+    if next_funding_time is None:
+        return "settlement_window_missed"
+    minutes_to_settlement = (next_funding_time - now).total_seconds() / 60.0
+    min_minutes = float(getattr(config, "FUNDING_VALIDATION_ENTRY_MIN_MINUTES_BEFORE_SETTLEMENT", 3))
+    max_minutes = float(getattr(config, "FUNDING_VALIDATION_ENTRY_MAX_MINUTES_BEFORE_SETTLEMENT", 12))
+    if minutes_to_settlement < min_minutes or minutes_to_settlement > max_minutes:
+        return "settlement_window_missed"
+    return None
+
+
 def _build_live_features(
     opp: FundingOpportunity,
     rate_history: list,
@@ -173,24 +194,30 @@ async def evaluate_entries(
     ml_min_predicted_rate = ml_min_predicted_rate if ml_min_predicted_rate is not None else config.FUNDING_ML_MIN_PREDICTED_RATE
     if str(getattr(config, "FUNDING_MODE", "paper")).lower() == "paper":
         # In paper mode we widen exploration to generate real settled labels faster.
-        entry_window = max(int(entry_window), 120)
-        ml_min_confidence = min(float(ml_min_confidence), 0.60)
-        ml_min_predicted_rate = min(float(ml_min_predicted_rate), 0.00005)
+        if not bool(getattr(config, "FUNDING_VALIDATION_MODE", False)):
+            entry_window = max(int(entry_window), 120)
+            ml_min_confidence = min(float(ml_min_confidence), 0.60)
+            ml_min_predicted_rate = min(float(ml_min_predicted_rate), 0.00005)
     entries: List[Tuple[FundingOpportunity, Decimal]] = []
 
     # Check timing
-    minutes_to_settlement = _minutes_to_next_settlement()
-    if minutes_to_settlement > entry_window:
-        logger.debug(
-            "Outside entry window: %d min to settlement (window=%d min)",
-            minutes_to_settlement, entry_window,
-        )
-        return entries
+    if not bool(getattr(config, "FUNDING_VALIDATION_MODE", False)):
+        minutes_to_settlement = _minutes_to_next_settlement()
+        if minutes_to_settlement > entry_window:
+            logger.debug(
+                "Outside entry window: %d min to settlement (window=%d min)",
+                minutes_to_settlement, entry_window,
+            )
+            return entries
 
     # Try to load ML model
     predictor = _get_ml_predictor() if use_ml else None
 
     for opp in opportunities:
+        rejection = validation_rejection_reason(opp)
+        if rejection is not None:
+            logger.debug("Validation rejected %s: %s", opp.symbol, rejection)
+            continue
         # Check risk manager
         liq_price = hedge_calculator.calculate_liquidation_price(
             opp.entry_price_perp

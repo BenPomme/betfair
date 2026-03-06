@@ -241,6 +241,17 @@ def api_funding_state():
                 "opportunity_count": 0, "trade_count": 0, "open_hedges": 0,
                 "total_exposure": 0, "total_funding_collected": 0,
                 "total_fees_paid": 0, "trading_halted": False, "positions": [],
+                "validation_mode": bool(getattr(config, "FUNDING_VALIDATION_MODE", False)),
+                "validation_scope": str(getattr(config, "FUNDING_VALIDATION_SCOPE", "hedge_only")),
+                "execution_mode": "fail_closed" if bool(getattr(config, "FUNDING_PAPER_REQUIRE_TESTNET_FILLS", False)) else "best_effort",
+                "fresh_book_started_at": None,
+                "archived_state_path": None,
+                "execution_quality": {},
+                "settlement_audit": {},
+                "cost_breakdown": {},
+                "paper_rejections": {"count": 0, "rate": 0.0, "reasons": {}, "recent": []},
+                "readiness_v2": None,
+                "all_positions": [],
                 "pnl_history": _funding_pnl_history[-300:]}
     state = _funding_engine.get_state()
     _append_funding_pnl_snapshot(state)
@@ -280,6 +291,11 @@ def _funding_state_snapshot() -> dict:
             "online_learner": {},
             "contrarian_learner": {},
             "realized_roi_pct": 0.0,
+            "validation_mode": bool(getattr(config, "FUNDING_VALIDATION_MODE", False)),
+            "execution_mode": "fail_closed" if bool(getattr(config, "FUNDING_PAPER_REQUIRE_TESTNET_FILLS", False)) else "best_effort",
+            "paper_rejections": {"count": 0, "rate": 0.0, "reasons": {}, "recent": []},
+            "execution_quality": {},
+            "settlement_audit": {},
         }
     try:
         return _funding_engine.get_state()
@@ -292,6 +308,11 @@ def _funding_state_snapshot() -> dict:
             "online_learner": {},
             "contrarian_learner": {},
             "realized_roi_pct": 0.0,
+            "validation_mode": bool(getattr(config, "FUNDING_VALIDATION_MODE", False)),
+            "execution_mode": "fail_closed" if bool(getattr(config, "FUNDING_PAPER_REQUIRE_TESTNET_FILLS", False)) else "best_effort",
+            "paper_rejections": {"count": 0, "rate": 1.0, "reasons": {}, "recent": []},
+            "execution_quality": {},
+            "settlement_audit": {},
             "error": str(exc),
         }
 
@@ -459,6 +480,8 @@ def api_funding_ml_status():
         "online_learner": state.get("online_learner", {}) or {},
         "contrarian_learner": state.get("contrarian_learner", {}) or {},
         "funding_summary": state.get("funding_summary", {}) or {},
+        "validation_scope": state.get("validation_scope"),
+        "contrarian_trading_disabled_for_validation": state.get("contrarian_trading_disabled_for_validation", False),
     }
 
 

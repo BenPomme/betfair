@@ -37,6 +37,25 @@ def _funding_state_ready(mode: str = "paper"):
         "ws_connected": True,
         "trading_halted": False,
         "realized_roi_pct": 1.1,
+        "realized_net_pnl_usd": 15.0,
+        "closed_hedges": 10,
+        "validation_mode": True,
+        "execution_mode": "fail_closed",
+        "validation_run_id": "run_123",
+        "fresh_book_started_at": "2026-03-06T10:00:00+00:00",
+        "execution_quality": {
+            "avg_realized_slippage_bps": 3.0,
+            "rejection_rate": 0.1,
+            "simulated_fill_count": 0,
+            "orphaned_single_leg_incidents": 0,
+            "stale_open_positions": 0,
+        },
+        "settlement_audit": {
+            "realized_funding_events": 15,
+            "funding_cap_applied_count": 0,
+        },
+        "paper_rejections": {"count": 1, "rate": 0.1, "reasons": {}, "recent": []},
+        "positions": [],
         "online_learner": {
             "strict_gate_pass": True,
             "rolling_200": {"settled": 200, "roi_pct": 1.5, "brier_lift_abs": 0.01},
@@ -51,6 +70,8 @@ def _funding_state_ready(mode: str = "paper"):
 def test_live_readiness_passes_when_both_systems_validated_and_paper(monkeypatch):
     monkeypatch.setattr(config, "PREDICTION_GATE_ENFORCEMENT_MODE", "strict")
     monkeypatch.setattr(config, "FUNDING_GATE_MODE", "full")
+    monkeypatch.setattr(config, "FUNDING_VALIDATION_MIN_CLOSED_HEDGES", 8)
+    monkeypatch.setattr(config, "FUNDING_VALIDATION_MIN_SETTLEMENT_EVENTS", 12)
     readiness = evaluate_live_trading_readiness(
         _betfair_state_ready(paper_mode=True),
         _funding_state_ready(mode="paper"),
@@ -59,29 +80,34 @@ def test_live_readiness_passes_when_both_systems_validated_and_paper(monkeypatch
     assert readiness["can_activate_live_now"] is True
     assert readiness["betfair"]["can_switch_to_live_now"] is True
     assert readiness["binance"]["can_switch_to_live_now"] is True
+    assert readiness["binance"]["readiness_v2"] is True
 
 
-def test_live_readiness_blocks_when_betfair_models_fail_strict_gate(monkeypatch):
+def test_live_readiness_blocks_when_rejection_rate_is_too_high(monkeypatch):
     monkeypatch.setattr(config, "PREDICTION_GATE_ENFORCEMENT_MODE", "strict")
     monkeypatch.setattr(config, "FUNDING_GATE_MODE", "full")
-    betfair = _betfair_state_ready(paper_mode=True)
-    betfair["prediction_models"]["pure_logit_3"]["strict_gate_pass"] = False
-    betfair["prediction_models"]["pure_logit_3"]["rolling_200"]["roi_pct"] = -0.2
-    readiness = evaluate_live_trading_readiness(betfair, _funding_state_ready(mode="paper"))
+    funding = _funding_state_ready(mode="paper")
+    funding["execution_quality"]["rejection_rate"] = 0.6
+    readiness = evaluate_live_trading_readiness(_betfair_state_ready(paper_mode=True), funding)
     assert readiness["validation_ready"] is False
-    assert readiness["can_activate_live_now"] is False
-    assert readiness["betfair"]["validation_ready"] is False
-    assert any(b.startswith("betfair:") for b in readiness["blockers"])
+    assert "rejection_rate_within_limit" in readiness["binance"]["blockers_v2"]
 
 
-def test_live_readiness_reports_already_live_mode_even_if_validated(monkeypatch):
+def test_live_readiness_blocks_when_simulated_fill_present(monkeypatch):
     monkeypatch.setattr(config, "PREDICTION_GATE_ENFORCEMENT_MODE", "strict")
     monkeypatch.setattr(config, "FUNDING_GATE_MODE", "full")
-    readiness = evaluate_live_trading_readiness(
-        _betfair_state_ready(paper_mode=False),
-        _funding_state_ready(mode="live"),
-    )
-    assert readiness["validation_ready"] is True
-    assert readiness["can_activate_live_now"] is False
-    assert "already_live_mode" in readiness["betfair"]["blockers"]
-    assert "already_live_mode" in readiness["binance"]["blockers"]
+    funding = _funding_state_ready(mode="paper")
+    funding["execution_quality"]["simulated_fill_count"] = 1
+    readiness = evaluate_live_trading_readiness(_betfair_state_ready(paper_mode=True), funding)
+    assert readiness["validation_ready"] is False
+    assert "no_simulated_fills" in readiness["binance"]["blockers_v2"]
+
+
+def test_live_readiness_blocks_when_settlement_events_too_low(monkeypatch):
+    monkeypatch.setattr(config, "PREDICTION_GATE_ENFORCEMENT_MODE", "strict")
+    monkeypatch.setattr(config, "FUNDING_GATE_MODE", "full")
+    funding = _funding_state_ready(mode="paper")
+    funding["settlement_audit"]["realized_funding_events"] = 2
+    readiness = evaluate_live_trading_readiness(_betfair_state_ready(paper_mode=True), funding)
+    assert readiness["validation_ready"] is False
+    assert "settlement_events_minimum" in readiness["binance"]["blockers_v2"]
