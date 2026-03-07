@@ -43,10 +43,13 @@ DISCORD_DIGEST_ENABLED: bool = os.getenv("DISCORD_DIGEST_ENABLED", "true").lower
 DISCORD_DIGEST_INTERVAL_MINUTES: int = int(os.getenv("DISCORD_DIGEST_INTERVAL_MINUTES", "30"))
 DISCORD_DAILY_DIGEST_ENABLED: bool = os.getenv("DISCORD_DAILY_DIGEST_ENABLED", "true").lower() == "true"
 DISCORD_DAILY_DIGEST_UTC_HOUR: int = int(os.getenv("DISCORD_DAILY_DIGEST_UTC_HOUR", "18"))
+DISCORD_DIGEST_TIMEZONE: str = os.getenv("DISCORD_DIGEST_TIMEZONE", "Europe/Madrid")
+DISCORD_DAILY_DIGEST_LOCAL_HOURS: str = os.getenv("DISCORD_DAILY_DIGEST_LOCAL_HOURS", "9,21")
 DISCORD_NOTIFY_CRITICAL_ONLY: bool = os.getenv("DISCORD_NOTIFY_CRITICAL_ONLY", "false").lower() == "true"
 DISCORD_NOTIFY_PORTFOLIOS: str = os.getenv(
     "DISCORD_NOTIFY_PORTFOLIOS", "betfair_core,hedge_validation,cascade_alpha,mev_scout_sol,contrarian_legacy,command_center"
 )
+DISCORD_NOTIFY_EVENT_TYPES: str = os.getenv("DISCORD_NOTIFY_EVENT_TYPES", "trade_closed")
 DISCORD_MIN_TRADE_ALERT_PNL_USD: Decimal = Decimal(
     os.getenv("DISCORD_MIN_TRADE_ALERT_PNL_USD", "5")
 )

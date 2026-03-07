@@ -161,6 +161,14 @@ class NotificationManager:
         if not discord_configured():
             self._state.discord_configured = False
             return False
+        if not allow_unlisted:
+            allowed_event_types = {
+                item.strip().lower()
+                for item in str(getattr(config, "DISCORD_NOTIFY_EVENT_TYPES", "trade_closed")).split(",")
+                if item.strip()
+            }
+            if allowed_event_types and str(event_type or "").strip().lower() not in allowed_event_types:
+                return False
         if config.DISCORD_NOTIFY_CRITICAL_ONLY and severity != "critical":
             return False
         allowed = {p.strip() for p in str(config.DISCORD_NOTIFY_PORTFOLIOS).split(",") if p.strip()}

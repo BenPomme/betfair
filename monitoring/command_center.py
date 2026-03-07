@@ -10,6 +10,7 @@ import asyncio
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
+from zoneinfo import ZoneInfo
 
 import config
 from fastapi import FastAPI, HTTPException
@@ -29,7 +30,7 @@ _process_manager = PortfolioProcessManager()
 _notifier = NotificationManager()
 _snapshot_cache: Dict[str, Dict[str, Any]] = {}
 _digest_sent_at: float = 0.0
-_daily_digest_sent_date: str = ""
+_daily_digest_sent_slots: set[str] = set()
 _template_path = Path(__file__).parent / "templates" / "command_center.html"
 _deploy_state_path = Path("data/runtime/deploy_watcher_state.json")
 _deploy_watcher_script = Path(__file__).resolve().parent.parent / "scripts" / "run_deploy_watcher.py"
@@ -355,43 +356,59 @@ def _ensure_deploy_watcher() -> None:
 
 
 def _maybe_send_daily_digest(summaries: List[Dict[str, Any]], snapshots: List[Dict[str, Any]]) -> None:
-    global _daily_digest_sent_date
+    global _daily_digest_sent_slots
     if not getattr(config, "DISCORD_DAILY_DIGEST_ENABLED", True):
         return
-    now = datetime.now(timezone.utc)
-    target_hour = int(getattr(config, "DISCORD_DAILY_DIGEST_UTC_HOUR", 18))
-    today = now.date().isoformat()
-    if now.hour < target_hour or _daily_digest_sent_date == today:
+    tz_name = str(getattr(config, "DISCORD_DIGEST_TIMEZONE", "Europe/Madrid") or "Europe/Madrid")
+    try:
+        digest_tz = ZoneInfo(tz_name)
+    except Exception:
+        digest_tz = timezone.utc
+    hours = []
+    for token in str(getattr(config, "DISCORD_DAILY_DIGEST_LOCAL_HOURS", "9,21")).split(","):
+        token = token.strip()
+        if not token:
+            continue
+        try:
+            hour = int(token)
+        except ValueError:
+            continue
+        if 0 <= hour <= 23:
+            hours.append(hour)
+    if not hours:
+        hours = [9, 21]
+    now_local = datetime.now(digest_tz)
+    if now_local.hour not in hours:
+        return
+    slot_key = f"{now_local.date().isoformat()}:{now_local.hour:02d}"
+    if slot_key in _daily_digest_sent_slots:
         return
     leaders = sorted(summaries, key=lambda item: float(item.get("realized_pnl", 0.0) or 0.0), reverse=True)
-    improvers = sorted(summaries, key=lambda item: float(item.get("progress_delta_24h", 0.0) or 0.0), reverse=True)
-    blocked = [item for item in summaries if int(item.get("blocker_count", 0) or 0) > 0]
-    lines = [f"Daily portfolio summary {today} UTC"]
+    losers = sorted(summaries, key=lambda item: float(item.get("realized_pnl", 0.0) or 0.0))
+    lines = [f"Performance summary {now_local.date().isoformat()} {now_local.hour:02d}:00 {tz_name}"]
     for item in summaries:
-        snapshot = next((snap for snap in snapshots if snap["summary"]["portfolio_id"] == item["portfolio_id"]), None)
-        trend = ((snapshot or {}).get("state") or {}).get("trend") or {}
         lines.append(
-            f"- {item.get('label')}: readiness={item.get('readiness')} progress={item.get('progress_pct', 0):.1f}% "
-            f"delta24h={trend.get('progress_delta_24h', 0):+.1f} pnl={item.get('realized_pnl', 0):.2f} {item.get('currency', '')} "
-            f"open={item.get('open_count', 0)}"
+            f"- {item.get('label')}: pnl={float(item.get('realized_pnl', 0.0) or 0.0):+.2f} {item.get('currency', '')} "
+            f"roi={float(item.get('roi_pct', 0.0) or 0.0):+.2f}% open={int(item.get('open_count', 0) or 0)} "
+            f"readiness={item.get('readiness')}"
         )
     sections = {
-        "Leaders": [
+        "Top Performers": [
             f"{item.get('label')}: {float(item.get('realized_pnl', 0.0) or 0.0):+.2f} {item.get('currency', '')} | ROI {float(item.get('roi_pct', 0.0) or 0.0):+.2f}%"
             for item in leaders[:3]
         ],
-        "Improving": [
-            f"{item.get('label')}: {float(item.get('progress_delta_24h', 0.0) or 0.0):+.1f} pts | {item.get('readiness')}"
-            for item in improvers[:3]
+        "Main Drags": [
+            f"{item.get('label')}: {float(item.get('realized_pnl', 0.0) or 0.0):+.2f} {item.get('currency', '')} | ROI {float(item.get('roi_pct', 0.0) or 0.0):+.2f}%"
+            for item in losers[:3]
         ],
-        "Blockers": [
-            f"{item.get('label')}: {int(item.get('blocker_count', 0) or 0)} blockers"
-            for item in blocked[:3]
+        "Open Risk": [
+            f"{item.get('label')}: open={int(item.get('open_count', 0) or 0)} | readiness={item.get('readiness')}"
+            for item in sorted(summaries, key=lambda item: int(item.get('open_count', 0) or 0), reverse=True)[:3]
         ],
     }
     sender = getattr(_notifier, "send_daily_digest", None)
     if callable(sender) and sender(lines, sections=sections):
-        _daily_digest_sent_date = today
+        _daily_digest_sent_slots.add(slot_key)
 
 
 def _trade_identifier(trade: Dict[str, Any]) -> str:
@@ -615,7 +632,7 @@ def _emit_snapshot_notifications(snapshots: List[Dict[str, Any]]) -> None:
         }
 
     digest_interval = max(5, int(config.DISCORD_DIGEST_INTERVAL_MINUTES)) * 60
-    if now - _digest_sent_at >= digest_interval:
+    if getattr(config, "DISCORD_DIGEST_ENABLED", True) and now - _digest_sent_at >= digest_interval:
         _notifier.send_digest([item["summary"] for item in snapshots], snapshots=snapshots)
         _digest_sent_at = now
     _maybe_send_daily_digest([item["summary"] for item in snapshots], snapshots)
