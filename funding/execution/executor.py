@@ -19,6 +19,11 @@ logger = logging.getLogger(__name__)
 
 _paper_executor: Optional[FundingPaperExecutor] = None
 _position_manager: Optional[PositionManager] = None
+_NON_BREAKER_FAILURE_REASONS = {
+    "missing_testnet_credentials",
+    "futures_auth_invalid",
+    "spot_auth_invalid",
+}
 
 
 def get_position_manager() -> PositionManager:
@@ -65,9 +70,17 @@ async def execute_entry(
             if result:
                 risk_manager.record_success()
             else:
-                tripped = risk_manager.record_failure()
-                if tripped:
-                    logger.error("Circuit breaker tripped after failed entry")
+                failure_reason = getattr(executor, "last_failure_reason", None)
+                if failure_reason in _NON_BREAKER_FAILURE_REASONS:
+                    logger.warning(
+                        "Skipping circuit-breaker increment for %s due to auth/config blocker: %s",
+                        opportunity.symbol,
+                        failure_reason,
+                    )
+                else:
+                    tripped = risk_manager.record_failure()
+                    if tripped:
+                        logger.error("Circuit breaker tripped after failed entry")
             return result
         except Exception as e:
             logger.exception("Paper execution entry failed: %s", e)
@@ -102,7 +115,15 @@ async def execute_exit(symbol: str) -> Optional[HedgePosition]:
             if result:
                 risk_manager.record_success()
             else:
-                risk_manager.record_failure()
+                failure_reason = getattr(executor, "last_failure_reason", None)
+                if failure_reason in _NON_BREAKER_FAILURE_REASONS:
+                    logger.warning(
+                        "Skipping circuit-breaker increment for %s close due to auth/config blocker: %s",
+                        symbol,
+                        failure_reason,
+                    )
+                else:
+                    risk_manager.record_failure()
             return result
         except Exception as e:
             logger.exception("Paper execution exit failed: %s", e)

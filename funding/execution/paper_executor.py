@@ -40,6 +40,7 @@ class FundingPaperExecutor:
         self._validation_mode = bool(config.FUNDING_VALIDATION_MODE)
         self._require_testnet_fills = bool(config.FUNDING_PAPER_REQUIRE_TESTNET_FILLS)
         self._allow_sim_fallback = bool(config.FUNDING_PAPER_ALLOW_SIM_FALLBACK)
+        self._last_failure_reason: Optional[str] = None
         self._simulated_fills_only = not (
             bool(config.BINANCE_FUTURES_TESTNET_API_KEY)
             and bool(config.BINANCE_FUTURES_TESTNET_API_SECRET)
@@ -87,7 +88,15 @@ class FundingPaperExecutor:
         )
 
     def _reject(self, reason: str, symbol: str, details: Optional[dict] = None) -> None:
+        self._last_failure_reason = reason
         self._positions.log_rejection(reason, symbol, details=details)
+
+    @property
+    def last_failure_reason(self) -> Optional[str]:
+        return self._last_failure_reason
+
+    def clear_last_failure_reason(self) -> None:
+        self._last_failure_reason = None
 
     @staticmethod
     def _order_id(order: dict) -> Optional[str]:
@@ -126,6 +135,7 @@ class FundingPaperExecutor:
     ) -> Optional[HedgePosition]:
         """Open a delta-neutral hedge: spot buy + perp short."""
         symbol = opportunity.symbol
+        self.clear_last_failure_reason()
         logger.info("Opening hedge for %s ($%s)", symbol, opportunity.position_size)
 
         if opportunity.rejection_reason:
@@ -184,7 +194,11 @@ class FundingPaperExecutor:
                     self._reject("unwind_failed", symbol, details={"stage": "entry", "error": str(unwind_exc)})
                     logger.error("Failed to unwind perp for %s: %s", symbol, unwind_exc)
                     return None
-                self._reject("spot_order_failed", symbol, details={"stage": "entry", "error": str(exc)})
+                self._reject(
+                    self._classify_exception_reason(exc, default="spot_order_failed"),
+                    symbol,
+                    details={"stage": "entry", "error": str(exc)},
+                )
                 return None
 
             notional = spot_qty * spot_fill_price
@@ -227,12 +241,17 @@ class FundingPaperExecutor:
                     symbol,
                 )
                 return self._open_hedge_simulated(opportunity, spot_qty, perp_qty)
-            self._reject("perp_order_failed", symbol, details={"stage": "entry", "error": str(exc)})
+            self._reject(
+                self._classify_exception_reason(exc, default="perp_order_failed"),
+                symbol,
+                details={"stage": "entry", "error": str(exc)},
+            )
             logger.error("Failed to open hedge for %s: %s", symbol, exc)
             return None
 
     async def close_hedge(self, symbol: str) -> Optional[HedgePosition]:
         """Close a hedge: close perp + sell spot."""
+        self.clear_last_failure_reason()
         position = self._positions.get_position(symbol)
         if position is None or position.status != HedgeStatus.OPEN:
             logger.warning("No open position for %s", symbol)
@@ -319,7 +338,11 @@ class FundingPaperExecutor:
                     symbol,
                 )
                 return self._close_hedge_simulated(position)
-            self._reject("perp_order_failed", symbol, details={"stage": "close", "error": str(exc)})
+            self._reject(
+                self._classify_exception_reason(exc, default="perp_order_failed"),
+                symbol,
+                details={"stage": "close", "error": str(exc)},
+            )
             logger.error("Failed to close hedge for %s: %s", symbol, exc)
             position.status = HedgeStatus.OPEN
             return None
@@ -374,3 +397,12 @@ class FundingPaperExecutor:
     def _should_fallback_to_sim(exc: Exception) -> bool:
         msg = str(exc).lower()
         return ("-2015" in msg) or ("invalid api-key" in msg) or ("permissions for action" in msg)
+
+    @staticmethod
+    def _classify_exception_reason(exc: Exception, default: str) -> str:
+        msg = str(exc).lower()
+        if ("-2015" in msg) or ("invalid api-key" in msg) or ("permissions for action" in msg):
+            if "spot" in default:
+                return "spot_auth_invalid"
+            return "futures_auth_invalid"
+        return default

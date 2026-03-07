@@ -350,9 +350,15 @@ LIVE_READY_REQUIRE_FULL_FUNDING_GATE: bool = (
 )
 
 # Binance testnet URLs
-BINANCE_FUTURES_TESTNET_URL: str = "https://testnet.binancefuture.com"
-BINANCE_SPOT_TESTNET_URL: str = "https://testnet.binance.vision"
-BINANCE_FUTURES_WS_TESTNET: str = "wss://fstream.binancefuture.com"
+BINANCE_FUTURES_TESTNET_URL: str = os.getenv(
+    "BINANCE_FUTURES_TESTNET_URL", "https://demo-fapi.binance.com"
+)
+BINANCE_SPOT_TESTNET_URL: str = os.getenv(
+    "BINANCE_SPOT_TESTNET_URL", "https://testnet.binance.vision"
+)
+BINANCE_FUTURES_WS_TESTNET: str = os.getenv(
+    "BINANCE_FUTURES_WS_TESTNET", "wss://fstream.binancefuture.com"
+)
 
 # Binance production URLs
 BINANCE_FUTURES_PROD_URL: str = "https://fapi.binance.com"

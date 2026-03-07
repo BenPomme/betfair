@@ -211,6 +211,9 @@ def evaluate_binance_live_readiness(state: Dict[str, Any]) -> Dict[str, Any]:
     running = _as_bool(state.get("running"), False)
     ws_connected = _as_bool(state.get("ws_connected"), False)
     trading_halted = _as_bool(state.get("trading_halted"), False)
+    exchange_auth = state.get("exchange_auth") or {}
+    futures_trading_ready = _as_bool(exchange_auth.get("futures_trading_ready"), True)
+    futures_error = str(exchange_auth.get("futures_error") or "").strip()
     mode = str(state.get("mode", getattr(config, "FUNDING_MODE", "paper"))).lower()
     paper_mode = mode == "paper"
     gate_mode = str(getattr(config, "FUNDING_GATE_MODE", "observe")).lower()
@@ -287,6 +290,13 @@ def evaluate_binance_live_readiness(state: Dict[str, Any]) -> Dict[str, Any]:
     checks = [
         _check("engine_running", running, running, True, "Funding runtime must be active"),
         _check("ws_connected", ws_connected, ws_connected, True, "Binance websocket should be connected"),
+        _check(
+            "futures_auth_ready",
+            futures_trading_ready,
+            futures_error or futures_trading_ready,
+            True,
+            "Binance futures trading auth must be valid",
+        ),
         _check("risk_not_halted", not trading_halted, trading_halted, False, "Risk circuit breaker must be clear"),
         _check(
             "model_pool_depth",
@@ -361,6 +371,13 @@ def evaluate_binance_live_readiness(state: Dict[str, Any]) -> Dict[str, Any]:
             {"run_id": validation_run_id, "fresh_book_started_at": fresh_book_started_at},
             True,
             "A fresh validation run must be active",
+        ),
+        _check(
+            "futures_auth_ready",
+            futures_trading_ready,
+            futures_error or futures_trading_ready,
+            True,
+            "Binance futures trading auth must be valid",
         ),
         _check(
             "closed_hedges_minimum",

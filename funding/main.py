@@ -371,18 +371,26 @@ class FundingEngine:
         spot_balance = Decimal("0")
         futures_wallet_balance = Decimal("0")
         capital_source = "configured_cap"
+        spot_account_fetch_ok = False
+        futures_account_fetch_ok = False
+        spot_error = ""
+        futures_error = ""
 
         try:
             async with async_timeout(10.0):
                 spot_balance = await self._spot_client.get_account_balance("USDT")
+                spot_account_fetch_ok = True
         except Exception as e:
+            spot_error = str(e)
             logger.debug("Could not fetch spot balance for hedge sizing: %s", e)
 
         try:
             async with async_timeout(10.0):
                 account = await self._futures_client.get_account()
                 futures_wallet_balance = Decimal(str(account.get("totalWalletBalance", "0")))
+                futures_account_fetch_ok = True
         except Exception as e:
+            futures_error = str(e)
             logger.debug("Could not fetch futures wallet for hedge sizing: %s", e)
 
         leverage = Decimal(str(max(1, int(config.FUNDING_LEVERAGE))))
@@ -416,6 +424,14 @@ class FundingEngine:
             "remaining_slots": remaining_slots,
             "suggested_position_size_usd": float(suggested_position),
             "capital_source": capital_source,
+            "exchange_auth": {
+                "spot_account_fetch_ok": spot_account_fetch_ok,
+                "futures_account_fetch_ok": futures_account_fetch_ok,
+                "spot_trading_ready": spot_account_fetch_ok,
+                "futures_trading_ready": futures_account_fetch_ok,
+                "spot_error": spot_error or None,
+                "futures_error": futures_error or None,
+            },
         }
 
     @staticmethod
@@ -1440,6 +1456,7 @@ class FundingEngine:
                 "mode": config.FUNDING_MODE,
                 "ws_connected": self._stream.is_connected,
                 "trading_halted": risk_manager.trading_halted,
+                "exchange_auth": (self._hedge_capital_context or {}).get("exchange_auth", {}),
                 "online_learner": self._online_learner.get_state(),
                 "contrarian_learner": (
                     self._contrarian_learner.get_state() if self._contrarian_learner is not None else None
@@ -1491,6 +1508,7 @@ class FundingEngine:
             "positions": enriched_open_positions,
             "all_positions": [p.to_dict() for p in all_positions],
             "hedge_capital_context": self._hedge_capital_context,
+            "exchange_auth": (self._hedge_capital_context or {}).get("exchange_auth", {}),
             "validation_run_id": self._validation_run_id or validation_context.get("validation_run_id"),
             "validation_mode": self._validation_mode,
             "validation_scope": self._validation_scope,
