@@ -59,6 +59,16 @@ DISCORD_MODEL_ALERT_MIN_AUC_DELTA: Decimal = Decimal(
 DISCORD_MODEL_ALERT_MIN_BRIER_LIFT_DELTA: Decimal = Decimal(
     os.getenv("DISCORD_MODEL_ALERT_MIN_BRIER_LIFT_DELTA", "0.01")
 )
+DISCORD_BOT_ENABLED: bool = os.getenv("DISCORD_BOT_ENABLED", "false").lower() == "true"
+DISCORD_BOT_TOKEN: str = os.getenv("DISCORD_BOT_TOKEN", "")
+DISCORD_BOT_PREFIX: str = os.getenv("DISCORD_BOT_PREFIX", "!")
+DISCORD_BOT_ALLOWED_USER_IDS: str = os.getenv("DISCORD_BOT_ALLOWED_USER_IDS", "")
+DISCORD_BOT_ALLOWED_GUILD_IDS: str = os.getenv("DISCORD_BOT_ALLOWED_GUILD_IDS", "")
+DISCORD_BOT_ALLOWED_CHANNEL_IDS: str = os.getenv("DISCORD_BOT_ALLOWED_CHANNEL_IDS", "")
+DISCORD_BOT_STATUS_PORTFOLIOS: str = os.getenv(
+    "DISCORD_BOT_STATUS_PORTFOLIOS",
+    "betfair_core,hedge_validation,hedge_research,cascade_alpha,contrarian_legacy,mev_scout_sol",
+)
 NOTIFICATIONS_ENABLED: bool = os.getenv("NOTIFICATIONS_ENABLED", "true").lower() == "true"
 NOTIFY_DEDUPE_WINDOW_SECONDS: int = int(os.getenv("NOTIFY_DEDUPE_WINDOW_SECONDS", "600"))
 
