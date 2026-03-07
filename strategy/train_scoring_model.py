@@ -16,15 +16,25 @@ from typing import Dict, List, Tuple
 
 
 FEATURE_MAP = {
-    "roi": "net_roi_pct",
-    "profit": "net_profit_eur",
-    "depth": "overround_back",
-    "spread": "overround_lay",
-    "volatility": "fill_prob",
-    "edge_score": "edge_score",
+    "roi": ("net_roi_pct",),
+    "profit": ("net_profit_eur",),
+    "depth": ("depth_total_eur", "overround_back"),
+    "spread": ("spread_mean", "overround_lay"),
+    "volatility": ("short_volatility", "fill_prob"),
+    "edge_score": ("edge_score",),
 }
 
 EXCLUDE_REASONS = {"no_arb_after_filters", "stale_or_missing_snapshot"}
+
+BOOTSTRAP_PRIOR = {
+    "bias": -0.10,
+    "roi": 1.20,
+    "profit": 0.18,
+    "depth": 0.00001,
+    "spread": -0.40,
+    "volatility": -0.25,
+    "edge_score": 0.45,
+}
 
 
 @dataclass
@@ -66,16 +76,69 @@ def _build_examples(records: List[dict]) -> List[Example]:
             continue
         x = {}
         missing = False
-        for k_out, k_in in FEATURE_MAP.items():
-            if k_in not in r:
+        for k_out, source_keys in FEATURE_MAP.items():
+            selected = None
+            for source_key in source_keys:
+                if source_key in r:
+                    selected = source_key
+                    break
+            if selected is None:
                 missing = True
                 break
-            x[k_out] = float(r[k_in])
+            x[k_out] = float(r[selected])
         if missing:
             continue
         y = 1 if bool(r.get("executed")) else 0
         out.append(Example(x=x, y=y))
     return out
+
+
+def train_from_logs(
+    input_dir: str = "data/candidates",
+    output: str = "data/models/scoring_linear_v2.json",
+    min_samples: int = 100,
+) -> Dict[str, object]:
+    records = _load_records(input_dir)
+    if not records:
+        out_path = Path(output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(BOOTSTRAP_PRIOR, indent=2), encoding="utf-8")
+        return {"ok": True, "reason": "bootstrap_prior", "output": str(out_path), "samples": 0}
+    examples = _build_examples(records)
+    if len(examples) < min_samples:
+        out_path = Path(output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(BOOTSTRAP_PRIOR, indent=2), encoding="utf-8")
+        return {
+            "ok": True,
+            "reason": "bootstrap_prior",
+            "output": str(out_path),
+            "samples": len(examples),
+            "required": min_samples,
+        }
+
+    model = _train_sgd(examples)
+    out = {
+        "bias": model["bias"],
+        "roi": model["roi"],
+        "profit": model["profit"],
+        "depth": model["depth"],
+        "spread": model["spread"],
+        "volatility": model["volatility"],
+        "edge_score": model["edge_score"],
+    }
+    out_path = Path(output)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(out, indent=2), encoding="utf-8")
+    acc, brier, cm = _walk_forward(examples)
+    return {
+        "ok": True,
+        "output": str(out_path),
+        "samples": len(examples),
+        "walk_forward_accuracy": round(acc, 4),
+        "walk_forward_brier": round(brier, 4),
+        "confusion_matrix": cm,
+    }
 
 
 def _train_sgd(examples: List[Example], epochs: int = 12, lr: float = 0.03, l2: float = 1e-4) -> Dict[str, float]:
@@ -142,34 +205,22 @@ def main() -> int:
     parser.add_argument("--min-samples", type=int, default=100)
     args = parser.parse_args()
 
-    records = _load_records(args.input_dir)
-    if not records:
-        print("No candidate records found.")
-        return 1
-    examples = _build_examples(records)
-    if len(examples) < args.min_samples:
-        print(f"Not enough samples: {len(examples)} < {args.min_samples}")
+    result = train_from_logs(args.input_dir, args.output, args.min_samples)
+    if not result.get("ok"):
+        reason = result.get("reason", "unknown")
+        if reason == "insufficient_samples":
+            print(f"Not enough samples: {result.get('samples')} < {result.get('required')}")
+        elif reason == "no_candidate_records":
+            print("No candidate records found.")
+        else:
+            print(f"Training failed: {reason}")
         return 1
 
-    model = _train_sgd(examples)
-    out = {
-        "bias": model["bias"],
-        "roi": model["roi"],
-        "profit": model["profit"],
-        "depth": model["depth"],
-        "spread": model["spread"],
-        "volatility": model["volatility"],
-    }
-    out_path = Path(args.output)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(out, indent=2), encoding="utf-8")
-
-    acc, brier, cm = _walk_forward(examples)
-    print(f"Samples: {len(examples)}")
-    print(f"Saved model: {out_path}")
-    print(f"Walk-forward accuracy: {acc:.4f}")
-    print(f"Walk-forward brier: {brier:.4f}")
-    print(f"Confusion matrix: {cm}")
+    print(f"Samples: {result['samples']}")
+    print(f"Saved model: {result['output']}")
+    print(f"Walk-forward accuracy: {result['walk_forward_accuracy']:.4f}")
+    print(f"Walk-forward brier: {result['walk_forward_brier']:.4f}")
+    print(f"Confusion matrix: {result['confusion_matrix']}")
     return 0
 
 

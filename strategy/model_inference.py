@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 from decimal import Decimal
 from typing import Any, Dict, Optional
 
@@ -28,6 +29,12 @@ def _as_decimal(value: Any, default: Decimal = Decimal("0")) -> Decimal:
         return default
 
 
+_LINEAR_MODEL: Dict[str, Decimal] = {}
+_LINEAR_MODEL_MTIME: Optional[float] = None
+_FILL_MODEL: Dict[str, Decimal] = {}
+_FILL_MODEL_MTIME: Optional[float] = None
+
+
 def _load_linear_model() -> Dict[str, Decimal]:
     path = os.getenv("ML_LINEAR_MODEL_PATH", "").strip()
     if not path:
@@ -38,9 +45,6 @@ def _load_linear_model() -> Dict[str, Decimal]:
         return {k: _as_decimal(v) for k, v in raw.items()}
     except Exception:
         return {}
-
-
-_LINEAR_MODEL = _load_linear_model()
 
 
 def _load_fill_model() -> Dict[str, Decimal]:
@@ -55,7 +59,24 @@ def _load_fill_model() -> Dict[str, Decimal]:
         return {}
 
 
-_FILL_MODEL = _load_fill_model()
+def _refresh_artifacts() -> None:
+    global _LINEAR_MODEL, _LINEAR_MODEL_MTIME, _FILL_MODEL, _FILL_MODEL_MTIME
+
+    linear_path = str(os.getenv("ML_LINEAR_MODEL_PATH", "")).strip()
+    if linear_path:
+        path = Path(linear_path)
+        mtime = path.stat().st_mtime if path.exists() else None
+        if mtime != _LINEAR_MODEL_MTIME:
+            _LINEAR_MODEL = _load_linear_model()
+            _LINEAR_MODEL_MTIME = mtime
+
+    fill_path = str(getattr(config, "FILL_MODEL_PATH", "")).strip()
+    if fill_path:
+        path = Path(fill_path)
+        mtime = path.stat().st_mtime if path.exists() else None
+        if mtime != _FILL_MODEL_MTIME:
+            _FILL_MODEL = _load_fill_model()
+            _FILL_MODEL_MTIME = mtime
 
 
 def _dynamic_threshold(features: FeatureVector) -> Decimal:
@@ -138,19 +159,34 @@ def _apply_prediction_influence(
         return edge_score, fill_prob, expected_net, "none"
     settled = int(prediction_confidence.get("settled_bets", 0))
     brier = _as_decimal(prediction_confidence.get("model_brier", 1.0), Decimal("1.0"))
+    ensemble_size = int(prediction_confidence.get("ensemble_size", 1))
+    tier = str(prediction_confidence.get("tier", "trusted"))
     if settled < 30:
-        return edge_score, fill_prob, expected_net, "ignored_insufficient_data"
+        if tier != "exploratory":
+            return edge_score, fill_prob, expected_net, "ignored_insufficient_data"
     if brier > Decimal("0.28"):
-        return edge_score, fill_prob, expected_net, "ignored_insufficient_data"
+        if tier != "exploratory":
+            return edge_score, fill_prob, expected_net, "ignored_insufficient_data"
     edge_vs_market = _as_decimal(prediction_confidence.get("edge_vs_market", 0), Decimal("0"))
+    trust_boost = Decimal(str(min(0.10, max(0.0, (ensemble_size - 1) * 0.02))))
     if edge_vs_market > Decimal("0.05"):
-        new_edge = _clip01(edge_score + Decimal("0.10"))
-        return new_edge, fill_prob, expected_net, "boosted"
+        edge_bonus = Decimal("0.10") if tier == "trusted" else Decimal("0.04")
+        fill_bonus = Decimal("0.05") if tier == "trusted" else Decimal("0.02")
+        expected_bonus = Decimal("1.15") if tier == "trusted" else Decimal("1.05")
+        new_edge = _clip01(edge_score + edge_bonus + trust_boost)
+        new_fill = _clip01(fill_prob + fill_bonus + (trust_boost / Decimal("2")))
+        new_expected = expected_net * expected_bonus
+        return new_edge, new_fill, new_expected, "boosted" if tier == "trusted" else "exploratory_supported"
     if edge_vs_market < Decimal("-0.03"):
         new_edge = _clip01(edge_score - Decimal("0.15"))
-        new_fill = _clip01(fill_prob * Decimal("0.80"))
+        new_fill = _clip01(fill_prob * Decimal("0.75"))
         new_expected = expected_net * (new_fill / fill_prob) if fill_prob > Decimal("0") else expected_net
         return new_edge, new_fill, new_expected, "penalized"
+    if edge_vs_market > Decimal("0.02") and ensemble_size >= int(config.VALUE_BET_MIN_ENSEMBLE_SIZE):
+        new_edge = _clip01(edge_score + Decimal("0.04") + (trust_boost / Decimal("2")))
+        new_fill = _clip01(fill_prob + (Decimal("0.03") if tier == "trusted" else Decimal("0.01")))
+        new_expected = expected_net * (Decimal("1.08") if tier == "trusted" else Decimal("1.02"))
+        return new_edge, new_fill, new_expected, "ensemble_supported" if tier == "trusted" else "exploratory_supported"
     return edge_score, fill_prob, expected_net, "none"
 
 
@@ -235,6 +271,7 @@ def _linear_score(
     score_raw += _LINEAR_MODEL.get("depth", Decimal("0")) * features.microstructure.depth_total_eur
     score_raw += _LINEAR_MODEL.get("spread", Decimal("0")) * features.microstructure.spread_mean
     score_raw += _LINEAR_MODEL.get("volatility", Decimal("0")) * features.microstructure.short_volatility
+    score_raw += _LINEAR_MODEL.get("edge_score", Decimal("0")) * features.net_roi_pct
 
     # Logistic squashing without float dependencies.
     fill_prob = _clip01(Decimal("0.5") + (score_raw / Decimal("8")))
@@ -298,6 +335,7 @@ def score_opportunity(
     Main inference API.
     Falls back to deterministic heuristic when no model artifact is configured.
     """
+    _refresh_artifacts()
     if os.getenv("ML_SCORING_ENABLED", "true").lower() != "true":
         return ScoredOpportunity(
             edge_score=Decimal("1"),

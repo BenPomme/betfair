@@ -24,6 +24,16 @@ FEATURES = [
     "total_stake_eur",
 ]
 
+BOOTSTRAP_PRIOR = {
+    "bias": 0.15,
+    "spread_mean": -0.35,
+    "depth_total_eur": 0.00002,
+    "short_volatility": -0.20,
+    "time_to_start_sec": -0.000002,
+    "in_play": -0.08,
+    "total_stake_eur": -0.01,
+}
+
 
 @dataclass
 class Example:
@@ -67,17 +77,47 @@ def _build_examples(rows: List[dict]) -> List[Example]:
             continue
         try:
             x = {
-                "spread_mean": float(r.get("overround_lay", 0.0)),
-                "depth_total_eur": float(r.get("overround_back", 0.0)),
-                "short_volatility": float(r.get("edge_score", 0.0)),
+                "spread_mean": float(r.get("spread_mean", r.get("overround_lay", 0.0))),
+                "depth_total_eur": float(r.get("depth_total_eur", r.get("overround_back", 0.0))),
+                "short_volatility": float(r.get("short_volatility", r.get("edge_score", 0.0))),
                 "time_to_start_sec": float(r.get("time_to_start_sec", 0.0)),
-                "in_play": 1.0 if float(r.get("time_to_start_sec", 1.0)) <= 0 else 0.0,
+                "in_play": 1.0 if bool(r.get("in_play", float(r.get("time_to_start_sec", 1.0)) <= 0)) else 0.0,
                 "total_stake_eur": float(r.get("total_stake_eur", 0.0)),
             }
         except Exception:
             continue
         out.append(Example(x=x, y=y))
     return out
+
+
+def train_from_logs(
+    input_dir: str = "data/candidates",
+    output: str = "data/models/fill_model_v1.json",
+    min_samples: int = 100,
+) -> Dict[str, object]:
+    rows = _load_rows(input_dir)
+    if not rows:
+        out_path = Path(output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(BOOTSTRAP_PRIOR, indent=2), encoding="utf-8")
+        return {"ok": True, "reason": "bootstrap_prior", "output": str(out_path), "samples": 0}
+    examples = _build_examples(rows)
+    if len(examples) < min_samples:
+        out_path = Path(output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(BOOTSTRAP_PRIOR, indent=2), encoding="utf-8")
+        return {
+            "ok": True,
+            "reason": "bootstrap_prior",
+            "output": str(out_path),
+            "samples": len(examples),
+            "required": min_samples,
+        }
+    model = _train(examples)
+    out_path = Path(output)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(model, indent=2), encoding="utf-8")
+    return {"ok": True, "output": str(out_path), "samples": len(examples)}
 
 
 def _train(examples: List[Example], epochs: int = 10, lr: float = 0.03, l2: float = 1e-4) -> Dict[str, float]:
@@ -103,20 +143,18 @@ def main() -> int:
     parser.add_argument("--min-samples", type=int, default=100)
     args = parser.parse_args()
 
-    rows = _load_rows(args.input_dir)
-    if not rows:
-        print("No candidate rows found.")
+    result = train_from_logs(args.input_dir, args.output, args.min_samples)
+    if not result.get("ok"):
+        reason = result.get("reason", "unknown")
+        if reason == "insufficient_samples":
+            print(f"Not enough samples: {result.get('samples')} < {result.get('required')}")
+        elif reason == "no_candidate_rows":
+            print("No candidate rows found.")
+        else:
+            print(f"Training failed: {reason}")
         return 1
-    examples = _build_examples(rows)
-    if len(examples) < args.min_samples:
-        print(f"Not enough samples: {len(examples)} < {args.min_samples}")
-        return 1
-
-    model = _train(examples)
-    out_path = Path(args.output)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(model, indent=2), encoding="utf-8")
-    print(f"Saved fill model: {out_path}")
+    print(f"Saved fill model: {result['output']}")
+    print(f"Samples: {result['samples']}")
     return 0
 
 

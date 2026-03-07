@@ -72,13 +72,14 @@ def _extract_best_prediction(
 ) -> Optional[Dict[str, float]]:
     """
     Build prediction confidence via inverse-Brier-weighted ensemble.
-    Eligible models: settled_bets >= 30, avg_brier < 0.28.
-    Falls back to single best model if only one qualifies.
+    Uses two trust tiers:
+    - trusted: strict-pass mature models
+    - exploratory: early models with positive learning evidence
     """
     if prediction_manager is None or snapshot is None or not snapshot.selections:
         return None
     states = prediction_manager.initial_state()
-    candidates = [
+    trusted_candidates = [
         (model_id, st)
         for model_id, st in states.items()
         if int(st.get("settled_bets", 0)) >= 30
@@ -86,6 +87,22 @@ def _extract_best_prediction(
         and str(st.get("model_kind", "")) != "implied_market"
         and bool(st.get("strict_gate_pass", False))
     ]
+    exploratory_candidates = [
+        (model_id, st)
+        for model_id, st in states.items()
+        if int(st.get("learning_settled", 0) or st.get("settled_bets", 0) or 0) >= 10
+        and float(st.get("avg_brier", 1.0)) < 0.40
+        and str(st.get("model_kind", "")) != "implied_market"
+        and (
+            float(st.get("recent_learning_brier_lift", 0.0) or 0.0) > 0.0
+            or float(st.get("recent_brier_lift", 0.0) or 0.0) > 0.0
+        )
+    ]
+    tier = "trusted"
+    candidates = trusted_candidates
+    if not candidates:
+        tier = "exploratory"
+        candidates = exploratory_candidates
     if not candidates:
         return None
     backable = [s for s in snapshot.selections if s.best_back_price > Decimal("1.01")]
@@ -130,6 +147,9 @@ def _extract_best_prediction(
         "model_brier": avg_ensemble_brier,
         "settled_bets": sum(int(st.get("settled_bets", 0)) for _, st in candidates),
         "ensemble_size": len(model_predictions),
+        "tier": tier,
+        "strict_models": len(trusted_candidates),
+        "exploratory_models": len(exploratory_candidates),
     }
 
 
@@ -251,7 +271,7 @@ async def run_loop(
     market_no_movement_seconds = max(0, int(getattr(config, "MARKET_NO_MOVEMENT_SECONDS", 900)))
     market_missing_retire_cycles = max(1, int(getattr(config, "MARKET_MISSING_RETIRE_CYCLES", 120)))
 
-    def _execute_opp(opp, scored, on_trade_cb):
+    def _execute_opp(opp, scored, on_trade_cb, features=None):
         """Common path: check risk, execute, log."""
         if not risk_manager.can_execute(opp):
             if candidate_logger:
@@ -263,6 +283,7 @@ async def run_loop(
                         reason="risk_blocked",
                         opportunity=opp,
                         scored=scored,
+                        features=features,
                         executed=False,
                     )
                 )
@@ -308,6 +329,7 @@ async def run_loop(
                         reason="executed",
                         opportunity=opp,
                         scored=scored,
+                        features=features,
                         executed=True,
                     )
                 )
@@ -433,6 +455,8 @@ async def run_loop(
                     try:
                         edge = float(prediction_confidence["edge_vs_market"])
                         pred_prob = float(prediction_confidence["predicted_prob"])
+                        tier = str(prediction_confidence.get("tier", "trusted"))
+                        exploratory = tier != "trusted"
                         # Find best backable selection (most liquid)
                         vb_backable = [s for s in snapshot.selections if s.best_back_price > Decimal("1.01")]
                         if vb_backable:
@@ -442,6 +466,10 @@ async def run_loop(
                             b = vb_odds - 1.0
                             kelly_f = (b * pred_prob - (1.0 - pred_prob)) / b if b > 0 else 0
                             kelly_f = max(0.0, kelly_f) * float(config.VALUE_BET_KELLY_FRACTION)
+                            if exploratory:
+                                if edge < max(float(config.VALUE_BET_MIN_EDGE) + 0.02, 0.07):
+                                    raise ValueError("exploratory_edge_too_small")
+                                kelly_f *= 0.35
                             vb_stake = Decimal(str(round(float(paper_executor.balance) * kelly_f, 2)))
                             vb_stake = min(vb_stake, config.VALUE_BET_MAX_STAKE_EUR)
                             if vb_stake >= config.VALUE_BET_MIN_STAKE_EUR:
@@ -614,13 +642,14 @@ async def run_loop(
                                 snapshot=snapshot,
                                 opportunity=opp,
                                 scored=scored,
+                                features=features,
                                 executed=False,
                             )
                         )
                     continue
 
                 sized_opp = _sized_for_execution(opp, scored)
-                _execute_opp(sized_opp, scored, on_trade)
+                _execute_opp(sized_opp, scored, on_trade, features=features)
             except Exception as e:
                 logger.exception("Scan/execute error for %s: %s", market_id, e)
 
@@ -737,13 +766,14 @@ async def run_loop(
                                             snapshot=feature_snapshot,
                                             opportunity=opp,
                                             scored=scored,
+                                            features=features,
                                             executed=False,
                                         )
                                     )
                                 continue
                             _executed_cross_pairs.add(pair_key)
                             sized_opp = _sized_for_execution(opp, scored)
-                            _execute_opp(sized_opp, scored, on_trade)
+                            _execute_opp(sized_opp, scored, on_trade, features=features)
             except Exception as e:
                 logger.exception("Cross-market scan error: %s", e)
 

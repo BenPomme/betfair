@@ -50,6 +50,7 @@ def build_scan_record(
     snapshot: Optional[Any] = None,
     opportunity: Optional[Any] = None,
     scored: Optional[Any] = None,
+    features: Optional[Any] = None,
     executed: bool = False,
 ) -> dict:
     now = datetime.now(timezone.utc)
@@ -74,6 +75,28 @@ def build_scan_record(
         record["net_profit_eur"] = opportunity.net_profit_eur
         record["net_roi_pct"] = opportunity.net_roi_pct
         record["total_stake_eur"] = opportunity.total_stake_eur
+
+    if features is not None:
+        micro = getattr(features, "microstructure", None)
+        if micro is not None:
+            record["spread_mean"] = getattr(micro, "spread_mean", 0)
+            record["imbalance"] = getattr(micro, "imbalance", 0)
+            record["depth_total_eur"] = getattr(micro, "depth_total_eur", 0)
+            record["price_velocity"] = getattr(micro, "price_velocity", 0)
+            record["short_volatility"] = getattr(micro, "short_volatility", 0)
+            record["time_to_start_sec"] = getattr(micro, "time_to_start_sec", 0)
+            record["in_play"] = getattr(micro, "in_play", False)
+            record["weighted_spread"] = getattr(micro, "weighted_spread", 0)
+            record["lay_back_ratio"] = getattr(micro, "lay_back_ratio", 0)
+            record["top_of_book_concentration"] = getattr(micro, "top_of_book_concentration", 0)
+            record["volume_momentum"] = getattr(micro, "volume_momentum", 0)
+            record["back_lay_crossover"] = getattr(micro, "back_lay_crossover", 0)
+            record["overround_distance"] = getattr(micro, "overround_distance", 0)
+            record["depth_ratio_top3"] = getattr(micro, "depth_ratio_top3", 0)
+            record["price_range"] = getattr(micro, "price_range", 0)
+        record["selection_count"] = getattr(features, "selection_count", record.get("selection_count", 0))
+        record["stake_eur"] = getattr(features, "stake_eur", record.get("total_stake_eur", 0))
+        record["arb_type_feature"] = getattr(features, "arb_type", record.get("arb_type", ""))
 
     if scored is not None:
         record["model_version"] = scored.model_version

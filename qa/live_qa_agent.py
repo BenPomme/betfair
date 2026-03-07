@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import sys
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -374,11 +375,30 @@ class LiveQAAgent:
 
     async def _run_safe_command(self, cmd_name: str) -> Dict[str, Any]:
         if cmd_name == "retrain_models":
-            cmd = [".venv/bin/bash", "scripts/retrain_models.sh"]
+            def _bootstrap_models() -> Dict[str, Any]:
+                from strategy.fill_model import train_from_logs as train_fill_model
+                from strategy.train_scoring_model import train_from_logs as train_scoring_model
+
+                scoring = train_scoring_model(
+                    input_dir=config.CANDIDATE_LOG_DIR,
+                    output=config.ML_LINEAR_MODEL_PATH,
+                    min_samples=100,
+                )
+                fill = train_fill_model(
+                    input_dir=config.CANDIDATE_LOG_DIR,
+                    output=config.FILL_MODEL_PATH,
+                    min_samples=100,
+                )
+                return {"ok": bool(scoring.get("ok") or fill.get("ok")), "scoring": scoring, "fill": fill}
+
+            try:
+                return await asyncio.to_thread(_bootstrap_models)
+            except Exception as e:
+                return {"ok": False, "reason": f"bootstrap_error:{e}"}
         elif cmd_name == "validate_gates":
-            cmd = [".venv/bin/python", "scripts/validate_performance_gates.py"]
+            cmd = [sys.executable, "scripts/validate_performance_gates.py"]
         elif cmd_name == "qa_scan":
-            cmd = [".venv/bin/pytest", "-q"]
+            cmd = [sys.executable, "-m", "pytest", "-q"]
         else:
             return {"ok": False, "reason": "unsupported_cmd"}
         try:
