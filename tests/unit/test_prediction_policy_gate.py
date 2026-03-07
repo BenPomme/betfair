@@ -29,6 +29,7 @@ def test_prediction_policy_gate_promotes_positive_model_and_shadows_negative_mod
     monkeypatch.setattr(config, "PREDICTION_POLICY_GATE_TRAIN_FRACTION", 0.7)
     monkeypatch.setattr(config, "PREDICTION_POLICY_GATE_MIN_ROI", 0.0)
     monkeypatch.setattr(config, "PREDICTION_POLICY_GATE_MIN_BRIER_LIFT", 0.0)
+    monkeypatch.setattr(config, "PREDICTION_POLICY_GATE_EDGE_THRESHOLDS", "0.01,0.02,0.03")
 
     positive_state = {
         "model_id": "pure_logit_3",
@@ -89,4 +90,5 @@ def test_prediction_policy_gate_promotes_positive_model_and_shadows_negative_mod
     assert positive["mode"] == "execute"
     assert positive["roi"] >= 0.0
     assert positive["brier_lift"] >= 0.0
+    assert positive["edge_threshold"] <= 0.02
     assert negative["mode"] == "shadow_only"

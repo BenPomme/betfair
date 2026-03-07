@@ -145,7 +145,10 @@ CLV_LOG_DIR: str = os.getenv("CLV_LOG_DIR", "data/clv")
 
 # --- Prediction paper account (separate from arbitrage) ---
 PREDICTION_ENABLED: bool = os.getenv("PREDICTION_ENABLED", "true").lower() == "true"
-PREDICTION_MODEL_KINDS: str = os.getenv("PREDICTION_MODEL_KINDS", "implied_market,residual_logit,pure_logit")
+PREDICTION_MODEL_KINDS: str = os.getenv(
+    "PREDICTION_MODEL_KINDS",
+    "implied_market,residual_logit,pure_logit,market_calibrated,hybrid_logit",
+)
 PREDICTION_INITIAL_BALANCE_EUR: Decimal = Decimal(os.getenv("PREDICTION_INITIAL_BALANCE_EUR", "100000.00"))
 PREDICTION_STAKE_FRACTION: Decimal = Decimal(os.getenv("PREDICTION_STAKE_FRACTION", "0.05"))
 PREDICTION_MIN_STAKE_EUR: Decimal = Decimal(os.getenv("PREDICTION_MIN_STAKE_EUR", "2.00"))
@@ -204,6 +207,10 @@ PREDICTION_POLICY_GATE_MIN_ROI: Decimal = Decimal(
 )
 PREDICTION_POLICY_GATE_MIN_BRIER_LIFT: Decimal = Decimal(
     os.getenv("PREDICTION_POLICY_GATE_MIN_BRIER_LIFT", "0.0")
+)
+PREDICTION_POLICY_GATE_EDGE_THRESHOLDS: str = os.getenv(
+    "PREDICTION_POLICY_GATE_EDGE_THRESHOLDS",
+    "0.01,0.02,0.03,0.04,0.05",
 )
 
 # --- Learning architect (meta-controller) ---

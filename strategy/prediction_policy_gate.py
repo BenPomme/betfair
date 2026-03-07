@@ -15,6 +15,8 @@ from typing import Dict, Iterable, List, Optional
 
 import config
 from strategy.predictive_model import (
+    HybridLogitModel,
+    MarketCalibratedModel,
     PredictionExample,
     PredictiveMetrics,
     PureLogitModel,
@@ -129,8 +131,14 @@ def _walk_forward_metrics(
         return metrics, baseline_brier
 
     feature_names = sorted({key for ex in examples for key in ex.features.keys()})
-    if model_kind == "pure_logit":
+    if model_kind == "market_calibrated":
+        model = MarketCalibratedModel()
+        model.fit(examples[:train_examples], epochs=6, lr=0.02)
+    elif model_kind == "pure_logit":
         model = PureLogitModel(feature_names)
+        model.fit(examples[:train_examples], epochs=4, lr=0.02)
+    elif model_kind == "hybrid_logit":
+        model = HybridLogitModel(feature_names)
         model.fit(examples[:train_examples], epochs=4, lr=0.02)
     else:
         model = ResidualLogitModel(feature_names)
@@ -142,6 +150,8 @@ def _walk_forward_metrics(
     for ex in test:
         if model_kind == "pure_logit":
             prob = model.predict_proba(ex.features)
+        elif model_kind == "market_calibrated":
+            prob = model.predict_proba(ex.base_prob)
         else:
             prob = model.predict_proba(ex.base_prob, ex.features)
         probs.append(prob)
@@ -166,6 +176,59 @@ def _stake_multiplier_from_metrics(metrics: PredictiveMetrics, brier_lift: float
     if metrics.roi >= 0.02:
         return 0.75
     return 0.5
+
+
+def _threshold_grid() -> List[float]:
+    raw = str(getattr(config, "PREDICTION_POLICY_GATE_EDGE_THRESHOLDS", "0.01,0.02,0.03,0.04,0.05"))
+    values: List[float] = []
+    for token in raw.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        try:
+            values.append(float(token))
+        except Exception:
+            continue
+    if not values:
+        values = [0.01, 0.02, 0.03, 0.04, 0.05]
+    return sorted(set(v for v in values if v >= 0.0))
+
+
+def _select_threshold(
+    *,
+    model_kind: str,
+    examples: List[PredictionExample],
+    edge_threshold: float,
+    min_test_examples: int,
+    min_test_bets: int,
+    train_fraction: float,
+) -> tuple[float, int]:
+    if len(examples) < max(80, min_test_examples * 2):
+        return edge_threshold, max(50, int(len(examples) * train_fraction))
+    inner_train = max(50, int(len(examples) * 0.55))
+    inner_test = len(examples) - inner_train
+    if inner_test < min_test_examples:
+        inner_train = max(50, len(examples) - min_test_examples)
+    best_threshold = edge_threshold
+    best_score: Optional[tuple[float, float, float, int]] = None
+    for candidate in _threshold_grid():
+        metrics, baseline_brier = _walk_forward_metrics(
+            model_kind=model_kind,
+            examples=examples,
+            train_examples=inner_train,
+            edge_threshold=candidate,
+        )
+        brier_lift = baseline_brier - metrics.brier
+        score = (
+            1.0 if metrics.bets >= min_test_bets else 0.0,
+            float(metrics.roi),
+            float(brier_lift),
+            int(metrics.bets),
+        )
+        if best_score is None or score > best_score:
+            best_score = score
+            best_threshold = candidate
+    return best_threshold, max(50, int(len(examples) * train_fraction))
 
 
 def train_from_examples(
@@ -195,28 +258,13 @@ def train_from_examples(
         model_id = _infer_model_id(path)
         state = _state_payload(model_id)
         model_kind = str(state.get("model_kind", "unknown") or "unknown")
+        if model_kind == "unknown":
+            continue
         examples = _load_examples(path)
         payload["summary"]["models_seen"] = int(payload["summary"]["models_seen"]) + 1
         edge_threshold = float(state.get("min_edge", config.PREDICTION_MIN_EDGE))
 
-        if model_kind == "unknown":
-            policy = ModelPolicy(
-                model_id=model_id,
-                model_kind=model_kind,
-                mode="shadow_only",
-                reason="missing_model_kind",
-                train_examples=0,
-                test_examples=0,
-                bets=0,
-                roi=0.0,
-                pnl_units=0.0,
-                brier=0.0,
-                baseline_brier=0.0,
-                brier_lift=0.0,
-                stake_multiplier=0.0,
-                edge_threshold=edge_threshold,
-            )
-        elif len(examples) < min_examples:
+        if len(examples) < min_examples:
             policy = ModelPolicy(
                 model_id=model_id,
                 model_kind=model_kind,
@@ -234,7 +282,14 @@ def train_from_examples(
                 edge_threshold=edge_threshold,
             )
         else:
-            train_examples = max(50, int(len(examples) * train_fraction))
+            selected_edge_threshold, train_examples = _select_threshold(
+                model_kind=model_kind,
+                examples=examples,
+                edge_threshold=edge_threshold,
+                min_test_examples=min_test_examples,
+                min_test_bets=min_test_bets,
+                train_fraction=train_fraction,
+            )
             test_examples = len(examples) - train_examples
             if test_examples < min_test_examples:
                 train_examples = max(50, len(examples) - min_test_examples)
@@ -243,7 +298,7 @@ def train_from_examples(
                 model_kind=model_kind,
                 examples=examples,
                 train_examples=train_examples,
-                edge_threshold=edge_threshold,
+                edge_threshold=selected_edge_threshold,
             )
             brier_lift = baseline_brier - metrics.brier
             mode = "shadow_only"
@@ -276,7 +331,7 @@ def train_from_examples(
                 baseline_brier=float(baseline_brier),
                 brier_lift=float(brier_lift),
                 stake_multiplier=_stake_multiplier_from_metrics(metrics, brier_lift),
-                edge_threshold=edge_threshold,
+                edge_threshold=selected_edge_threshold,
             )
 
         payload["model_policies"][model_id] = policy.to_dict()
@@ -314,4 +369,12 @@ def get_model_policy(model_id: str) -> Dict[str, object]:
         return {"mode": "execute", "reason": "policy_gate_disabled", "stake_multiplier": 1.0}
     _refresh_cache()
     model_policies = dict(_CACHE_PAYLOAD.get("model_policies") or {})
-    return dict(model_policies.get(model_id) or {"mode": "execute", "reason": "policy_gate_missing", "stake_multiplier": 1.0})
+    return dict(
+        model_policies.get(model_id)
+        or {
+            "mode": "shadow_only",
+            "reason": "policy_gate_missing",
+            "stake_multiplier": 0.0,
+            "edge_threshold": float(getattr(config, "PREDICTION_MIN_EDGE", 0.03)),
+        }
+    )

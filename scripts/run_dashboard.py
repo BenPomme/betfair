@@ -15,7 +15,7 @@ os.chdir(project_root)
 
 try:
     from dotenv import load_dotenv
-    load_dotenv(project_root / ".env")
+    load_dotenv(project_root / ".env", override=True)
 except ImportError:
     pass
 

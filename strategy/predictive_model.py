@@ -214,6 +214,131 @@ class PureLogitModel:
         return cls.from_dict(payload)
 
 
+class MarketCalibratedModel:
+    """
+    Learn a calibrated mapping around the market-implied probability:
+      p_hat = sigmoid(bias + market_weight * logit(base_prob))
+    """
+
+    def __init__(self):
+        self.bias = 0.0
+        self.market_weight = 1.0
+
+    def predict_proba(self, base_prob: float) -> float:
+        z = self.bias + (self.market_weight * _logit(base_prob))
+        return _clip_prob(_sigmoid(z))
+
+    def fit(
+        self,
+        examples: List[PredictionExample],
+        epochs: int = 8,
+        lr: float = 0.03,
+        l2: float = 1e-4,
+    ) -> None:
+        if not examples:
+            return
+        for _ in range(max(1, epochs)):
+            for ex in examples:
+                market_logit = _logit(ex.base_prob)
+                p = self.predict_proba(ex.base_prob)
+                err = p - float(ex.label)
+                self.bias -= lr * err
+                self.market_weight -= lr * ((err * market_logit) + (l2 * self.market_weight))
+
+    def to_dict(self) -> dict:
+        return {
+            "model_type": "market_calibrated_v1",
+            "bias": self.bias,
+            "market_weight": self.market_weight,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict) -> "MarketCalibratedModel":
+        model = cls()
+        model.bias = float(payload.get("bias", 0.0))
+        model.market_weight = float(payload.get("market_weight", 1.0))
+        return model
+
+    def save(self, path: str) -> None:
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(self.to_dict(), indent=2), encoding="utf-8")
+
+    @classmethod
+    def load(cls, path: str) -> "MarketCalibratedModel":
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+        return cls.from_dict(payload)
+
+
+class HybridLogitModel:
+    """
+    Learn how much to trust the market and microstructure simultaneously:
+      p_hat = sigmoid(bias + market_weight * logit(base_prob) + w·x)
+    """
+
+    def __init__(self, feature_names: Iterable[str]):
+        self.feature_names = list(feature_names)
+        self.bias = 0.0
+        self.market_weight = 1.0
+        self.weights = {name: 0.0 for name in self.feature_names}
+
+    def predict_proba(self, base_prob: float, features: Dict[str, float]) -> float:
+        z = self.bias + (self.market_weight * _logit(base_prob))
+        for name in self.feature_names:
+            x = _transform_feature(name, float(features.get(name, 0.0)))
+            z += _clip_contribution(self.weights[name] * x)
+        return _clip_prob(_sigmoid(z))
+
+    def fit(
+        self,
+        examples: List[PredictionExample],
+        epochs: int = 8,
+        lr: float = 0.02,
+        l2: float = 1e-4,
+    ) -> None:
+        if not examples:
+            return
+        for _ in range(max(1, epochs)):
+            for ex in examples:
+                base_logit = _logit(ex.base_prob)
+                p = self.predict_proba(ex.base_prob, ex.features)
+                err = p - float(ex.label)
+                self.bias -= lr * err
+                self.market_weight -= lr * ((err * base_logit) + (l2 * self.market_weight))
+                for name in self.feature_names:
+                    x = _transform_feature(name, float(ex.features.get(name, 0.0)))
+                    grad = err * x + l2 * self.weights[name]
+                    self.weights[name] -= lr * grad
+
+    def to_dict(self) -> dict:
+        return {
+            "model_type": "hybrid_logit_v1",
+            "feature_names": self.feature_names,
+            "bias": self.bias,
+            "market_weight": self.market_weight,
+            "weights": self.weights,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict) -> "HybridLogitModel":
+        feature_names = payload.get("feature_names", [])
+        model = cls(feature_names=feature_names)
+        model.bias = float(payload.get("bias", 0.0))
+        model.market_weight = float(payload.get("market_weight", 1.0))
+        model.weights = {name: float(payload.get("weights", {}).get(name, 0.0)) for name in feature_names}
+        return model
+
+    def save(self, path: str) -> None:
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(self.to_dict(), indent=2), encoding="utf-8")
+
+    @classmethod
+    def load(cls, path: str) -> "HybridLogitModel":
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+        return cls.from_dict(payload)
+
+
 def evaluate_predictions(
     probs: List[float],
     labels: List[int],

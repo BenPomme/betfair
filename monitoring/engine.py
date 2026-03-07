@@ -240,7 +240,9 @@ class TradingEngine:
         events = payload.get("events") or []
         with self._lock:
             if isinstance(models, dict):
-                self._prediction_models = models
+                merged = dict(self._prediction_models)
+                merged.update(models)
+                self._prediction_models = merged
             self._last_prediction_ts = time.time()
         for ev in events:
             kind = ev.get("kind")

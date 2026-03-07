@@ -22,7 +22,13 @@ from core.types import PriceSnapshot
 from data.clv_tracker import CLVTracker
 from strategy.features import build_market_microstructure
 from strategy.prediction_policy_gate import get_model_policy
-from strategy.predictive_model import PredictionExample, PureLogitModel, ResidualLogitModel
+from strategy.predictive_model import (
+    HybridLogitModel,
+    MarketCalibratedModel,
+    PredictionExample,
+    PureLogitModel,
+    ResidualLogitModel,
+)
 
 FEATURE_NAMES = [
     "spread_mean",
@@ -170,6 +176,13 @@ class OnlinePredictionEngine:
                 except Exception:
                     pass
             return ResidualLogitModel(feature_names=FEATURE_NAMES)
+        if self.model_kind == "hybrid_logit":
+            if self.model_path.exists():
+                try:
+                    return HybridLogitModel.load(str(self.model_path))
+                except Exception:
+                    pass
+            return HybridLogitModel(feature_names=FEATURE_NAMES)
         if self.model_kind == "pure_logit":
             if self.model_path.exists():
                 try:
@@ -177,6 +190,13 @@ class OnlinePredictionEngine:
                 except Exception:
                     pass
             return PureLogitModel(feature_names=FEATURE_NAMES)
+        if self.model_kind == "market_calibrated":
+            if self.model_path.exists():
+                try:
+                    return MarketCalibratedModel.load(str(self.model_path))
+                except Exception:
+                    pass
+            return MarketCalibratedModel()
         raise ValueError(f"Unsupported model_kind: {self.model_kind}")
 
     def _maybe_save_model(self) -> None:
@@ -388,8 +408,10 @@ class OnlinePredictionEngine:
     def _predict_prob(self, base_prob: float, features: Dict[str, float]) -> float:
         if self.model_kind == "implied_market":
             return max(1e-6, min(1.0 - 1e-6, base_prob))
-        if self.model_kind == "residual_logit":
+        if self.model_kind in {"residual_logit", "hybrid_logit"}:
             return self.model.predict_proba(base_prob, features)
+        if self.model_kind == "market_calibrated":
+            return self.model.predict_proba(base_prob)
         return self.model.predict_proba(features)
 
     def _append_example(self, ex: PredictionExample) -> None:

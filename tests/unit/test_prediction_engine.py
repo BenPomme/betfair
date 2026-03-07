@@ -3,6 +3,7 @@ from decimal import Decimal
 import math
 
 import config
+import pytest
 from core.types import PriceSnapshot, SelectionPrice
 from data.price_cache import PriceCache
 from strategy.prediction_engine import MultiModelPredictionManager, OnlinePredictionEngine
@@ -25,6 +26,11 @@ def _snapshot(
         timestamp=datetime.now(timezone.utc),
         market_status=market_status,
     )
+
+
+@pytest.fixture(autouse=True)
+def _disable_prediction_policy_gate(monkeypatch):
+    monkeypatch.setattr(config, "PREDICTION_POLICY_GATE_ENABLED", False)
 
 
 def test_prediction_engine_opens_and_settles_with_learning():
@@ -212,6 +218,38 @@ def test_residual_model_learns_without_opening_bets(tmp_path):
     assert out_closed["state"]["total_bets"] == 0
     assert out_closed["state"]["learning_settled"] >= 1
     assert out_closed["state"]["learning_updates"] >= 1
+
+
+def test_challenger_models_learn_without_opening_bets(tmp_path):
+    for model_kind in ("market_calibrated", "hybrid_logit"):
+        engine = OnlinePredictionEngine(
+            model_id=f"{model_kind}_shadow",
+            model_kind=model_kind,
+            initial_balance_eur=100.0,
+            stake_fraction=0.1,
+            min_stake_eur=2.0,
+            max_stake_eur=20.0,
+            min_edge=0.5,
+            min_liquidity_eur=1.0,
+            model_path=str(tmp_path / f"{model_kind}_model.json"),
+            save_every=1,
+        )
+        s_open = _snapshot(f"{model_kind}.1", "2.2", "2.4", market_status="OPEN")
+        out_open = engine.process_snapshot(f"{model_kind}.1", s_open, "Challenger Shadow", None)
+        assert not any(e["kind"] == "prediction_open" for e in out_open["events"])
+        assert any(e["kind"] == "prediction_learning_track" for e in out_open["events"])
+
+        s_closed = _snapshot(
+            f"{model_kind}.1",
+            "2.2",
+            "2.4",
+            market_status="CLOSED",
+            a_status="WINNER",
+            b_status="LOSER",
+        )
+        out_closed = engine.process_snapshot(f"{model_kind}.1", s_closed, "Challenger Shadow", None)
+        assert any(e["kind"] == "prediction_learning_settle" for e in out_closed["events"])
+        assert out_closed["state"]["learning_settled"] >= 1
 
 
 def test_implied_model_tracks_learning_without_model_updates(tmp_path):
