@@ -381,6 +381,7 @@ class LiveQAAgent:
     async def _run_safe_command(self, cmd_name: str) -> Dict[str, Any]:
         if cmd_name == "retrain_models":
             def _bootstrap_models() -> Dict[str, Any]:
+                from strategy.prediction_bootstrap import bootstrap_challenger_models
                 from strategy.fill_model import train_from_logs as train_fill_model
                 from strategy.prediction_policy_gate import train_from_examples as train_prediction_policy_gate
                 from strategy.train_scoring_model import train_from_logs as train_scoring_model
@@ -395,6 +396,11 @@ class LiveQAAgent:
                     output=config.FILL_MODEL_PATH,
                     min_samples=100,
                 )
+                challengers = bootstrap_challenger_models(
+                    input_dir="data/prediction",
+                    model_dir=config.PREDICTION_MODEL_DIR,
+                    force=True,
+                )
                 gate = train_prediction_policy_gate(
                     input_dir="data/prediction",
                     output=config.PREDICTION_POLICY_GATE_PATH,
@@ -403,6 +409,7 @@ class LiveQAAgent:
                     "ok": bool(scoring.get("ok") or fill.get("ok") or gate.get("ok")),
                     "scoring": scoring,
                     "fill": fill,
+                    "challengers": challengers,
                     "prediction_policy_gate": gate,
                 }
 

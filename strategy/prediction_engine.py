@@ -29,6 +29,7 @@ from strategy.predictive_model import (
     PureLogitModel,
     ResidualLogitModel,
 )
+from strategy.prediction_bootstrap import bootstrap_challenger_models
 
 FEATURE_NAMES = [
     "spread_mean",
@@ -182,6 +183,16 @@ class OnlinePredictionEngine:
                     return HybridLogitModel.load(str(self.model_path))
                 except Exception:
                     pass
+            bootstrap_challenger_models(
+                input_dir="data/prediction",
+                model_dir=str(self.model_path.parent),
+                force=False,
+            )
+            if self.model_path.exists():
+                try:
+                    return HybridLogitModel.load(str(self.model_path))
+                except Exception:
+                    pass
             return HybridLogitModel(feature_names=FEATURE_NAMES)
         if self.model_kind == "pure_logit":
             if self.model_path.exists():
@@ -191,6 +202,16 @@ class OnlinePredictionEngine:
                     pass
             return PureLogitModel(feature_names=FEATURE_NAMES)
         if self.model_kind == "market_calibrated":
+            if self.model_path.exists():
+                try:
+                    return MarketCalibratedModel.load(str(self.model_path))
+                except Exception:
+                    pass
+            bootstrap_challenger_models(
+                input_dir="data/prediction",
+                model_dir=str(self.model_path.parent),
+                force=False,
+            )
             if self.model_path.exists():
                 try:
                     return MarketCalibratedModel.load(str(self.model_path))
