@@ -21,6 +21,7 @@ import config
 from core.types import PriceSnapshot
 from data.clv_tracker import CLVTracker
 from strategy.features import build_market_microstructure
+from strategy.prediction_policy_gate import get_model_policy
 from strategy.predictive_model import PredictionExample, PureLogitModel, ResidualLogitModel
 
 FEATURE_NAMES = [
@@ -918,11 +919,19 @@ class OnlinePredictionEngine:
         if best is None or best["edge"] < effective_min_edge:
             return None
 
+        policy_gate = get_model_policy(self.model_id)
+        policy_mode = str(policy_gate.get("mode", "execute") or "execute").lower()
+        if policy_mode != "execute":
+            return None
+        policy_stake_multiplier = float(policy_gate.get("stake_multiplier", 1.0) or 1.0)
+        if policy_stake_multiplier <= 0:
+            return None
+
         key = (market_id, best["selection_id"])
         if key in self._pending:
             return None
 
-        stake = self._stake_size(stake_multiplier=stake_multiplier)
+        stake = self._stake_size(stake_multiplier=(stake_multiplier * policy_stake_multiplier))
         if stake < self.min_stake or stake <= 0:
             return None
 
@@ -966,10 +975,12 @@ class OnlinePredictionEngine:
             "edge": round(best["edge"], 5),
             "pred_prob": round(best["pred_prob"], 5),
             "stake_eur": stake,
-            "stake_multiplier": round(stake_multiplier, 4),
+            "stake_multiplier": round(stake_multiplier * policy_stake_multiplier, 4),
             "effective_min_edge": round(effective_min_edge, 6),
             "balance_eur": round(self.balance, 2),
             "bet_id": bet_id,
+            "policy_gate_mode": policy_mode,
+            "policy_gate_reason": str(policy_gate.get("reason", "")),
         }
 
     def process_snapshot(
@@ -1049,6 +1060,7 @@ class OnlinePredictionEngine:
         gate_pass, gate_reason, r50, r100, r200 = self._strict_gate_status()
         saturation_rate = self._prediction_saturation_rate()
         frozen = self._prediction_is_frozen()
+        policy_gate = get_model_policy(self.model_id)
         return {
             "model_id": self.model_id,
             "model_kind": self.model_kind,
@@ -1093,6 +1105,11 @@ class OnlinePredictionEngine:
             "model_version": f"{self.model_kind}_online_v1",
             "last_edge": round(self.last_edge, 6),
             "last_prediction": round(self.last_prediction, 6),
+            "policy_gate_mode": str(policy_gate.get("mode", "execute") or "execute"),
+            "policy_gate_reason": str(policy_gate.get("reason", "") or ""),
+            "policy_gate_test_roi": float(policy_gate.get("roi", 0.0) or 0.0),
+            "policy_gate_brier_lift": float(policy_gate.get("brier_lift", 0.0) or 0.0),
+            "policy_gate_test_bets": int(policy_gate.get("bets", 0) or 0),
         }
 
 

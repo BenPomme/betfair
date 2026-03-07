@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 import math
 
+import config
 from core.types import PriceSnapshot, SelectionPrice
 from data.price_cache import PriceCache
 from strategy.prediction_engine import MultiModelPredictionManager, OnlinePredictionEngine
@@ -132,7 +133,8 @@ def test_prediction_engine_state_persists(tmp_path):
     assert st2["open_positions"] >= 1
 
 
-def test_pending_market_settlement_watcher_resolves_closed_market(tmp_path):
+def test_pending_market_settlement_watcher_resolves_closed_market(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "PREDICTION_POLICY_GATE_ENABLED", False)
     manager = MultiModelPredictionManager(
         model_kinds=["implied_market"],
         initial_balance_eur=1000.0,

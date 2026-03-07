@@ -182,6 +182,7 @@ class LiveQAAgent:
         return {
             "scoring_model_exists": _exists(config.ML_LINEAR_MODEL_PATH),
             "fill_model_exists": _exists(config.FILL_MODEL_PATH),
+            "prediction_policy_gate_exists": _exists(config.PREDICTION_POLICY_GATE_PATH),
         }
 
     def _collect_runtime_metrics(
@@ -275,7 +276,11 @@ class LiveQAAgent:
                 }
             )
 
-        if not a.get("scoring_model_exists") or not a.get("fill_model_exists"):
+        if (
+            not a.get("scoring_model_exists")
+            or not a.get("fill_model_exists")
+            or not a.get("prediction_policy_gate_exists")
+        ):
             actions.append({"type": "run_cmd", "cmd": "retrain_models", "reason": "missing_artifacts"})
 
         degraded_seconds = float(r.get("degraded_seconds", 0.0))
@@ -377,6 +382,7 @@ class LiveQAAgent:
         if cmd_name == "retrain_models":
             def _bootstrap_models() -> Dict[str, Any]:
                 from strategy.fill_model import train_from_logs as train_fill_model
+                from strategy.prediction_policy_gate import train_from_examples as train_prediction_policy_gate
                 from strategy.train_scoring_model import train_from_logs as train_scoring_model
 
                 scoring = train_scoring_model(
@@ -389,7 +395,16 @@ class LiveQAAgent:
                     output=config.FILL_MODEL_PATH,
                     min_samples=100,
                 )
-                return {"ok": bool(scoring.get("ok") or fill.get("ok")), "scoring": scoring, "fill": fill}
+                gate = train_prediction_policy_gate(
+                    input_dir="data/prediction",
+                    output=config.PREDICTION_POLICY_GATE_PATH,
+                )
+                return {
+                    "ok": bool(scoring.get("ok") or fill.get("ok") or gate.get("ok")),
+                    "scoring": scoring,
+                    "fill": fill,
+                    "prediction_policy_gate": gate,
+                }
 
             try:
                 return await asyncio.to_thread(_bootstrap_models)
