@@ -6,6 +6,7 @@ import config
 from monitoring import command_center
 from portfolio.accounting import build_strategy_account
 from portfolio.state_store import PortfolioStateStore
+from portfolio.types import ModelShadowAccount
 
 
 class _DummyManager:
@@ -113,6 +114,103 @@ def test_command_center_notification_endpoints(tmp_path, monkeypatch):
 
     assert "discord_configured" in state
     assert "notification_failures" in state
+
+
+def test_command_center_exposes_polymarket_quantum_fold_portfolio(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "PORTFOLIO_STATE_ROOT", str(tmp_path))
+    monkeypatch.setattr(command_center, "_process_manager", _DummyManager())
+
+    store = PortfolioStateStore("polymarket_quantum_fold")
+    store.write_account(
+        build_strategy_account(
+            portfolio_id="polymarket_quantum_fold",
+            currency="USD",
+            starting_balance=7500.0,
+            current_balance=7525.0,
+            realized_pnl=25.0,
+            trade_count=12,
+        )
+    )
+    store.write_state(
+        {
+            "portfolio_id": "polymarket_quantum_fold",
+            "running": True,
+            "status": "running",
+            "mode": "paper",
+            "realized_pnl_usd": 25.0,
+            "current_balance_usd": 7525.0,
+            "trade_count": 12,
+            "source_health": {
+                "gamma": {"healthy": True, "event_count": 24, "market_count": 18, "token_count": 36},
+                "clob": {"healthy": True, "rest_book_count": 18, "ws_connected": True},
+            },
+            "training_progress": {
+                "tracked_examples": 320,
+                "labeled_examples": 180,
+                "pending_labels": 21,
+                "final_resolution_labels": 12,
+                "closed_trades": 24,
+                "targets": {"labeled_examples": 250, "closed_trades": 50},
+            },
+            "model_league": {
+                "leader_model_id": "hybrid_transition",
+                "ranked_models": [
+                    {
+                        "model_id": "hybrid_transition",
+                        "shadow_realized_pnl": 36.0,
+                        "settled_count": 180,
+                        "recent_learning_brier_lift": 0.014,
+                        "strict_gate_pass": False,
+                    }
+                ],
+            },
+            "quote_freshness_sec": 6.5,
+            "open_positions": [{"trade_id": "pmqf-1"}],
+            "events": [],
+            "closed_trades": [],
+        }
+    )
+    store.write_readiness({"status": "paper_validating"})
+    store.write_balance_history(
+        [
+            {"ts": "2026-03-06T00:00:00Z", "balance": 7500.0},
+            {"ts": "2026-03-06T01:00:00Z", "balance": 7525.0},
+        ]
+    )
+    store.write_models(
+        [
+            ModelShadowAccount(
+                portfolio_id="polymarket_quantum_fold",
+                model_id="hybrid_transition",
+                shadow_starting_balance=7500.0,
+                shadow_current_balance=7536.0,
+                shadow_realized_pnl=36.0,
+                shadow_roi_pct=0.48,
+                settled_count=180,
+                metrics={
+                    "learning_tracked": 320,
+                    "learning_settled": 180,
+                    "strict_gate_pass": False,
+                    "strict_gate_reason": "insufficient_labeled_examples",
+                    "recent_learning_brier_lift": 0.014,
+                    "rolling_200": {"brier_lift_abs": 0.014},
+                },
+                selected_for_execution=True,
+            )
+        ]
+    )
+    store.write_pid(2468)
+
+    client = TestClient(command_center.app)
+    portfolios = client.get("/api/portfolios").json()["portfolios"]
+    summary = client.get("/api/portfolios/polymarket_quantum_fold/summary").json()
+    state = client.get("/api/portfolios/polymarket_quantum_fold/state").json()
+
+    assert any(item["portfolio_id"] == "polymarket_quantum_fold" for item in portfolios)
+    assert summary["running"] is True
+    assert summary["progress_pct"] > 0
+    assert state["raw_state"]["source_health"]["gamma"]["healthy"] is True
+    assert state["models"][0]["model_id"] == "hybrid_transition"
 
 
 def test_command_center_betfair_strategy_endpoints(tmp_path, monkeypatch):

@@ -274,6 +274,84 @@ def test_implied_model_tracks_learning_without_model_updates(tmp_path):
     assert out["state"]["learning_updates"] == 0
 
 
+def test_shadow_only_policy_opens_bounded_test_bets(tmp_path, monkeypatch):
+    policy_path = tmp_path / "prediction_policy_gate.json"
+    policy_path.write_text(
+        """
+{
+  "model_policies": {
+    "residual_shadow_policy": {
+      "mode": "shadow_only",
+      "reason": "insufficient_examples",
+      "stake_multiplier": 0.1,
+      "edge_threshold": 0.03
+    }
+  }
+}
+""".strip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(config, "PREDICTION_POLICY_GATE_ENABLED", True)
+    monkeypatch.setattr(config, "PREDICTION_POLICY_GATE_PATH", str(policy_path))
+
+    engine = OnlinePredictionEngine(
+        model_id="residual_shadow_policy",
+        model_kind="residual_logit",
+        initial_balance_eur=1000.0,
+        stake_fraction=0.05,
+        min_stake_eur=2.0,
+        max_stake_eur=20.0,
+        min_edge=-1.0,
+        min_liquidity_eur=1.0,
+        model_path=str(tmp_path / "residual_shadow_policy_model.json"),
+        save_every=1,
+    )
+    s_open = _snapshot("14.1", "3.0", "3.2", market_status="OPEN")
+    out = engine.process_snapshot("14.1", s_open, "Shadow Policy Event", None)
+    opened = next((e for e in out["events"] if e["kind"] == "prediction_open"), None)
+    assert opened is not None
+    assert opened["policy_gate_mode"] == "shadow_only"
+    assert 2.0 <= opened["stake_eur"] < 20.0
+
+
+def test_implied_model_remains_learning_only_under_shadow_policy(tmp_path, monkeypatch):
+    policy_path = tmp_path / "prediction_policy_gate_implied.json"
+    policy_path.write_text(
+        """
+{
+  "model_policies": {
+    "implied_shadow_policy": {
+      "mode": "shadow_only",
+      "reason": "insufficient_test_bets",
+      "stake_multiplier": 0.1,
+      "edge_threshold": 0.0
+    }
+  }
+}
+""".strip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(config, "PREDICTION_POLICY_GATE_ENABLED", True)
+    monkeypatch.setattr(config, "PREDICTION_POLICY_GATE_PATH", str(policy_path))
+
+    engine = OnlinePredictionEngine(
+        model_id="implied_shadow_policy",
+        model_kind="implied_market",
+        initial_balance_eur=1000.0,
+        stake_fraction=0.05,
+        min_stake_eur=2.0,
+        max_stake_eur=20.0,
+        min_edge=0.0,
+        min_liquidity_eur=1.0,
+        model_path=str(tmp_path / "implied_shadow_policy_model.json"),
+        save_every=1,
+    )
+    s_open = _snapshot("15.1", "2.4", "2.6", market_status="OPEN")
+    out = engine.process_snapshot("15.1", s_open, "Implied Shadow Policy", None)
+    assert not any(e["kind"] == "prediction_open" for e in out["events"])
+    assert any(e["kind"] == "prediction_learning_track" for e in out["events"])
+
+
 def test_strict_gate_pass_fail_matrix():
     engine = OnlinePredictionEngine(
         model_id="gate_matrix",

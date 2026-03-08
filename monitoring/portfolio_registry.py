@@ -10,14 +10,14 @@ from portfolio.types import PortfolioRunnerSpec
 _REGISTRY: Dict[str, PortfolioRunnerSpec] = {
     "betfair_core": PortfolioRunnerSpec(
         portfolio_id="betfair_core",
-        label="Betfair Core",
+        label="Betfair Lab",
         category="betfair",
         control_mode="local_managed",
         currency="EUR",
         initial_balance=float(config.INITIAL_BALANCE_EUR),
         runner_path="portfolio.runners.betfair_runner:BetfairPortfolioRunner",
         autostart=False,
-        description="Primary Betfair arbitrage portfolio.",
+        description="Betfair execution and prediction research portfolio.",
         ui_group="Betfair",
     ),
     "hedge_validation": PortfolioRunnerSpec(
@@ -70,6 +70,19 @@ _REGISTRY: Dict[str, PortfolioRunnerSpec] = {
         enabled=bool(getattr(config, "MEV_SCOUT_SOL_ENABLED", False)),
         description="Solana/Jito whale-flow and latency research portfolio.",
         ui_group="MEV Scout",
+    ),
+    "polymarket_quantum_fold": PortfolioRunnerSpec(
+        portfolio_id="polymarket_quantum_fold",
+        label="Polymarket Quantum-Fold",
+        category="polymarket_paper",
+        control_mode="local_managed",
+        currency="USD",
+        initial_balance=float(getattr(config, "POLYMARKET_QF_INITIAL_BALANCE_USD", 7500.0)),
+        runner_path="portfolio.runners.polymarket_quantum_fold_runner:PolymarketQuantumFoldPortfolioRunner",
+        autostart=False,
+        enabled=bool(getattr(config, "POLYMARKET_QF_ENABLED", False)),
+        description="Standalone Polymarket sports paper portfolio driven by coherence, folding, and online model-league learning.",
+        ui_group="Polymarket",
     ),
     "contrarian_legacy": PortfolioRunnerSpec(
         portfolio_id="contrarian_legacy",

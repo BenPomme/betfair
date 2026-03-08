@@ -178,6 +178,16 @@ def _stake_multiplier_from_metrics(metrics: PredictiveMetrics, brier_lift: float
     return 0.5
 
 
+def _shadow_stake_multiplier(model_kind: str, reason: str) -> float:
+    if model_kind == "implied_market":
+        return 0.0
+    warmup = max(0.0, float(config.PREDICTION_POLICY_GATE_SHADOW_STAKE_MULTIPLIER))
+    failing = max(0.0, float(config.PREDICTION_POLICY_GATE_SHADOW_FAIL_STAKE_MULTIPLIER))
+    if reason in {"negative_walk_forward", "negative_roi", "negative_brier_lift"}:
+        return min(warmup, failing) if failing > 0 else warmup
+    return warmup
+
+
 def _threshold_grid() -> List[float]:
     raw = str(getattr(config, "PREDICTION_POLICY_GATE_EDGE_THRESHOLDS", "0.01,0.02,0.03,0.04,0.05"))
     values: List[float] = []
@@ -278,7 +288,7 @@ def train_from_examples(
                 brier=0.0,
                 baseline_brier=0.0,
                 brier_lift=0.0,
-                stake_multiplier=0.0,
+                stake_multiplier=_shadow_stake_multiplier(model_kind, "insufficient_examples"),
                 edge_threshold=edge_threshold,
             )
         else:
@@ -330,7 +340,11 @@ def train_from_examples(
                 brier=float(metrics.brier),
                 baseline_brier=float(baseline_brier),
                 brier_lift=float(brier_lift),
-                stake_multiplier=_stake_multiplier_from_metrics(metrics, brier_lift),
+                stake_multiplier=(
+                    _stake_multiplier_from_metrics(metrics, brier_lift)
+                    if mode == "execute"
+                    else _shadow_stake_multiplier(model_kind, reason)
+                ),
                 edge_threshold=selected_edge_threshold,
             )
 
@@ -374,7 +388,7 @@ def get_model_policy(model_id: str) -> Dict[str, object]:
         or {
             "mode": "shadow_only",
             "reason": "policy_gate_missing",
-            "stake_multiplier": 0.0,
+            "stake_multiplier": float(getattr(config, "PREDICTION_POLICY_GATE_SHADOW_FAIL_STAKE_MULTIPLIER", 0.0)),
             "edge_threshold": float(getattr(config, "PREDICTION_MIN_EDGE", 0.03)),
         }
     )

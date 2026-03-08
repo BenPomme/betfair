@@ -964,8 +964,6 @@ class OnlinePredictionEngine:
 
         policy_gate = get_model_policy(self.model_id)
         policy_mode = str(policy_gate.get("mode", "execute") or "execute").lower()
-        if policy_mode != "execute":
-            return None
         policy_stake_multiplier = float(policy_gate.get("stake_multiplier", 1.0) or 1.0)
         if policy_stake_multiplier <= 0:
             return None

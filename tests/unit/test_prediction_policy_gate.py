@@ -92,3 +92,5 @@ def test_prediction_policy_gate_promotes_positive_model_and_shadows_negative_mod
     assert positive["brier_lift"] >= 0.0
     assert positive["edge_threshold"] <= 0.02
     assert negative["mode"] == "shadow_only"
+    assert positive["stake_multiplier"] > 0.0
+    assert negative["stake_multiplier"] > 0.0
