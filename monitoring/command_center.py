@@ -272,6 +272,27 @@ def _progress_from_readiness(readiness: Dict[str, Any], portfolio_id: str | None
         provider = bool(raw_state.get("provider_configured", False))
         progress = (20.0 if provider else 0.0) + min(observed / 100.0, 1.0) * 30.0 + min(labeled / max(1.0, target), 1.0) * 50.0
         return round(_clamp(progress), 2)
+    if portfolio_id == "polymarket_quantum_fold":
+        training = dict(raw_state.get("training_progress") or {})
+        source_health = dict(raw_state.get("source_health") or {})
+        gamma_healthy = bool((source_health.get("gamma") or {}).get("healthy", False))
+        clob_healthy = bool((source_health.get("clob") or {}).get("healthy", False))
+        labeled = float(training.get("labeled_examples", 0) or 0)
+        labeled_target = float((training.get("targets") or {}).get("labeled_examples", getattr(config, "POLYMARKET_QF_READINESS_MIN_LABELED", 250)) or getattr(config, "POLYMARKET_QF_READINESS_MIN_LABELED", 250))
+        closed_trades = float(training.get("closed_trades", 0) or 0)
+        trade_target = float((training.get("targets") or {}).get("closed_trades", getattr(config, "POLYMARKET_QF_READINESS_MIN_CLOSED_TRADES", 50)) or getattr(config, "POLYMARKET_QF_READINESS_MIN_CLOSED_TRADES", 50))
+        realized_pnl = float((state.get("account") or {}).get("realized_pnl", raw_state.get("realized_pnl_usd", 0.0)) or 0.0)
+        model_league = dict(raw_state.get("model_league") or {})
+        ranked_models = list(model_league.get("ranked_models") or [])
+        calibration_lift = float((ranked_models[0] if ranked_models else {}).get("recent_learning_brier_lift", 0.0) or 0.0)
+        progress = 0.0
+        progress += 10.0 if gamma_healthy else 0.0
+        progress += 10.0 if clob_healthy else 0.0
+        progress += min(labeled / max(1.0, labeled_target), 1.0) * 40.0
+        progress += min(closed_trades / max(1.0, trade_target), 1.0) * 25.0
+        progress += 10.0 if realized_pnl > 0 else max(0.0, min(10.0, realized_pnl))
+        progress += 5.0 if calibration_lift > 0 else 0.0
+        return round(_clamp(progress), 2)
     return 0.0
 
 
@@ -349,6 +370,8 @@ def _format_eta(hours: float | None) -> str:
 def _model_target_settled(portfolio_id: str) -> int:
     if portfolio_id == "betfair_core":
         return int(getattr(config, "PREDICTION_STRICT_GATE_MIN_SETTLED", 100))
+    if portfolio_id == "polymarket_quantum_fold":
+        return int(getattr(config, "POLYMARKET_QF_READINESS_MIN_LABELED", 250))
     return int(getattr(config, "FUNDING_STRICT_MIN_SETTLED", 100))
 
 
