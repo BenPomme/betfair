@@ -193,7 +193,7 @@
       <div class="panel" id="compare-panel"></div>
     </section>
 
-    <section class="section" id="section-betfair_core"><h2>Betfair Core</h2><div id="betfair_core-body"></div></section>
+    <section class="section" id="section-betfair_core"><h2>Betfair Lab</h2><div id="betfair_core-body"></div></section>
     <section class="section" id="section-hedge_validation"><h2>Hedge Validation</h2><div id="hedge_validation-body"></div></section>
     <section class="section" id="section-hedge_research"><h2>Hedge Research</h2><div id="hedge_research-body"></div></section>
     <section class="section" id="section-cascade_alpha"><h2>Cascade Alpha</h2><div id="cascade_alpha-body"></div></section>
@@ -207,7 +207,7 @@
       overview: "Overview",
       portfolios: "Portfolios",
       compare: "Compare",
-      betfair_core: "Betfair",
+      betfair_core: "Betfair Lab",
       hedge_validation: "Hedge Validation",
       hedge_research: "Hedge Research",
       cascade_alpha: "Cascade Alpha",
@@ -310,6 +310,31 @@
       return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
     }
 
+    function learningProgress(metrics) {
+      const settled = Number(metrics?.learning_settled || metrics?.settled_bets || 0);
+      const updates = Number(metrics?.learning_updates || 0);
+      const coveragePct = Math.min(100, Math.round((settled / 200) * 100));
+      if ((metrics?.policy_gate_mode || '') === 'execute' || metrics?.strict_gate_pass) return 100;
+      if (settled >= 200 && updates >= 50) return 100;
+      if (settled >= 100) return Math.max(coveragePct, 60);
+      if (settled >= 25) return Math.max(coveragePct, 25);
+      return Math.max(coveragePct, updates > 0 ? 10 : 0);
+    }
+
+    function learningStage(metrics) {
+      const settled = Number(metrics?.learning_settled || metrics?.settled_bets || 0);
+      const updates = Number(metrics?.learning_updates || 0);
+      const policyReason = String(metrics?.policy_gate_reason || '');
+      if ((metrics?.policy_gate_mode || '') === 'execute') return 'Executing';
+      if (metrics?.strict_gate_pass) return 'Ready';
+      if (settled >= 200 && ['negative_roi', 'negative_brier_lift'].includes(policyReason)) return 'Fully observed, underperforming';
+      if (settled >= 200) return 'Evidence complete';
+      if (settled >= 100) return 'Calibrating';
+      if (settled >= 25) return 'Warming up';
+      if (updates > 0) return 'Cold start';
+      return 'Untrained';
+    }
+
     function renderDirectionPanel(portfolioId, state) {
       const raw = state.raw_state || {};
       const models = state.models || [];
@@ -337,7 +362,7 @@
               ${metricCard('Prediction Open Positions', league.open_positions || 0)}
             </div>
             <div class="muted">Healthy direction means: certificate auth ready, feed healthy, more settled bets, and strict-pass model count increasing from zero.</div>
-            <div class="muted" style="margin-top:8px;">Core arbitrage book and prediction league are separate. Core P&L can be zero while model accounts are still actively learning and trading.</div>
+            <div class="muted" style="margin-top:8px;">The execution book and the prediction league are separate. The execution book is now clean-reset; model accounts keep their own learning history and shadow P&L.</div>
             <div class="muted" style="margin-top:8px;">Prediction summary: active=${predictionSummary.active_model_count || 0}, leader=${predictionSummary.leader_model_id || 'n/a'}, best model by realized P&L=${league.best_model_id || 'n/a'}.</div>
           </div>`;
       }
@@ -435,13 +460,18 @@
 
     function renderModelHealth(models) {
       if (!models.length) {
-        return '<tr><td colspan="6" class="muted">No model accounts</td></tr>';
+        return '<tr><td colspan="13" class="muted">No model accounts</td></tr>';
       }
       return models.map(m => {
         const metrics = m.metrics || {};
         return `<tr>
           <td>${m.model_id}</td>
+          <td>${learningStage(metrics)}</td>
+          <td>${learningProgress(metrics)}%</td>
           <td>${metrics.settled_count ?? m.settled_count ?? 0}/${m.settled_target ?? 'n/a'}</td>
+          <td>${metrics.learning_tracked ?? 0}</td>
+          <td>${metrics.learning_settled ?? 0}</td>
+          <td>${metrics.learning_updates ?? 0}</td>
           <td>${Number(m.shadow_realized_pnl || 0).toFixed(2)}</td>
           <td>${pct(m.shadow_roi_pct)}</td>
           <td>${metrics.current_auc != null ? compactNumber(metrics.current_auc) : 'n/a'}</td>
@@ -458,21 +488,140 @@
         <div class="cards" style="margin:14px 0 18px;">
           ${models.map(m => {
             const metrics = m.metrics || {};
+            const lpct = learningProgress(metrics);
             return `<div class="card">
               <div class="muted">${metrics.model_kind || 'model'}</div>
               <h3>${m.model_id}</h3>
               <div class="grid">
+                ${metricCard('Learning Stage', learningStage(metrics))}
+                ${metricCard('Learning Progress', `${lpct}%`)}
                 ${metricCard('Settled', `${metrics.settled_bets ?? metrics.settled_count ?? m.settled_count ?? 0}/${m.settled_target ?? 'n/a'}`)}
-                ${metricCard('Open', metrics.open_positions ?? metrics.learning_open_markets ?? 0)}
+                ${metricCard('Prediction Bets Open', metrics.open_positions ?? 0)}
+                ${metricCard('Learning Markets Open', metrics.learning_open_markets ?? 0)}
+                ${metricCard('Learning Tracked', metrics.learning_tracked ?? 0)}
+                ${metricCard('Learning Settled', metrics.learning_settled ?? 0)}
+                ${metricCard('Learning Updates', metrics.learning_updates ?? 0)}
                 ${metricCard('Shadow P&L', Number(m.shadow_realized_pnl || 0).toFixed(2))}
                 ${metricCard('ROI', pct(m.shadow_roi_pct))}
                 ${metricCard('Gate', metrics.strict_gate_pass == null ? 'n/a' : yesNo(metrics.strict_gate_pass))}
                 ${metricCard('ETA', m.eta_to_readiness || 'unknown')}
               </div>
+              ${progressBar(lpct)}
               <div class="muted">Why not ready: ${metrics.strict_gate_reason || metrics.last_retrain_result || 'n/a'}</div>
             </div>`;
           }).join('')}
         </div>`;
+    }
+
+    function strategyExplainer(title, oneLiner, bullets) {
+      return `
+        <details class="panel" style="margin-bottom:12px;">
+          <summary style="cursor:pointer;font-weight:700;">${title}: <span class="muted">${oneLiner}</span></summary>
+          <div class="muted" style="margin-top:10px;">
+            ${(bullets || []).map(item => `<div style="margin-top:6px;">- ${item}</div>`).join('')}
+          </div>
+        </details>`;
+    }
+
+    function renderBetfairStrategyBooks(raw) {
+      const books = raw.strategy_books || {};
+      const polymarket = raw.polymarket_signal_layer || {};
+      const explainers = [];
+      explainers.push(strategyExplainer(
+        'Betfair Execution Book',
+        'Executes the currently approved Betfair paper-trading strategies and tracks real paper P&L.',
+        [
+          'This is the live Betfair paper execution ledger.',
+          'It should stay clean and separate from shadow strategy research.',
+        ],
+      ));
+      explainers.push(strategyExplainer(
+        'Prediction League',
+        'Runs prediction models in shadow or canary mode to see which ones deserve execution.',
+        [
+          'Models learn on observed outcomes before they earn execution rights.',
+          'Negative shadow P&L here does not directly hit the execution book.',
+        ],
+      ));
+      if (books.betfair_suspension_lag) {
+        explainers.push(strategyExplainer(
+          'Suspension-Lag',
+          books.betfair_suspension_lag.explainer,
+          [
+            'Looks for event-state changes that Betfair derivative markets have not fully priced in yet.',
+            'Uses Polymarket sports moves only as confirmation, not as a trading venue.',
+          ],
+        ));
+      }
+      if (books.betfair_crossbook_consensus) {
+        explainers.push(strategyExplainer(
+          'Cross-Book Consensus',
+          books.betfair_crossbook_consensus.explainer,
+          [
+            'Compares Betfair against an external price consensus.',
+            'In this first version, the framework is active but still waiting for more quote sources than Polymarket alone.',
+          ],
+        ));
+      }
+      if (books.betfair_timezone_decay) {
+        explainers.push(strategyExplainer(
+          'Timezone Decay',
+          books.betfair_timezone_decay.explainer,
+          [
+            'Ranks low-attention leagues and time windows where stale pricing lasts longer.',
+            'This is a Betfair-native strategy with optional external confirmation.',
+          ],
+        ));
+      }
+      explainers.push(strategyExplainer(
+        'Polymarket Sports Signal Layer',
+        polymarket.explainer || 'Uses Polymarket sports market moves as an extra confirmation signal for the same sporting events.',
+        [
+          'Read-only sports data source.',
+          'Used for event discovery and confirmation only.',
+          'No Polymarket trading happens in this system.',
+        ],
+      ));
+
+      const cards = Object.values(books).map(book => `
+        <div class="card">
+          <div class="muted">${book.mode || 'observe'}</div>
+          <h3>${book.label || book.strategy_id}</h3>
+          <div class="grid">
+            ${metricCard('Candidates', book.candidate_count || 0)}
+            ${metricCard('Accepted', book.accepted_count || 0)}
+            ${metricCard('Rejected', book.rejected_count || 0)}
+            ${metricCard('Realized Net', compactNumber(book.realized_net_pnl || 0))}
+            ${metricCard('Expected Edge', compactNumber(book.expected_net_edge || 0))}
+            ${metricCard('Fillability', compactNumber(book.fillability_avg || 0))}
+            ${metricCard('Learning Progress', `${compactNumber(book.learning_progress_pct || 0)}%`)}
+          </div>
+          ${progressBar(book.learning_progress_pct || 0)}
+          <div class="muted">Top blockers: ${(book.top_blockers || []).join(', ') || 'none'}</div>
+          <div class="muted" style="margin-top:8px;">Recent source mix: ${((book.latest_candidates || []).slice(0, 2).map(c => (c.source_mix || []).join('+')).join(' | ')) || 'n/a'}</div>
+        </div>`).join('');
+
+      const polymarketPanel = `
+        <div class="panel">
+          <h3>Polymarket Sports Signal Layer</h3>
+          <div class="grid">
+            ${metricCard('Feed Health', polymarket.feed_health || 'idle')}
+            ${metricCard('Matched Events', polymarket.matched_events || 0)}
+            ${metricCard('Unmatched Events', polymarket.unmatched_events || 0)}
+            ${metricCard('Quote Freshness', polymarket.quote_freshness_sec != null ? `${compactNumber(polymarket.quote_freshness_sec)}s` : 'n/a')}
+            ${metricCard('Confirmation Hit Rate', pct((Number(polymarket.confirmation_hit_rate || 0) || 0) * 100))}
+            ${metricCard('Useful Sports', (polymarket.useful_sports || []).join(', ') || 'n/a')}
+          </div>
+          <div class="muted">Source health: ${Object.entries(polymarket.source_health || {}).map(([name, state]) => `${name}=${state.status}`).join(', ') || 'n/a'}</div>
+        </div>`;
+
+      return `
+        <div class="panel">
+          <h3>Betfair Strategy Books</h3>
+          ${explainers.join('')}
+          <div class="cards" style="margin-top:14px;">${cards || '<div class="muted">No strategy books yet</div>'}</div>
+        </div>
+        ${polymarketPanel}`;
     }
 
     function sparkline(points) {
@@ -662,9 +811,10 @@
           <div class="metric"><div class="label">ETA To Trust</div><div class="value">${trend.eta_to_readiness || 'unknown'}</div></div>
           <div class="metric"><div class="label">24h Trend</div><div class="value ${trend.direction === 'improving' ? 'good' : (trend.direction === 'worsening' ? 'bad' : 'muted')}">${trend.direction || 'flat'} ${trend.progress_delta_24h ? `(${Number(trend.progress_delta_24h).toFixed(1)}%)` : ''}</div></div>
           ${portfolioId === 'betfair_core' ? `<div class="metric"><div class="label">Prediction League P&L</div><div class="value">${money(((state.raw_state || {}).prediction_league_summary || {}).realized_pnl_eur || 0, 'EUR')}</div></div>` : ''}
-          ${portfolioId === 'betfair_core' ? `<div class="metric"><div class="label">Prediction League Open</div><div class="value">${(((state.raw_state || {}).prediction_league_summary || {}).open_positions || 0)}</div></div>` : ''}
+          ${portfolioId === 'betfair_core' ? `<div class="metric"><div class="label">Prediction Bets Open</div><div class="value">${(((state.raw_state || {}).prediction_league_summary || {}).open_positions || 0)}</div></div>` : ''}
         </div>
         ${portfolioId === 'betfair_core' ? `<div class="panel"><h3>Betfair Model Accounts</h3>${renderModelCards(models)}</div>` : ''}
+        ${portfolioId === 'betfair_core' ? renderBetfairStrategyBooks(state.raw_state || {}) : ''}
         <div class="two-col">
           <div class="panel">
             <h3>Recent Trades</h3>
@@ -686,7 +836,7 @@
         <div class="two-col">
           <div class="panel">
             <h3>Model Health</h3>
-            <table><thead><tr><th>Model</th><th>Settled</th><th>Shadow P&L</th><th>ROI</th><th>AUC</th><th>Gate</th><th>ETA</th><th>Why not ready</th></tr></thead><tbody>
+            <table><thead><tr><th>Model</th><th>L Stage</th><th>L Prog</th><th>Settled</th><th>Tracked</th><th>L Settled</th><th>Updates</th><th>Shadow P&L</th><th>ROI</th><th>AUC</th><th>Gate</th><th>ETA</th><th>Why not ready</th></tr></thead><tbody>
               ${renderModelHealth(models)}
             </tbody></table>
           </div>

@@ -115,6 +115,49 @@ def test_command_center_notification_endpoints(tmp_path, monkeypatch):
     assert "notification_failures" in state
 
 
+def test_command_center_betfair_strategy_endpoints(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "PORTFOLIO_STATE_ROOT", str(tmp_path))
+    monkeypatch.setattr(command_center, "_process_manager", _DummyManager())
+
+    betfair_store = PortfolioStateStore("betfair_core")
+    betfair_store.write_account(
+        build_strategy_account(
+            portfolio_id="betfair_core",
+            currency="EUR",
+            starting_balance=1000.0,
+            current_balance=1000.0,
+            realized_pnl=0.0,
+        )
+    )
+    betfair_store.write_state(
+        {
+            "portfolio_id": "betfair_core",
+            "running": True,
+            "status": "running",
+            "mode": "paper",
+            "strategy_books": {
+                "betfair_suspension_lag": {
+                    "strategy_id": "betfair_suspension_lag",
+                    "label": "Suspension-Lag",
+                    "candidate_count": 3,
+                }
+            },
+            "polymarket_signal_layer": {
+                "feed_health": "healthy",
+                "matched_events": 2,
+            },
+        }
+    )
+    betfair_store.write_readiness({"status": "monitoring"})
+
+    client = TestClient(command_center.app)
+    lag = client.get("/api/strategies/betfair_suspension_lag/state").json()
+    poly = client.get("/api/signals/polymarket/state").json()
+
+    assert lag["state"]["candidate_count"] == 3
+    assert poly["matched_events"] == 2
+
+
 def test_emit_snapshot_notifications_sends_closed_trade_alert(monkeypatch):
     sent = []
     monkeypatch.setattr(

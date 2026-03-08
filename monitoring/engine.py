@@ -132,6 +132,11 @@ class TradingEngine:
             "results": [],
             "metrics": {},
         }
+        self._strategy_state: Dict[str, Any] = {
+            "observed_at": None,
+            "strategy_books": {},
+            "polymarket_signal_layer": {},
+        }
         self._qa_agent: Any = None
 
         # Balance history: (timestamp_iso, balance_float) pairs
@@ -254,6 +259,12 @@ class TradingEngine:
                 "prediction_update_rejected",
             }:
                 self.record_event(kind, ev)
+
+    def on_strategy_state(self, payload: Dict[str, Any]) -> None:
+        if not payload:
+            return
+        with self._lock:
+            self._strategy_state = dict(payload)
 
     def on_architect(self, payload: Dict[str, Any]) -> None:
         """Called when learning architect runs a decision cycle."""
@@ -848,6 +859,12 @@ class TradingEngine:
             "gates": gates,
             "architect": architect,
             "qa": qa,
+            "strategy_books": dict(self._strategy_state.get("strategy_books") or {}),
+            "polymarket_signal_layer": dict(self._strategy_state.get("polymarket_signal_layer") or {}),
+            "external_signals": {
+                "observed_at": self._strategy_state.get("observed_at"),
+                "enabled": bool(getattr(config, "BETFAIR_EXTERNAL_SIGNALS_ENABLED", True)),
+            },
             "balance_history": balance_history,
             "effective_stake": round(effective_stake, 2) if effective_stake is not None else None,
         }
@@ -870,6 +887,7 @@ class TradingEngine:
             from strategy.prediction_engine import MultiModelPredictionManager
             from strategy.learning_architect import LearningArchitect
             from qa.live_qa_agent import LiveQAAgent
+            from betfair.strategies.information_arb_manager import BetfairInformationArbManager
 
             client = create_and_login()
             from data.market_catalogue import discover_markets
@@ -919,6 +937,7 @@ class TradingEngine:
             )
             candidate_logger = CandidateLogger(config.CANDIDATE_LOG_DIR) if config.CANDIDATE_LOG_ENABLED else None
             prediction_manager = None
+            info_arb_manager = BetfairInformationArbManager() if getattr(config, "BETFAIR_EXTERNAL_SIGNALS_ENABLED", True) else None
             learning_architect = LearningArchitect() if config.ARCHITECT_ENABLED else None
             qa_agent = LiveQAAgent() if config.QA_AGENT_ENABLED else None
             clv_tracker = CLVTracker(config.CLV_LOG_DIR) if config.CLV_ENABLED else None
@@ -1035,9 +1054,11 @@ class TradingEngine:
                         on_trade=lambda opp, result, scored=None: self.on_trade(opp, result, scored),
                         on_prediction=lambda payload: self.on_prediction(payload),
                         on_architect=lambda payload: self.on_architect(payload),
+                        on_strategy_state=lambda payload: self.on_strategy_state(payload),
                         market_metadata=market_metadata,
                         candidate_logger=candidate_logger,
                         prediction_manager=prediction_manager,
+                        info_arb_manager=info_arb_manager,
                         learning_architect=learning_architect,
                         poller_metrics_provider=lambda: dict(self._poller_metrics),
                     )

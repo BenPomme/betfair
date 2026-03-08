@@ -119,6 +119,47 @@ BETFAIR_STALE_HEAVY_THRESHOLD: float = float(os.getenv("BETFAIR_STALE_HEAVY_THRE
 BETFAIR_FORCE_REFRESH_ON_DEGRADE: bool = os.getenv("BETFAIR_FORCE_REFRESH_ON_DEGRADE", "true").lower() == "true"
 BETFAIR_RELOGIN_ON_DEGRADE: bool = os.getenv("BETFAIR_RELOGIN_ON_DEGRADE", "true").lower() == "true"
 BETFAIR_MAX_RECOVERY_ATTEMPTS: int = int(os.getenv("BETFAIR_MAX_RECOVERY_ATTEMPTS", "2"))
+BETFAIR_EXTERNAL_SIGNALS_ENABLED: bool = os.getenv("BETFAIR_EXTERNAL_SIGNALS_ENABLED", "true").lower() == "true"
+BETFAIR_SIGNAL_OBSERVE_ONLY: bool = os.getenv("BETFAIR_SIGNAL_OBSERVE_ONLY", "true").lower() == "true"
+BETFAIR_EVENT_MATCH_MIN_CONFIDENCE: float = float(os.getenv("BETFAIR_EVENT_MATCH_MIN_CONFIDENCE", "0.80"))
+BETFAIR_EXTERNAL_REFRESH_SECONDS: int = int(os.getenv("BETFAIR_EXTERNAL_REFRESH_SECONDS", "30"))
+BETFAIR_STRATEGY_LOG_LABEL_DELAY_SECONDS: str = os.getenv(
+    "BETFAIR_STRATEGY_LOG_LABEL_DELAY_SECONDS", "2,5,15,60"
+)
+BETFAIR_EXTERNAL_SOURCE_HTTP_TIMEOUT_SECONDS: float = float(
+    os.getenv("BETFAIR_EXTERNAL_SOURCE_HTTP_TIMEOUT_SECONDS", "10.0")
+)
+POLYMARKET_ENABLED: bool = os.getenv("POLYMARKET_ENABLED", "true").lower() == "true"
+POLYMARKET_SPORTS_ONLY: bool = os.getenv("POLYMARKET_SPORTS_ONLY", "true").lower() == "true"
+POLYMARKET_ROLE: str = os.getenv("POLYMARKET_ROLE", "confirmation").strip().lower()
+POLYMARKET_HTTP_BASE_URL: str = os.getenv(
+    "POLYMARKET_HTTP_BASE_URL", "https://gamma-api.polymarket.com"
+)
+POLYMARKET_WS_URL: str = os.getenv("POLYMARKET_WS_URL", "wss://ws-subscriptions-clob.polymarket.com/ws")
+POLYMARKET_MATCH_MIN_CONFIDENCE: float = float(os.getenv("POLYMARKET_MATCH_MIN_CONFIDENCE", "0.85"))
+POLYMARKET_QUOTE_MAX_AGE_SECONDS: int = int(os.getenv("POLYMARKET_QUOTE_MAX_AGE_SECONDS", "15"))
+POLYMARKET_SIGNAL_WEIGHT: float = float(os.getenv("POLYMARKET_SIGNAL_WEIGHT", "0.15"))
+POLYMARKET_MAX_EVENTS: int = int(os.getenv("POLYMARKET_MAX_EVENTS", "250"))
+BETFAIR_SUSPENSION_LAG_ENABLED: bool = os.getenv("BETFAIR_SUSPENSION_LAG_ENABLED", "true").lower() == "true"
+BETFAIR_SUSPENSION_LAG_MODE: str = os.getenv("BETFAIR_SUSPENSION_LAG_MODE", "observe").strip().lower()
+BETFAIR_SUSPENSION_LAG_MIN_CONFIDENCE: float = float(
+    os.getenv("BETFAIR_SUSPENSION_LAG_MIN_CONFIDENCE", "0.70")
+)
+BETFAIR_SUSPENSION_LAG_MIN_SIGNAL_STRENGTH: float = float(
+    os.getenv("BETFAIR_SUSPENSION_LAG_MIN_SIGNAL_STRENGTH", "0.12")
+)
+BETFAIR_CROSSBOOK_CONSENSUS_ENABLED: bool = os.getenv(
+    "BETFAIR_CROSSBOOK_CONSENSUS_ENABLED", "true"
+).lower() == "true"
+BETFAIR_CROSSBOOK_CONSENSUS_MODE: str = os.getenv(
+    "BETFAIR_CROSSBOOK_CONSENSUS_MODE", "observe"
+).strip().lower()
+BETFAIR_CONSENSUS_MIN_SOURCES: int = int(os.getenv("BETFAIR_CONSENSUS_MIN_SOURCES", "3"))
+BETFAIR_TIMEZONE_DECAY_ENABLED: bool = os.getenv("BETFAIR_TIMEZONE_DECAY_ENABLED", "true").lower() == "true"
+BETFAIR_TIMEZONE_DECAY_MODE: str = os.getenv("BETFAIR_TIMEZONE_DECAY_MODE", "observe").strip().lower()
+DASHBOARD_STRATEGY_EXPLAINERS_ENABLED: bool = os.getenv(
+    "DASHBOARD_STRATEGY_EXPLAINERS_ENABLED", "true"
+).lower() == "true"
 
 # --- Cross-market arbitrage ---
 CROSS_MARKET_ENABLED: bool = os.getenv("CROSS_MARKET_ENABLED", "true").lower() == "true"

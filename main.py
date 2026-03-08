@@ -38,6 +38,7 @@ from strategy.learning_architect import LearningArchitect
 from strategy.prediction_engine import MultiModelPredictionManager
 from qa.live_qa_agent import LiveQAAgent
 from strategy.audit_agent import AuditAgent
+from betfair.strategies.information_arb_manager import BetfairInformationArbManager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -252,9 +253,11 @@ async def run_loop(
     on_trade: Optional[Callable[..., None]] = None,
     on_prediction: Optional[Callable[..., None]] = None,
     on_architect: Optional[Callable[..., None]] = None,
+    on_strategy_state: Optional[Callable[..., None]] = None,
     market_metadata: Optional[dict] = None,
     candidate_logger: Optional[CandidateLogger] = None,
     prediction_manager: Optional[MultiModelPredictionManager] = None,
+    info_arb_manager: Optional[BetfairInformationArbManager] = None,
     learning_architect: Optional[LearningArchitect] = None,
     poller_metrics_provider: Optional[Callable[[], dict]] = None,
 ) -> None:
@@ -338,6 +341,18 @@ async def run_loop(
         if not market_ids:
             await asyncio.sleep(max(1.0, scan_interval_seconds))
             continue
+        if info_arb_manager is not None:
+            try:
+                strategy_state = await info_arb_manager.evaluate_cycle(
+                    market_ids=market_ids,
+                    market_metadata=meta,
+                    price_cache=price_cache,
+                    candidate_logger=candidate_logger,
+                )
+                if on_strategy_state:
+                    on_strategy_state(strategy_state)
+            except Exception as e:
+                logger.exception("Information-arbitrage cycle error: %s", e)
         poller_metrics = poller_metrics_provider() if poller_metrics_provider else {}
         cycle_sec = float((poller_metrics or {}).get("cycle_duration_sec", 0.0) or 0.0)
         dynamic_prematch_stale = max(
@@ -855,6 +870,7 @@ def main() -> None:
     )
     candidate_logger = CandidateLogger(config.CANDIDATE_LOG_DIR) if config.CANDIDATE_LOG_ENABLED else None
     prediction_manager = None
+    info_arb_manager = BetfairInformationArbManager() if getattr(config, "BETFAIR_EXTERNAL_SIGNALS_ENABLED", True) else None
     learning_architect = LearningArchitect() if config.ARCHITECT_ENABLED else None
     qa_agent = LiveQAAgent() if config.QA_AGENT_ENABLED else None
     audit_agent = AuditAgent()
@@ -953,6 +969,7 @@ def main() -> None:
                 market_metadata=market_metadata,
                 candidate_logger=candidate_logger,
                 prediction_manager=prediction_manager,
+                info_arb_manager=info_arb_manager,
                 learning_architect=learning_architect,
                 poller_metrics_provider=lambda: dict(_poller_metrics),
             )
