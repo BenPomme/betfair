@@ -618,11 +618,13 @@
             ${metricCard('Feed Health', polymarket.feed_health || 'idle')}
             ${metricCard('Matched Events', polymarket.matched_events || 0)}
             ${metricCard('Unmatched Events', polymarket.unmatched_events || 0)}
+            ${metricCard('Second Source Events', polymarket.thesportsdb_event_count || 0)}
             ${metricCard('Quote Freshness', polymarket.quote_freshness_sec != null ? `${compactNumber(polymarket.quote_freshness_sec)}s` : 'n/a')}
             ${metricCard('Confirmation Hit Rate', pct((Number(polymarket.confirmation_hit_rate || 0) || 0) * 100))}
             ${metricCard('Useful Sports', (polymarket.useful_sports || []).join(', ') || 'n/a')}
           </div>
           <div class="muted">Source health: ${Object.entries(polymarket.source_health || {}).map(([name, state]) => `${name}=${state.status}`).join(', ') || 'n/a'}</div>
+          <div class="muted" style="margin-top:8px;">Confirmation quality: ${polymarket.source_mix_quality || 'single_source'}.</div>
         </div>`;
 
       return `

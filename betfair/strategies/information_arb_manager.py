@@ -8,11 +8,16 @@ from typing import Any, Dict, List, Optional, Tuple
 import config
 from core.types import PriceSnapshot
 from data.candidate_logger import CandidateLogger, build_strategy_record
+from portfolio.state_store import PortfolioStateStore
 
+from betfair.models.polymarket_binary_ranker import PolymarketBinaryRanker
 from betfair.signals.external_event_ingest import ExternalSignalCoordinator
 from betfair.signals.external_quote_ingest import build_consensus
 from betfair.strategies.crossbook_consensus import evaluate_crossbook_consensus
-from betfair.strategies.polymarket_binary_research import evaluate_polymarket_binary_research
+from betfair.strategies.polymarket_binary_research import (
+    build_polymarket_binary_candidates,
+    summarize_polymarket_binary_research,
+)
 from betfair.strategies.suspension_lag import evaluate_suspension_lag
 from betfair.strategies.timezone_decay import evaluate_timezone_decay
 
@@ -56,6 +61,8 @@ class BetfairInformationArbManager:
         self._last_refresh_ts: Optional[datetime] = None
         self._refresh_seconds = max(10, int(getattr(config, "BETFAIR_EXTERNAL_REFRESH_SECONDS", 30)))
         self._pending_labels: Dict[str, Dict[str, Any]] = {}
+        self._runtime_store = PortfolioStateStore("betfair_core")
+        self._ranker = PolymarketBinaryRanker("betfair_core")
         self._state: Dict[str, Any] = self._empty_state()
         self._seen_keys: Dict[Tuple[str, str, str], datetime] = {}
 
@@ -129,8 +136,31 @@ class BetfairInformationArbManager:
                 "confirmation_hit_rate": 0.0,
                 "useful_sports": [],
                 "source_health": {},
+                "source_mix_quality": "single_source",
             },
         }
+
+    def _polymarket_label_summary(self) -> Dict[str, Any]:
+        labels = self._ranker.load_labels(limit=5000)
+        if not labels:
+            return {"count": 0, "win_rate": 0.0, "avg_realized_edge": 0.0, "realized_net_pnl": 0.0, "pending_labels": len(self._ranker.load_pending())}
+        wins = sum(1 for row in labels if float(row.get("realized_edge", 0.0) or 0.0) > 0)
+        total_edge = sum(float(row.get("realized_edge", 0.0) or 0.0) for row in labels)
+        return {
+            "count": len(labels),
+            "win_rate": round(wins / len(labels), 4),
+            "avg_realized_edge": round(total_edge / len(labels), 6),
+            "realized_net_pnl": round(total_edge, 6),
+            "pending_labels": len(self._ranker.load_pending()),
+        }
+
+    @staticmethod
+    def _confidence_level(source_count: int, polymarket_confirmed: bool) -> str:
+        if source_count >= 2 and polymarket_confirmed:
+            return "high"
+        if polymarket_confirmed or source_count >= 2:
+            return "medium"
+        return "low"
 
     async def _refresh_signals(self, market_metadata: Dict[str, Dict[str, str]]) -> Dict[str, Any]:
         now = _utc_now()
@@ -264,6 +294,10 @@ class BetfairInformationArbManager:
         candidates = float(book["candidate_count"] or 0)
         return round(min(100.0, (candidates / max(1.0, min_target)) * 100.0), 2)
 
+    def _persist_polymarket_research_state(self, state: Dict[str, Any]) -> None:
+        path = self._runtime_store.runtime_dir / "polymarket_binary_research_state.json"
+        self._runtime_store.write_json(path, state)
+
     async def evaluate_cycle(
         self,
         *,
@@ -277,6 +311,7 @@ class BetfairInformationArbManager:
         self._state["observed_at"] = _utc_now_iso()
         signal_state = await self._refresh_signals(market_metadata)
         quotes = list(signal_state.get("quotes") or [])
+        research_quotes = list(signal_state.get("research_quotes") or quotes)
         matches = list(signal_state.get("matches") or [])
         matches_by_market: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
         for match in matches:
@@ -300,42 +335,100 @@ class BetfairInformationArbManager:
             or 0
         )
         unmatched = polymarket_event_count - len(matches)
+        unique_betfair_events = {
+            str(match.get("betfair_event_id") or "")
+            for match in matches
+            if str(match.get("betfair_event_id") or "")
+        }
+        matched_polymarket_event_keys = {
+            str(match.get("external_event_key") or "")
+            for match in matches
+            if str(match.get("external_source") or "") == "polymarket"
+        }
         self._state["polymarket_signal_layer"].update(
             {
                 "healthy": bool(signal_state.get("polymarket", {}).get("healthy", False)),
                 "feed_health": "healthy" if signal_state.get("polymarket", {}).get("healthy", False) else "degraded",
-                "matched_events": len(matches),
-                "unmatched_events": max(0, unmatched),
+                "matched_events": len(unique_betfair_events),
+                "unmatched_events": max(0, polymarket_event_count - len(matched_polymarket_event_keys)),
                 "quote_freshness_sec": 0.0 if signal_state.get("polymarket", {}).get("healthy", False) else None,
-                "confirmation_hit_rate": round(len(matches) / max(1, polymarket_event_count or 1), 4),
+                "confirmation_hit_rate": round(len(matched_polymarket_event_keys) / max(1, polymarket_event_count or 1), 4),
                 "useful_sports": list(signal_state.get("polymarket", {}).get("sports") or []),
                 "source_health": signal_state.get("source_health") or {},
+                "source_mix_quality": "multi_source" if any(str(match.get("external_source")) == "thesportsdb" for match in matches) else "single_source",
                 "observed_at": signal_state.get("observed_at"),
+                "thesportsdb_event_count": int(signal_state.get("thesportsdb", {}).get("filtered_event_count") or signal_state.get("thesportsdb", {}).get("event_count", 0) or 0),
             }
         )
-        polymarket_research = evaluate_polymarket_binary_research(quotes)
+        label_stats = self._ranker.update_labels(
+            current_quotes=research_quotes,
+            min_elapsed_seconds=int(getattr(config, "POLYMARKET_BINARY_RESEARCH_LABEL_HORIZON_SECONDS", 120)),
+        )
+        model_state = self._ranker.load_model()
+        raw_binary_candidates = build_polymarket_binary_candidates(research_quotes)
+        scored_binary_candidates: List[Dict[str, Any]] = []
+        score_threshold = float(getattr(config, "POLYMARKET_BINARY_RESEARCH_MIN_SCORE", -0.01))
+        for candidate in raw_binary_candidates:
+            score = self._ranker.score_candidate(candidate, model=model_state)
+            candidate = dict(candidate)
+            candidate["strategy_context"] = {
+                **dict(candidate.get("strategy_context") or {}),
+                "bucket": score["bucket"],
+                "bucket_score": score["bucket_score"],
+                "bucket_confidence": score["confidence"],
+                "bucket_avg_realized_edge": score["bucket_avg_realized_edge"],
+            }
+            candidate["expected_edge"] = max(float(candidate.get("expected_edge", 0.0) or 0.0), float(score["empirical_expected_edge"]))
+            if float(score["bucket_score"]) < score_threshold and int(score["learned_count"]) >= 5:
+                continue
+            scored_binary_candidates.append(candidate)
+        self._ranker.track_candidates(scored_binary_candidates)
+        label_summary = self._polymarket_label_summary()
+        label_summary["pending_labels"] = label_stats.get("remaining_pending", label_summary.get("pending_labels", 0))
+        polymarket_research = summarize_polymarket_binary_research(
+            research_quotes,
+            sorted(scored_binary_candidates, key=lambda item: float(item.get("expected_edge", 0.0) or 0.0), reverse=True),
+            model_state=model_state,
+            label_state=label_summary,
+        )
+        self._persist_polymarket_research_state(polymarket_research)
         self._state["strategy_books"]["polymarket_binary_research"] = polymarket_research
 
         for market_id, snapshot in snapshots.items():
             meta = market_metadata.get(market_id, {})
-            for match in matches_by_market.get(market_id, []):
-                quote = next(
-                    (
-                        row for row in quotes
-                        if str(row.get("event_slug") or row.get("event_key") or "") == str(match.get("external_event_key") or "")
-                    ),
-                    {},
+            market_matches = list(matches_by_market.get(market_id, []))
+            if market_matches:
+                grouped_sources = sorted({str(match.get("external_source") or "unknown") for match in market_matches})
+                best_polymarket_match = max(
+                    (match for match in market_matches if str(match.get("external_source") or "") == "polymarket"),
+                    key=lambda match: float(match.get("match_confidence", 0.0) or 0.0),
+                    default=None,
                 )
-                matched_event = dict(match)
-                matched_event.update(quote)
-                matched_event["quote_freshness_sec"] = 0.0
-                candidate = evaluate_suspension_lag(
-                    matched_event=matched_event,
-                    snapshot=snapshot,
-                    market_meta=meta,
-                )
-                if candidate:
-                    self._register_candidate(candidate=candidate, book=self._book("betfair_suspension_lag"), candidate_logger=candidate_logger)
+                if best_polymarket_match is not None:
+                    quote = next(
+                        (
+                            row for row in quotes
+                            if str(row.get("event_slug") or row.get("event_key") or "") == str(best_polymarket_match.get("external_event_key") or "")
+                        ),
+                        {},
+                    )
+                    matched_event = dict(best_polymarket_match)
+                    matched_event.update(quote)
+                    matched_event["quote_freshness_sec"] = 0.0
+                    matched_event["source_mix"] = ["betfair_suspend_resume"] + grouped_sources
+                    matched_event["external_source_count"] = len(grouped_sources)
+                    matched_event["polymarket_confirmed"] = "polymarket" in grouped_sources
+                    matched_event["event_confirmation_level"] = self._confidence_level(
+                        len(grouped_sources),
+                        bool(matched_event["polymarket_confirmed"]),
+                    )
+                    candidate = evaluate_suspension_lag(
+                        matched_event=matched_event,
+                        snapshot=snapshot,
+                        market_meta=meta,
+                    )
+                    if candidate:
+                        self._register_candidate(candidate=candidate, book=self._book("betfair_suspension_lag"), candidate_logger=candidate_logger)
             for consensus_row in consensus.values():
                 if str(consensus_row.get("event_key") or "") not in {
                     str(match.get("external_event_key") or "") for match in matches_by_market.get(market_id, [])
@@ -364,7 +457,7 @@ class BetfairInformationArbManager:
             if strategy_id == "betfair_crossbook_consensus" and not self._book(strategy_id)["candidate_count"]:
                 self._book(strategy_id)["top_blockers"] = ["not_enough_external_quote_sources"]
             elif strategy_id == "betfair_suspension_lag" and not self._book(strategy_id)["candidate_count"]:
-                self._book(strategy_id)["top_blockers"] = ["awaiting_matched_polymarket_sports_events"]
+                self._book(strategy_id)["top_blockers"] = ["awaiting_multi_source_event_confirmation"]
             elif strategy_id == "betfair_timezone_decay" and not self._book(strategy_id)["candidate_count"]:
                 self._book(strategy_id)["top_blockers"] = ["market_ops_signal_below_threshold"]
         return self.state()

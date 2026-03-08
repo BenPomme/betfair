@@ -10,6 +10,7 @@ from betfair.signals.event_linker import EventLinker
 from betfair.signals.external_quote_ingest import build_consensus
 from betfair.signals.polymarket_adapter import PolymarketAdapter
 from betfair.signals.source_health import SourceHealthTracker
+from betfair.signals.thesportsdb_adapter import TheSportsDBAdapter
 
 
 def _utc_now_iso() -> str:
@@ -54,19 +55,23 @@ class ExternalSignalCoordinator:
     def __init__(self) -> None:
         self._health = SourceHealthTracker()
         self._polymarket = PolymarketAdapter()
+        self._thesportsdb = TheSportsDBAdapter()
         self._linker = EventLinker()
         self._last_snapshot: Dict[str, Any] = {
             "observed_at": None,
             "events": [],
             "quotes": [],
+            "research_events": [],
+            "research_quotes": [],
             "matches": [],
             "consensus": {},
             "source_health": {},
             "polymarket": {"healthy": False, "event_count": 0},
+            "thesportsdb": {"healthy": False, "event_count": 0},
         }
 
     @staticmethod
-    def _coerce_event_rows(rows: Iterable[Dict[str, Any]]) -> List[ExternalEvent]:
+    def _coerce_event_rows(rows: Iterable[Dict[str, Any]], *, source: str) -> List[ExternalEvent]:
         events: List[ExternalEvent] = []
         for row in rows:
             if not isinstance(row, dict):
@@ -75,15 +80,15 @@ class ExternalSignalCoordinator:
             event_key = str(row.get("event_slug") or row.get("event_key") or title)
             events.append(
                 ExternalEvent(
-                    source="polymarket",
+                    source=source,
                     sport=str(row.get("sport") or "unknown"),
-                    event_key=event_key,
-                    event_type="price_move_confirmation",
+                    event_key=str(row.get("event_key") or row.get("event_slug") or title),
+                    event_type=str(row.get("event_type") or "price_move_confirmation"),
                     title=title,
-                    participants=list(row.get("teams_or_players") or []),
-                    scheduled_start=row.get("start_time"),
+                    participants=list(row.get("participants") or row.get("teams_or_players") or []),
+                    scheduled_start=row.get("scheduled_start") or row.get("start_time"),
                     observed_at=str(row.get("observed_at") or _utc_now_iso()),
-                    confidence=float(row.get("source_confidence", 0.5) or 0.5),
+                    confidence=float(row.get("confidence", row.get("source_confidence", 0.5)) or 0.5),
                     raw_payload=dict(row),
                 )
             )
@@ -119,59 +124,98 @@ class ExternalSignalCoordinator:
                 "observed_at": _utc_now_iso(),
                 "events": [],
                 "quotes": [],
+                "research_events": [],
+                "research_quotes": [],
                 "matches": [],
                 "consensus": {},
                 "source_health": {},
                 "polymarket": {"healthy": False, "disabled": True, "event_count": 0},
+                "thesportsdb": {"healthy": False, "disabled": True, "event_count": 0},
             }
             return self._last_snapshot
 
         events: List[ExternalEvent] = []
         quotes: List[ExternalQuote] = []
+        research_events: List[Dict[str, Any]] = []
+        research_quotes: List[Dict[str, Any]] = []
         matches: List[Dict[str, Any]] = []
         polymarket_state: Dict[str, Any] = {"healthy": False, "event_count": 0}
+        thesportsdb_state: Dict[str, Any] = {"healthy": False, "event_count": 0}
+        allowed_sports = {
+            str(meta.get("sport_name") or meta.get("sport") or "").strip().lower()
+            for meta in (market_metadata or {}).values()
+            if str(meta.get("sport_name") or meta.get("sport") or "").strip()
+        }
+        betfair_events = self._linker.build_betfair_events(market_metadata)
 
         if getattr(config, "POLYMARKET_ENABLED", True):
             try:
                 polymarket_snapshot = await self._polymarket.fetch_snapshot()
-                allowed_sports = {
-                    str(meta.get("sport_name") or meta.get("sport") or "").strip().lower()
-                    for meta in (market_metadata or {}).values()
-                    if str(meta.get("sport_name") or meta.get("sport") or "").strip()
-                }
                 raw_event_rows = list(polymarket_snapshot.get("events") or [])
                 raw_quote_rows = list(polymarket_snapshot.get("quotes") or [])
+                research_events.extend(raw_event_rows)
+                research_quotes.extend(raw_quote_rows)
                 if allowed_sports:
                     raw_event_rows = [row for row in raw_event_rows if str(row.get("sport") or "").lower() in allowed_sports]
                     raw_quote_rows = [row for row in raw_quote_rows if str(row.get("sport") or "").lower() in allowed_sports]
                 polymarket_state = dict(polymarket_snapshot)
                 polymarket_state["filtered_event_count"] = len(raw_event_rows)
                 polymarket_state["filtered_quote_count"] = len(raw_quote_rows)
-                events = self._coerce_event_rows(raw_event_rows)
+                normalized_events = self._coerce_event_rows(raw_event_rows, source="polymarket")
+                events.extend(normalized_events)
                 quotes = self._coerce_quote_rows(raw_quote_rows)
-                self._health.mark_success("polymarket", item_count=len(events))
-                betfair_events = self._linker.build_betfair_events(market_metadata)
-                matches = [
+                self._health.mark_success("polymarket", item_count=len(normalized_events))
+                matches.extend(
+                    [
                     match.to_dict()
                     for match in self._linker.match_events(
                         source="polymarket",
-                        external_events=[event.to_dict() for event in events],
+                        external_events=[event.to_dict() for event in normalized_events],
                         betfair_events=betfair_events,
                     )
-                ]
+                    ]
+                )
             except Exception as exc:
                 self._health.mark_error("polymarket", exc)
                 polymarket_state = {"healthy": False, "error": str(exc), "event_count": 0}
+
+        if getattr(config, "THESPORTSDB_ENABLED", True):
+            try:
+                thesportsdb_snapshot = await self._thesportsdb.fetch_snapshot(sorted(allowed_sports))
+                raw_event_rows = list(thesportsdb_snapshot.get("events") or [])
+                if allowed_sports:
+                    raw_event_rows = [row for row in raw_event_rows if str(row.get("sport") or "").lower() in allowed_sports]
+                thesportsdb_state = dict(thesportsdb_snapshot)
+                thesportsdb_state["filtered_event_count"] = len(raw_event_rows)
+                normalized_rows = self._coerce_event_rows(raw_event_rows, source="thesportsdb")
+                events.extend(normalized_rows)
+                self._health.mark_success("thesportsdb", item_count=len(normalized_rows))
+                matches.extend(
+                    [
+                        match.to_dict()
+                        for match in self._linker.match_events(
+                            source="thesportsdb",
+                            external_events=[event.to_dict() for event in normalized_rows],
+                            betfair_events=betfair_events,
+                        )
+                    ]
+                )
+            except Exception as exc:
+                self._health.mark_error("thesportsdb", exc)
+                thesportsdb_state = {"healthy": False, "error": str(exc), "event_count": 0}
 
         consensus = build_consensus([quote.to_dict() for quote in quotes])
         self._last_snapshot = {
             "observed_at": _utc_now_iso(),
             "events": [event.to_dict() for event in events],
             "quotes": [quote.to_dict() for quote in quotes],
+            "research_events": research_events,
+            "research_quotes": research_quotes,
             "matches": matches,
             "consensus": consensus,
             "source_health": self._health.snapshot(),
             "polymarket": polymarket_state,
+            "thesportsdb": thesportsdb_state,
         }
         return self._last_snapshot
 

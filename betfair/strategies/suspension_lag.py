@@ -44,6 +44,8 @@ def evaluate_suspension_lag(
         or matched_event.get("source_confidence")
         or 0.0
     )
+    if external_prob <= 0:
+        return None
     signal_strength = abs(external_prob - implied_prob)
     spread = 0.0
     if float(favorite.best_lay_price or 0) > 1.01:
@@ -56,10 +58,12 @@ def evaluate_suspension_lag(
         signal_strength += 0.02
     if spread > 0.15:
         signal_strength -= 0.03
+    source_mix = list(matched_event.get("source_mix") or ["polymarket", "betfair_suspend_resume"])
+    external_source_count = int(matched_event.get("external_source_count", 1) or 1)
     confidence = "low"
     if signal_strength >= float(config.BETFAIR_SUSPENSION_LAG_MIN_SIGNAL_STRENGTH):
         confidence = "medium"
-    if signal_strength >= (float(config.BETFAIR_SUSPENSION_LAG_MIN_SIGNAL_STRENGTH) + 0.08):
+    if signal_strength >= (float(config.BETFAIR_SUSPENSION_LAG_MIN_SIGNAL_STRENGTH) + 0.08) or external_source_count >= 2:
         confidence = "high"
     if signal_strength < 0.05:
         return None
@@ -75,9 +79,14 @@ def evaluate_suspension_lag(
         "signal_strength": round(signal_strength, 6),
         "expected_edge": round(signal_strength * 100.0, 4),
         "fillability_score": round(max(0.0, min(1.0, float(favorite.available_to_back or 0) / 200.0)), 4),
-        "source_mix": ["betfair_suspend_resume", "polymarket_sports"],
-        "external_source_count": 1,
-        "polymarket_confirmed": True,
+        "source_mix": source_mix,
+        "external_source_count": external_source_count,
+        "polymarket_confirmed": bool(
+            matched_event.get(
+                "polymarket_confirmed",
+                ("probability" in matched_event) or ("last_trade_price" in matched_event),
+            )
+        ),
         "match_confidence": round(match_confidence, 4),
         "quote_freshness_sec": quote_freshness_sec,
         "event_confirmation_level": confidence,
@@ -86,7 +95,7 @@ def evaluate_suspension_lag(
         "entry_back_odds": float(favorite.best_back_price),
         "entry_lay_odds": float(favorite.best_lay_price or 0.0),
         "entry_market_status": str(snapshot.market_status),
-        "reason": "polymarket_move_vs_betfair_favorite",
+        "reason": "multi_source_confirmation_vs_betfair_favorite" if external_source_count >= 2 else "polymarket_move_vs_betfair_favorite",
         "strategy_context": {
             "market_type": str(market_meta.get("market_type") or ""),
             "competition": str(market_meta.get("competition_name") or ""),
@@ -95,5 +104,6 @@ def evaluate_suspension_lag(
             "favorite_implied_prob": round(implied_prob, 6),
             "external_prob": round(external_prob, 6),
             "spread": round(spread, 6),
+            "confirmation_sources": source_mix,
         },
     }
