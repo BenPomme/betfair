@@ -134,9 +134,21 @@ class ExternalSignalCoordinator:
         if getattr(config, "POLYMARKET_ENABLED", True):
             try:
                 polymarket_snapshot = await self._polymarket.fetch_snapshot()
+                allowed_sports = {
+                    str(meta.get("sport_name") or meta.get("sport") or "").strip().lower()
+                    for meta in (market_metadata or {}).values()
+                    if str(meta.get("sport_name") or meta.get("sport") or "").strip()
+                }
+                raw_event_rows = list(polymarket_snapshot.get("events") or [])
+                raw_quote_rows = list(polymarket_snapshot.get("quotes") or [])
+                if allowed_sports:
+                    raw_event_rows = [row for row in raw_event_rows if str(row.get("sport") or "").lower() in allowed_sports]
+                    raw_quote_rows = [row for row in raw_quote_rows if str(row.get("sport") or "").lower() in allowed_sports]
                 polymarket_state = dict(polymarket_snapshot)
-                events = self._coerce_event_rows(polymarket_snapshot.get("events") or [])
-                quotes = self._coerce_quote_rows(polymarket_snapshot.get("quotes") or [])
+                polymarket_state["filtered_event_count"] = len(raw_event_rows)
+                polymarket_state["filtered_quote_count"] = len(raw_quote_rows)
+                events = self._coerce_event_rows(raw_event_rows)
+                quotes = self._coerce_quote_rows(raw_quote_rows)
                 self._health.mark_success("polymarket", item_count=len(events))
                 betfair_events = self._linker.build_betfair_events(market_metadata)
                 matches = [

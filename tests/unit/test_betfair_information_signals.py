@@ -39,6 +39,38 @@ def test_event_linker_matches_polymarket_to_betfair_event():
     assert matches[0].betfair_event_id == "evt-1"
 
 
+def test_event_linker_can_match_selection_style_market():
+    linker = EventLinker(min_confidence=0.6)
+    betfair_events = linker.build_betfair_events(
+        {
+            "1.2": {
+                "event_id": "evt-2",
+                "event_name": "World Cup 2026 Qualifying",
+                "sport_name": "soccer",
+                "competition_name": "FIFA World Cup",
+                "market_start": "2026-03-10T20:00:00Z",
+                "market_name": "To Qualify",
+                "runner_names": ["Italy", "Netherlands", "Belgium"],
+            }
+        }
+    )
+    matches = linker.match_events(
+        source="polymarket",
+        external_events=[
+            {
+                "event_key": "italy-qualify-world-cup",
+                "title": "Will Italy qualify for the 2026 FIFA World Cup?",
+                "sport": "soccer",
+                "competition": "FIFA World Cup",
+                "scheduled_start": "2026-03-10T20:00:00Z",
+            }
+        ],
+        betfair_events=betfair_events,
+    )
+    assert len(matches) == 1
+    assert matches[0].betfair_event_id == "evt-2"
+
+
 def test_polymarket_adapter_parses_market_rows():
     rows = [
         {

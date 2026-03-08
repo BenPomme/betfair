@@ -18,13 +18,41 @@ logger = logging.getLogger(__name__)
 
 # Sport event type ID -> human name
 SPORT_NAMES: Dict[str, str] = {
-    "1": "Football",
+    "1": "Soccer",
     "2": "Tennis",
     "4": "Cricket",
     "7522": "Basketball",
     "7": "Horse Racing",
     "4339": "Greyhounds",
 }
+
+
+def get_event_types(client: Optional[Any] = None) -> List[Dict[str, Any]]:
+    if not HAS_BETFAIR or client is None:
+        return []
+    try:
+        from betfairlightweight.filters import market_filter
+
+        rows = client.betting.list_event_types(filter=market_filter())
+        event_types: List[Dict[str, Any]] = []
+        for row in rows or []:
+            event_type = getattr(row, "event_type", None)
+            event_type_id = str(getattr(event_type, "id", "") or "")
+            name = str(getattr(event_type, "name", "") or "")
+            market_count = int(getattr(row, "market_count", 0) or 0)
+            if event_type_id and name:
+                event_types.append(
+                    {
+                        "event_type_id": event_type_id,
+                        "sport_name": SPORT_NAMES.get(event_type_id, name),
+                        "market_count": market_count,
+                    }
+                )
+        event_types.sort(key=lambda item: int(item.get("market_count", 0) or 0), reverse=True)
+        return event_types
+    except Exception as e:
+        logger.warning("list_event_types failed: %s", e)
+        return []
 
 
 def get_market_catalogue(
@@ -35,6 +63,7 @@ def get_market_catalogue(
     all_sports: bool = False,
     market_type_codes: Optional[List[str]] = None,
     in_play_only: Optional[bool] = None,
+    sport_name: str = "",
 ) -> List[dict]:
     """
     Fetch market catalogue from Betfair REST API.
@@ -71,7 +100,7 @@ def get_market_catalogue(
         result = client.betting.list_market_catalogue(
             filter=market_filter_obj,
             max_results=max_results,
-            market_projection=["MARKET_DESCRIPTION", "RUNNER_DESCRIPTION", "EVENT", "MARKET_START_TIME"],
+            market_projection=["MARKET_DESCRIPTION", "RUNNER_DESCRIPTION", "EVENT", "MARKET_START_TIME", "COMPETITION"],
         )
         markets = []
         for m in result or []:
@@ -82,9 +111,12 @@ def get_market_catalogue(
                 "market_id": mid,
                 "market_name": getattr(m, "market_name", "") or "",
                 "event": getattr(m, "event", None),
+                "competition": getattr(m, "competition", None),
                 "runners": getattr(m, "runners", []) or [],
                 "market_start_time": getattr(m, "market_start_time", None),
                 "_description": getattr(m, "description", None),
+                "_sport_name": sport_name,
+                "_event_type_ids": list(event_type_ids or []),
             })
         return markets
     except Exception as e:
@@ -138,6 +170,9 @@ def discover_markets(
     # Keep room for in-play so we do not saturate with static pre-match markets.
     min_in_play = max(0, int(getattr(config, "SCAN_MIN_INPLAY_MARKETS", 0))) if include_in_play else 0
     min_in_play = min(min_in_play, max_total)
+    event_types = get_event_types(client)
+    if not event_types:
+        event_types = [{"event_type_id": "", "sport_name": "Unknown", "market_count": max_total}]
 
     seen_ids: set = set()
     market_ids: List[str] = []
@@ -173,6 +208,17 @@ def discover_markets(
             if allowed_market_types and market_type and market_type not in allowed_market_types:
                 continue
 
+            competition = m.get("competition")
+            competition_name = ""
+            competition_id = ""
+            if competition is not None:
+                if isinstance(competition, dict):
+                    competition_name = competition.get("name", "") or ""
+                    competition_id = str(competition.get("id", "") or "")
+                else:
+                    competition_name = getattr(competition, "name", "") or ""
+                    competition_id = str(getattr(competition, "id", "") or "")
+
             mst = m.get("market_start_time")
             if isinstance(mst, datetime):
                 if mst.tzinfo is None:
@@ -200,48 +246,67 @@ def discover_markets(
                 runner_names[mid] = rn
 
             metadata[mid] = {
-                "sport": "",
-                "sport_name": market_type or "Unknown",
+                "sport": (m.get("_sport_name") or "").lower(),
+                "sport_name": m.get("_sport_name") or "Unknown",
+                "event_type_id": str((m.get("_event_type_ids") or [""])[0] or ""),
                 "country": country,
                 "event_id": event_id,
                 "event_name": event_name,
+                "competition_id": competition_id,
+                "competition_name": competition_name,
                 "market_name": m.get("market_name", ""),
                 "market_start": mst.isoformat() if hasattr(mst, "isoformat") else str(mst) if mst else "",
                 "market_type": market_type,
                 "runner_count": len(m.get("runners", [])),
+                "runner_names": list(rn.values()),
             }
 
     pre_match_target = max(0, max_total - min_in_play)
 
-    # Fetch 1: pre-match (all sports, all countries, no filters)
-    try:
-        pre_match_raw = get_market_catalogue(
-            client=client,
-            all_sports=True,
-            max_results=min(max(pre_match_target, 1), BATCH_SIZE),
-            in_play_only=False,
-            market_type_codes=allowed_market_types or None,
-        )
-        _extract_and_add(pre_match_raw, allow_past_start=False)
-        logger.info("discover_markets: %d pre-match markets", len(pre_match_raw))
-    except Exception as e:
-        logger.warning("discover_markets pre-match fetch failed: %s", e)
+    def _scan_by_event_types(*, in_play_only: bool, target: int, allow_past_start: bool) -> None:
+        slots_remaining = max(0, target)
+        if slots_remaining <= 0:
+            return
+        for event_type in event_types:
+            if len(market_ids) >= max_total or slots_remaining <= 0:
+                break
+            event_type_id = str(event_type.get("event_type_id") or "")
+            sport_name = str(event_type.get("sport_name") or "Unknown")
+            try:
+                rows = get_market_catalogue(
+                    client=client,
+                    event_type_ids=[event_type_id] if event_type_id else None,
+                    country_code=None,
+                    max_results=min(max(slots_remaining, 1), BATCH_SIZE),
+                    all_sports=not bool(event_type_id),
+                    in_play_only=in_play_only,
+                    market_type_codes=allowed_market_types or None,
+                    sport_name=sport_name,
+                )
+                before = len(market_ids)
+                _extract_and_add(rows, allow_past_start=allow_past_start)
+                added = len(market_ids) - before
+                slots_remaining = max(0, target - len(market_ids))
+                if added > 0:
+                    logger.info(
+                        "discover_markets: %d %s markets from %s",
+                        added,
+                        "in-play" if in_play_only else "pre-match",
+                        sport_name,
+                    )
+            except Exception as e:
+                logger.warning(
+                    "discover_markets %s fetch failed for %s: %s",
+                    "in-play" if in_play_only else "pre-match",
+                    sport_name,
+                    e,
+                )
 
-    # Fetch 2: in-play (separate call since in_play_only is a different filter)
+    _scan_by_event_types(in_play_only=False, target=pre_match_target, allow_past_start=False)
+
     if include_in_play and len(market_ids) < max_total:
-        try:
-            in_play_slots = max(min_in_play, max_total - len(market_ids))
-            in_play_raw = get_market_catalogue(
-                client=client,
-                all_sports=True,
-                max_results=min(max(in_play_slots, 1), BATCH_SIZE),
-                in_play_only=True,
-                market_type_codes=allowed_market_types or None,
-            )
-            _extract_and_add(in_play_raw, allow_past_start=True)
-            logger.info("discover_markets: %d in-play markets", len(in_play_raw))
-        except Exception as e:
-            logger.warning("discover_markets in-play fetch failed: %s", e)
+        in_play_slots = max(min_in_play, max_total - len(market_ids))
+        _scan_by_event_types(in_play_only=True, target=len(market_ids) + in_play_slots, allow_past_start=True)
 
     # Fallback: if strict filters produced no markets, retry broader discovery.
     if not market_ids:
@@ -257,6 +322,7 @@ def discover_markets(
                 max_results=min(max_total, BATCH_SIZE),
                 in_play_only=False,
                 market_type_codes=None,
+                sport_name="Unknown",
             )
             _extract_and_add(pre_match_raw, allow_past_start=False)
             logger.info("discover_markets fallback: %d pre-match markets", len(pre_match_raw))
@@ -271,6 +337,7 @@ def discover_markets(
                     max_results=min(max_total - len(market_ids), BATCH_SIZE),
                     in_play_only=True,
                     market_type_codes=None,
+                    sport_name="Unknown",
                 )
                 _extract_and_add(in_play_raw, allow_past_start=True)
                 logger.info("discover_markets fallback: %d in-play markets", len(in_play_raw))

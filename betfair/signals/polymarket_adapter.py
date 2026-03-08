@@ -130,8 +130,9 @@ class PolymarketAdapter:
         return [title]
 
     @classmethod
-    def _parse_event_rows(cls, rows: Iterable[Dict[str, Any]]) -> List[PolymarketEvent]:
-        events: List[PolymarketEvent] = []
+    def _parse_event_rows(cls, rows: Iterable[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+        event_rows: List[Dict[str, Any]] = []
+        quote_rows: List[PolymarketEvent] = []
         observed_at = _utc_now_iso()
         for event_row in rows:
             if not isinstance(event_row, dict):
@@ -149,6 +150,18 @@ class PolymarketAdapter:
             event_slug = str(event_row.get("slug") or event_title)
             start = _parse_dt(event_row.get("startDate") or event_row.get("start_time"))
             competition = str(event_row.get("seriesSlug") or event_row.get("league") or event_row.get("competition") or "")
+            event_rows.append(
+                {
+                    "event_slug": event_slug,
+                    "sport": sport or "unknown",
+                    "title": event_title,
+                    "start_time": start.isoformat() if start else None,
+                    "teams_or_players": cls._extract_participants(event_title),
+                    "observed_at": observed_at,
+                    "source_confidence": 0.75,
+                    "competition": competition,
+                }
+            )
             for market_row in event_row.get("markets") or []:
                 if not isinstance(market_row, dict):
                     continue
@@ -164,7 +177,7 @@ class PolymarketAdapter:
                 if best_bid > 0 and best_ask > 0:
                     spread = abs(best_ask - best_bid)
                     confidence = max(0.3, min(0.95, 0.9 - spread))
-                events.append(
+                quote_rows.append(
                     PolymarketEvent(
                         event_slug=event_slug,
                         market_slug=market_slug,
@@ -179,9 +192,15 @@ class PolymarketAdapter:
                         observed_at=observed_at,
                         source_confidence=round(confidence, 4),
                         competition=competition,
-                    )
+                    ).to_dict()
                 )
-        return events
+                quote_rows[-1]["liquidity"] = float(market_row.get("liquidityNum") or market_row.get("liquidity") or 0.0)
+                quote_rows[-1]["one_day_price_change"] = float(market_row.get("oneDayPriceChange") or 0.0)
+                quote_rows[-1]["one_week_price_change"] = float(market_row.get("oneWeekPriceChange") or 0.0)
+        return {
+            "events": event_rows,
+            "quotes": quote_rows,
+        }
 
     @classmethod
     def _parse_market_rows(cls, rows: Iterable[Dict[str, Any]]) -> List[PolymarketEvent]:
@@ -199,7 +218,25 @@ class PolymarketAdapter:
                     "markets": [dict(row)],
                 }
             )
-        return cls._parse_event_rows(synthetic_events)
+        parsed = cls._parse_event_rows(synthetic_events)
+        return [
+            PolymarketEvent(
+                event_slug=row["event_slug"],
+                market_slug=row["market_slug"],
+                sport=row["sport"],
+                title=row["title"],
+                start_time=row["start_time"],
+                teams_or_players=list(row.get("teams_or_players") or []),
+                probability=float(row.get("probability", 0.0) or 0.0),
+                last_trade_price=float(row.get("last_trade_price", 0.0) or 0.0),
+                best_bid=float(row.get("best_bid", 0.0) or 0.0),
+                best_ask=float(row.get("best_ask", 0.0) or 0.0),
+                observed_at=row["observed_at"],
+                source_confidence=float(row.get("source_confidence", 0.0) or 0.0),
+                competition=str(row.get("competition") or ""),
+            )
+            for row in parsed.get("quotes", [])
+        ]
 
     async def fetch_snapshot(self) -> Dict[str, Any]:
         params = {"closed": "false", "limit": str(self.max_events), "tag_slug": "sports"}
@@ -207,17 +244,20 @@ class PolymarketAdapter:
             rows = await self._get_json(client, "/events", params=params)
         if not isinstance(rows, list):
             rows = rows.get("data") or rows.get("events") or []
-        events = self._parse_event_rows(rows)
-        sports = sorted({event.sport for event in events if event.sport and event.sport != "unknown"})
+        parsed = self._parse_event_rows(rows)
+        event_rows = parsed.get("events", [])
+        quote_rows = parsed.get("quotes", [])
+        sports = sorted({str(event.get("sport")) for event in event_rows if event.get("sport") and event.get("sport") != "unknown"})
         return {
             "provider": "polymarket",
             "role": config.POLYMARKET_ROLE,
             "observed_at": _utc_now_iso(),
-            "events": [event.to_dict() for event in events],
-            "quotes": [event.to_dict() for event in events],
+            "events": event_rows,
+            "quotes": quote_rows,
             "sports": sports,
-            "event_count": len(events),
-            "healthy": bool(events),
+            "event_count": len(event_rows),
+            "quote_count": len(quote_rows),
+            "healthy": bool(event_rows),
             "http_base_url": self.base_url,
-            "feed_health": "healthy" if events else "degraded",
+            "feed_health": "healthy" if event_rows else "degraded",
         }

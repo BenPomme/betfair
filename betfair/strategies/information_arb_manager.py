@@ -12,6 +12,7 @@ from data.candidate_logger import CandidateLogger, build_strategy_record
 from betfair.signals.external_event_ingest import ExternalSignalCoordinator
 from betfair.signals.external_quote_ingest import build_consensus
 from betfair.strategies.crossbook_consensus import evaluate_crossbook_consensus
+from betfair.strategies.polymarket_binary_research import evaluate_polymarket_binary_research
 from betfair.strategies.suspension_lag import evaluate_suspension_lag
 from betfair.strategies.timezone_decay import evaluate_timezone_decay
 
@@ -109,6 +110,12 @@ class BetfairInformationArbManager:
                     "Timezone Decay",
                     "Targets leagues and time windows where markets are less actively maintained, so stale prices and linked-market mismatches last longer.",
                     str(getattr(config, "BETFAIR_TIMEZONE_DECAY_MODE", "observe")),
+                ),
+                "polymarket_binary_research": self._empty_book(
+                    "polymarket_binary_research",
+                    "Polymarket Binary Research",
+                    "Studies binary-contract spread, liquidity, and repricing pressure on Polymarket to rank research candidates before any trading logic is trusted.",
+                    "research",
                 ),
             },
             "polymarket_signal_layer": {
@@ -287,7 +294,12 @@ class BetfairInformationArbManager:
         stale_ratio = round(max(0, active_count - len(snapshots)) / active_count, 4)
 
         consensus = signal_state.get("consensus") or build_consensus(quotes)
-        unmatched = int(signal_state.get("polymarket", {}).get("event_count", 0) or 0) - len(matches)
+        polymarket_event_count = int(
+            signal_state.get("polymarket", {}).get("filtered_event_count")
+            or signal_state.get("polymarket", {}).get("event_count", 0)
+            or 0
+        )
+        unmatched = polymarket_event_count - len(matches)
         self._state["polymarket_signal_layer"].update(
             {
                 "healthy": bool(signal_state.get("polymarket", {}).get("healthy", False)),
@@ -295,12 +307,14 @@ class BetfairInformationArbManager:
                 "matched_events": len(matches),
                 "unmatched_events": max(0, unmatched),
                 "quote_freshness_sec": 0.0 if signal_state.get("polymarket", {}).get("healthy", False) else None,
-                "confirmation_hit_rate": round(len(matches) / max(1, int(signal_state.get("polymarket", {}).get("event_count", 0) or 1)), 4),
+                "confirmation_hit_rate": round(len(matches) / max(1, polymarket_event_count or 1), 4),
                 "useful_sports": list(signal_state.get("polymarket", {}).get("sports") or []),
                 "source_health": signal_state.get("source_health") or {},
                 "observed_at": signal_state.get("observed_at"),
             }
         )
+        polymarket_research = evaluate_polymarket_binary_research(quotes)
+        self._state["strategy_books"]["polymarket_binary_research"] = polymarket_research
 
         for market_id, snapshot in snapshots.items():
             meta = market_metadata.get(market_id, {})

@@ -20,6 +20,13 @@ _STOPWORDS = {
     "the",
     "vs",
     "v",
+    "will",
+    "qualify",
+    "win",
+    "wins",
+    "for",
+    "of",
+    "to",
 }
 
 
@@ -63,6 +70,47 @@ def _name_score(left: str, right: str) -> float:
     return difflib.SequenceMatcher(None, left, right).ratio()
 
 
+def _extract_subjects(text: str) -> List[str]:
+    value = (text or "").strip()
+    lowered = value.lower()
+    patterns = [
+        r"^will\s+(.+?)\s+qualify\b",
+        r"^will\s+(.+?)\s+win\b",
+        r"^will\s+the\s+(.+?)\s+win\b",
+        r"^(.+?)\s+to\s+qualify\b",
+        r"^(.+?)\s+to\s+win\b",
+    ]
+    out: List[str] = []
+    for pattern in patterns:
+        match = re.match(pattern, lowered)
+        if match:
+            candidate = _normalize_token(match.group(1))
+            if candidate:
+                out.append(candidate)
+    if " v " in lowered or " vs " in lowered or " @ " in lowered:
+        parts = re.split(r"\s+v(?:s)?\s+|\s+@\s+", lowered)
+        out.extend(_normalize_token(part) for part in parts if _normalize_token(part))
+    normalized = _normalize_token(value)
+    if normalized:
+        out.append(normalized)
+    deduped: List[str] = []
+    for item in out:
+        if item and item not in deduped:
+            deduped.append(item)
+    return deduped
+
+
+def _entity_overlap_score(left: List[str], right: List[str]) -> float:
+    best = 0.0
+    for a in left:
+        for b in right:
+            score = _name_score(a, b)
+            if a and b and (a in b or b in a):
+                score = max(score, 0.9)
+            best = max(best, score)
+    return best
+
+
 @dataclass(frozen=True)
 class EventMatch:
     external_source: str
@@ -95,10 +143,15 @@ class EventLinker:
                     "sport": str(meta.get("sport_name") or meta.get("sport") or ""),
                     "competition": str(meta.get("competition_name") or ""),
                     "market_start": meta.get("market_start"),
+                    "runner_names": list(meta.get("runner_names") or []),
+                    "market_names": [],
                     "market_ids": [],
                 },
             )
             row["market_ids"].append(market_id)
+            market_name = str(meta.get("market_name") or "")
+            if market_name and market_name not in row["market_names"]:
+                row["market_names"].append(market_name)
             if not row.get("market_start") and meta.get("market_start"):
                 row["market_start"] = meta.get("market_start")
         return events
@@ -113,21 +166,37 @@ class EventLinker:
         matches: List[EventMatch] = []
         for event in external_events:
             event_key = str(event.get("event_key") or event.get("title") or "")
-            ext_name = _normalize_token(str(event.get("title") or ""))
+            ext_title = str(event.get("title") or "")
+            ext_name = _normalize_token(ext_title)
             ext_sport = _normalize_token(str(event.get("sport") or ""))
             ext_start = _parse_utc(event.get("scheduled_start"))
+            ext_entities = _extract_subjects(ext_title)
             best: Optional[EventMatch] = None
             for betfair_event_id, betfair in betfair_events.items():
                 bf_name = _normalize_token(str(betfair.get("event_name") or ""))
                 bf_sport = _normalize_token(str(betfair.get("sport") or ""))
+                bf_entities = _extract_subjects(str(betfair.get("event_name") or ""))
+                bf_entities.extend(_normalize_token(name) for name in betfair.get("runner_names") or [] if _normalize_token(name))
+                bf_entities.extend(_normalize_token(name) for name in betfair.get("market_names") or [] if _normalize_token(name))
                 name_score = _name_score(ext_name, bf_name)
                 sport_score = 1.0 if ext_sport and bf_sport and ext_sport == bf_sport else 0.5
                 time_score = _time_score(ext_start, _parse_utc(betfair.get("market_start")))
                 competition_name = _normalize_token(str(betfair.get("competition") or ""))
                 league_score = _name_score(_normalize_token(str(event.get("competition") or "")), competition_name) if competition_name else 0.5
-                confidence = round((name_score * 0.55) + (sport_score * 0.15) + (time_score * 0.2) + (league_score * 0.1), 4)
+                entity_score = _entity_overlap_score(ext_entities, bf_entities)
+                confidence = round(
+                    (max(name_score, entity_score) * 0.45)
+                    + (sport_score * 0.15)
+                    + (time_score * 0.15)
+                    + (league_score * 0.1)
+                    + (entity_score * 0.15),
+                    4,
+                )
                 if best is None or confidence > best.match_confidence:
-                    reason = f"name={name_score:.2f},sport={sport_score:.2f},time={time_score:.2f},league={league_score:.2f}"
+                    reason = (
+                        f"name={name_score:.2f},entity={entity_score:.2f},"
+                        f"sport={sport_score:.2f},time={time_score:.2f},league={league_score:.2f}"
+                    )
                     best = EventMatch(
                         external_source=source,
                         external_event_key=event_key,

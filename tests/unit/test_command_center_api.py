@@ -140,6 +140,11 @@ def test_command_center_betfair_strategy_endpoints(tmp_path, monkeypatch):
                     "strategy_id": "betfair_suspension_lag",
                     "label": "Suspension-Lag",
                     "candidate_count": 3,
+                },
+                "polymarket_binary_research": {
+                    "strategy_id": "polymarket_binary_research",
+                    "label": "Polymarket Binary Research",
+                    "candidate_count": 5,
                 }
             },
             "polymarket_signal_layer": {
@@ -152,9 +157,11 @@ def test_command_center_betfair_strategy_endpoints(tmp_path, monkeypatch):
 
     client = TestClient(command_center.app)
     lag = client.get("/api/strategies/betfair_suspension_lag/state").json()
+    poly_research = client.get("/api/strategies/polymarket_binary_research/state").json()
     poly = client.get("/api/signals/polymarket/state").json()
 
-    assert lag["state"]["candidate_count"] == 3
+    assert lag["candidate_count"] == 3
+    assert poly_research["candidate_count"] == 5
     assert poly["matched_events"] == 2
 
 

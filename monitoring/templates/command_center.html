@@ -563,16 +563,26 @@
           ],
         ));
       }
-      if (books.betfair_timezone_decay) {
-        explainers.push(strategyExplainer(
-          'Timezone Decay',
-          books.betfair_timezone_decay.explainer,
+        if (books.betfair_timezone_decay) {
+          explainers.push(strategyExplainer(
+            'Timezone Decay',
+            books.betfair_timezone_decay.explainer,
           [
             'Ranks low-attention leagues and time windows where stale pricing lasts longer.',
             'This is a Betfair-native strategy with optional external confirmation.',
-          ],
-        ));
-      }
+            ],
+          ));
+        }
+        if (books.polymarket_binary_research) {
+          explainers.push(strategyExplainer(
+            'Polymarket Binary Research',
+            books.polymarket_binary_research.explainer,
+            [
+              'Tracks binary-contract spread, liquidity, and short-horizon repricing pressure.',
+              'Research only for now; it is not trading and does not affect Betfair execution.',
+            ],
+          ));
+        }
       explainers.push(strategyExplainer(
         'Polymarket Sports Signal Layer',
         polymarket.explainer || 'Uses Polymarket sports market moves as an extra confirmation signal for the same sporting events.',

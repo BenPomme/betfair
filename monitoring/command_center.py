@@ -982,11 +982,10 @@ def _betfair_strategy_state(strategy_id: str) -> Dict[str, Any]:
     strategy_books = betfair.get("strategy_books") or {}
     if strategy_id not in strategy_books:
         raise HTTPException(status_code=404, detail={"error": "unknown_strategy", "strategy_id": strategy_id})
-    return {
-        "strategy_id": strategy_id,
-        "state": strategy_books.get(strategy_id) or {},
-        "observed_at": betfair.get("external_signals", {}).get("observed_at"),
-    }
+    state = dict(strategy_books.get(strategy_id) or {})
+    state.setdefault("strategy_id", strategy_id)
+    state.setdefault("observed_at", betfair.get("external_signals", {}).get("observed_at"))
+    return state
 
 
 @app.get("/api/strategies/betfair_suspension_lag/state")
@@ -1002,6 +1001,11 @@ def api_betfair_crossbook_consensus_state() -> Dict[str, Any]:
 @app.get("/api/strategies/betfair_timezone_decay/state")
 def api_betfair_timezone_decay_state() -> Dict[str, Any]:
     return _betfair_strategy_state("betfair_timezone_decay")
+
+
+@app.get("/api/strategies/polymarket_binary_research/state")
+def api_polymarket_binary_research_state() -> Dict[str, Any]:
+    return _betfair_strategy_state("polymarket_binary_research")
 
 
 @app.get("/api/signals/polymarket/state")
