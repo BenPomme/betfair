@@ -400,6 +400,101 @@ def _enrich_models(portfolio_id: str, models: List[Dict[str, Any]], portfolio_et
     return enriched
 
 
+def _model_progress_delta_24h(portfolio_id: str, model_id: str, current_settled: int) -> float:
+    rows = _read_jsonl(_model_history_path(portfolio_id, model_id), limit=1000)
+    if not rows:
+        return 0.0
+    latest = rows[-1]
+    latest_ts = _parse_iso(str(latest.get("ts", "") or ""))
+    if latest_ts is None:
+        return 0.0
+    baseline = rows[0]
+    for row in reversed(rows):
+        ts = _parse_iso(str(row.get("ts", "") or ""))
+        if ts is None:
+            continue
+        if (latest_ts - ts).total_seconds() >= 24 * 3600:
+            baseline = row
+            break
+    return float(current_settled - int(baseline.get("settled_count", 0) or 0))
+
+
+def _collect_model_digest_rows(snapshots: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    for item in snapshots:
+        summary = dict(item.get("summary") or {})
+        state = dict(item.get("state") or {})
+        if summary.get("control_mode") == "disabled":
+            continue
+        portfolio_id = str(summary.get("portfolio_id") or "")
+        portfolio_label = str(summary.get("label") or portfolio_id)
+        for model in state.get("models") or []:
+            if not isinstance(model, dict):
+                continue
+            metrics = dict(model.get("metrics") or {})
+            model_id = str(model.get("model_id") or "")
+            if not model_id:
+                continue
+            settled = int(metrics.get("settled_count", model.get("settled_count", 0)) or 0)
+            learning_settled = int(metrics.get("learning_settled", 0) or 0)
+            strict_gate_pass = bool(metrics.get("strict_gate_pass", False))
+            eta_hours = model.get("eta_hours")
+            reason = str(metrics.get("strict_gate_reason") or metrics.get("policy_gate_reason") or "")
+            auc = metrics.get("current_auc")
+            recent_learning_brier = metrics.get("recent_learning_brier_lift")
+            rolling_brier = ((metrics.get("rolling_200") or {}).get("brier_lift_abs"))
+            settled_delta_24h = _model_progress_delta_24h(portfolio_id, model_id, settled)
+            promising_score = 0.0
+            if strict_gate_pass:
+                promising_score += 100.0
+            if eta_hours is not None:
+                try:
+                    promising_score += max(0.0, 30.0 - min(float(eta_hours), 30.0))
+                except Exception:
+                    pass
+            promising_score += min(learning_settled / 10.0, 25.0)
+            promising_score += min(settled_delta_24h, 20.0)
+            try:
+                if auc is not None:
+                    promising_score += max(0.0, (float(auc) - 0.5) * 100.0)
+            except Exception:
+                pass
+            try:
+                if recent_learning_brier is not None and float(recent_learning_brier) > 0:
+                    promising_score += min(float(recent_learning_brier) * 1000.0, 15.0)
+            except Exception:
+                pass
+            try:
+                if rolling_brier is not None and float(rolling_brier) > 0:
+                    promising_score += min(float(rolling_brier) * 1000.0, 20.0)
+            except Exception:
+                pass
+            underperforming = (
+                reason in {"negative_brier_lift", "negative_roi", "fully_observed_underperforming"}
+                or (rolling_brier is not None and float(rolling_brier) < 0)
+            )
+            rows.append(
+                {
+                    "portfolio_id": portfolio_id,
+                    "portfolio_label": portfolio_label,
+                    "model_id": model_id,
+                    "strict_gate_pass": strict_gate_pass,
+                    "eta_hours": eta_hours,
+                    "eta_to_readiness": model.get("eta_to_readiness"),
+                    "settled_count": settled,
+                    "learning_settled": learning_settled,
+                    "settled_delta_24h": settled_delta_24h,
+                    "auc": auc,
+                    "recent_learning_brier_lift": recent_learning_brier,
+                    "rolling_brier_lift": rolling_brier,
+                    "reason": reason or "n/a",
+                    "promising_score": round(promising_score, 2),
+                    "underperforming": underperforming,
+                }
+            )
+    return rows
+
+
 def _load_deploy_state() -> Dict[str, Any]:
     if not _deploy_state_path.exists():
         return {"enabled": bool(getattr(config, "DEPLOY_WATCHER_ENABLED", False)), "configured": bool(getattr(config, "DEPLOY_WATCHER_ENABLED", False)), "running": False}
@@ -467,6 +562,10 @@ def _maybe_send_daily_digest(summaries: List[Dict[str, Any]], snapshots: List[Di
         return
     leaders = sorted(summaries, key=lambda item: float(item.get("realized_pnl", 0.0) or 0.0), reverse=True)
     losers = sorted(summaries, key=lambda item: float(item.get("realized_pnl", 0.0) or 0.0))
+    model_rows = _collect_model_digest_rows(snapshots)
+    promising_models = sorted(model_rows, key=lambda item: float(item.get("promising_score", 0.0) or 0.0), reverse=True)
+    improving_models = sorted(model_rows, key=lambda item: float(item.get("settled_delta_24h", 0.0) or 0.0), reverse=True)
+    weak_models = [item for item in model_rows if item.get("underperforming")]
     lines = [f"Performance summary {now_local.date().isoformat()} {now_local.hour:02d}:00 {tz_name}"]
     for item in summaries:
         lines.append(
@@ -486,6 +585,19 @@ def _maybe_send_daily_digest(summaries: List[Dict[str, Any]], snapshots: List[Di
         "Open Risk": [
             f"{item.get('label')}: open={int(item.get('open_count', 0) or 0)} | readiness={item.get('readiness')}"
             for item in sorted(summaries, key=lambda item: int(item.get('open_count', 0) or 0), reverse=True)[:3]
+        ],
+        "Promising Models": [
+            f"{item.get('portfolio_label')}/{item.get('model_id')}: score {float(item.get('promising_score', 0.0) or 0.0):.1f} | eta {item.get('eta_to_readiness') or 'unknown'} | reason {item.get('reason')}"
+            for item in promising_models[:3]
+        ],
+        "Models Improving": [
+            f"{item.get('portfolio_label')}/{item.get('model_id')}: +{int(item.get('settled_delta_24h', 0) or 0)} settled | learning {int(item.get('learning_settled', 0) or 0)} | brier {float(item.get('recent_learning_brier_lift', 0.0) or 0.0):+.4f}"
+            for item in improving_models[:3]
+            if int(item.get('settled_delta_24h', 0) or 0) > 0
+        ],
+        "Weak Models": [
+            f"{item.get('portfolio_label')}/{item.get('model_id')}: reason {item.get('reason')} | rolling brier {float(item.get('rolling_brier_lift', 0.0) or 0.0):+.4f}"
+            for item in weak_models[:3]
         ],
     }
     sender = getattr(_notifier, "send_daily_digest", None)

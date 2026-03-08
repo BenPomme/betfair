@@ -282,9 +282,9 @@ class NotificationManager:
             "title": "Daily Strategy Summary",
             "description": lines[0] if lines else "Daily summary",
             "color": self._severity_color("info"),
-            "fields": embed_fields[:5],
+            "fields": embed_fields[:8],
         }
-        ok = send_discord("\n".join(lines[:6]), username="Strategy Daily Digest", embeds=[embed])
+        ok = send_discord("\n".join(lines[:8]), username="Strategy Daily Digest", embeds=[embed])
         if ok:
             self._state.last_daily_digest_ts = self._utc_now_iso()
         else:
