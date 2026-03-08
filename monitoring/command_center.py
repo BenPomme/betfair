@@ -22,7 +22,7 @@ from monitoring.portfolio_process_manager import PortfolioProcessManager
 from monitoring.portfolio_registry import get_portfolio_spec, list_portfolios
 from portfolio.accounting import build_strategy_account
 from portfolio.state_store import PortfolioStateStore
-from portfolio.types import PortfolioState, PortfolioSummary
+from portfolio.types import PortfolioRunnerSpec, PortfolioState, PortfolioSummary
 
 logger = logging.getLogger(__name__)
 app = FastAPI(title="Strategy Command Center")
@@ -34,6 +34,74 @@ _daily_digest_sent_slots: set[str] = set()
 _template_path = Path(__file__).parent / "templates" / "command_center.html"
 _deploy_state_path = Path("data/runtime/deploy_watcher_state.json")
 _deploy_watcher_script = Path(__file__).resolve().parent.parent / "scripts" / "run_deploy_watcher.py"
+_SYNTHETIC_PORTFOLIO_SPECS = {
+    "betfair_execution_book": PortfolioRunnerSpec(
+        portfolio_id="betfair_execution_book",
+        label="Betfair Execution Book",
+        category="betfair_strategy",
+        control_mode="disabled",
+        currency="EUR",
+        initial_balance=0.0,
+        enabled=True,
+        description="Independent execution-book view for Betfair paper trades.",
+        ui_group="Betfair Strategies",
+    ),
+    "betfair_prediction_league": PortfolioRunnerSpec(
+        portfolio_id="betfair_prediction_league",
+        label="Betfair Prediction League",
+        category="betfair_strategy",
+        control_mode="disabled",
+        currency="EUR",
+        initial_balance=0.0,
+        enabled=True,
+        description="Independent shadow/canary prediction-model view.",
+        ui_group="Betfair Strategies",
+    ),
+    "betfair_suspension_lag": PortfolioRunnerSpec(
+        portfolio_id="betfair_suspension_lag",
+        label="Betfair Suspension-Lag",
+        category="betfair_strategy",
+        control_mode="disabled",
+        currency="EUR",
+        initial_balance=0.0,
+        enabled=True,
+        description="Independent information-arbitrage view for suspension-lag.",
+        ui_group="Betfair Strategies",
+    ),
+    "betfair_crossbook_consensus": PortfolioRunnerSpec(
+        portfolio_id="betfair_crossbook_consensus",
+        label="Betfair Cross-Book Consensus",
+        category="betfair_strategy",
+        control_mode="disabled",
+        currency="EUR",
+        initial_balance=0.0,
+        enabled=True,
+        description="Independent information-arbitrage view for cross-book consensus.",
+        ui_group="Betfair Strategies",
+    ),
+    "betfair_timezone_decay": PortfolioRunnerSpec(
+        portfolio_id="betfair_timezone_decay",
+        label="Betfair Timezone Decay",
+        category="betfair_strategy",
+        control_mode="disabled",
+        currency="EUR",
+        initial_balance=0.0,
+        enabled=True,
+        description="Independent information-arbitrage view for market-ops decay.",
+        ui_group="Betfair Strategies",
+    ),
+    "polymarket_binary_research": PortfolioRunnerSpec(
+        portfolio_id="polymarket_binary_research",
+        label="Polymarket Binary Research",
+        category="polymarket_research",
+        control_mode="disabled",
+        currency="USD",
+        initial_balance=0.0,
+        enabled=True,
+        description="Independent research view for Polymarket binary opportunities.",
+        ui_group="Polymarket",
+    ),
+}
 
 
 def _git_sha() -> str:
@@ -74,6 +142,20 @@ def _readiness_label(readiness: Dict[str, Any]) -> str:
 
 def _collect_snapshots() -> List[Dict[str, Any]]:
     return [_build_snapshot(spec.portfolio_id) for spec in list_portfolios()]
+
+
+def _display_specs() -> List[PortfolioRunnerSpec]:
+    return list(list_portfolios()) + list(_SYNTHETIC_PORTFOLIO_SPECS.values())
+
+
+def _get_spec(portfolio_id: str) -> PortfolioRunnerSpec:
+    try:
+        return get_portfolio_spec(portfolio_id)
+    except KeyError:
+        synthetic = _SYNTHETIC_PORTFOLIO_SPECS.get(portfolio_id)
+        if synthetic is None:
+            raise
+        return synthetic
 
 
 def _history_path(portfolio_id: str) -> Path:
@@ -671,8 +753,188 @@ def _extract_positions(raw_state: Dict[str, Any]) -> List[Dict[str, Any]]:
     return []
 
 
-def _build_snapshot(portfolio_id: str) -> Dict[str, Any]:
-    spec = get_portfolio_spec(portfolio_id)
+def _build_synthetic_betfair_snapshot(portfolio_id: str) -> Dict[str, Any]:
+    spec = _get_spec(portfolio_id)
+    parent = _build_base_snapshot("betfair_core")
+    parent_state = parent["state"]
+    parent_summary = parent["summary"]
+    raw_state = parent_state.get("raw_state") or {}
+    strategy_books = raw_state.get("strategy_books") or {}
+    book = dict(strategy_books.get(portfolio_id) or {})
+    prediction_summary = dict(raw_state.get("prediction_league_summary") or {})
+    parent_models = list(parent_state.get("models") or [])
+    balance_history = []
+    readiness: Dict[str, Any]
+    account: Dict[str, Any]
+    models: List[Dict[str, Any]] = []
+    recent_trades: List[Dict[str, Any]] = []
+    recent_events: List[Dict[str, Any]] = []
+    open_count = 0
+    mode = str(book.get("mode") or "observe")
+    realized_pnl = float(book.get("realized_net_pnl", 0.0) or 0.0)
+    roi_pct = 0.0
+    progress_pct = float(book.get("learning_progress_pct", 0.0) or 0.0)
+    readiness_status = "paper_validating"
+    blockers = list(book.get("top_blockers") or [])
+    bankroll = 0.0
+    currency = spec.currency
+
+    if portfolio_id == "betfair_execution_book":
+        account = dict(parent_state.get("account") or {})
+        bankroll = float(account.get("starting_balance", 0.0) or 0.0)
+        realized_pnl = float(account.get("realized_pnl", 0.0) or 0.0)
+        roi_pct = float(account.get("roi_pct", 0.0) or 0.0)
+        recent_trades = list(parent_state.get("recent_trades") or [])
+        recent_events = list(parent_state.get("recent_events") or [])
+        open_count = int(parent_summary.get("open_count", 0) or 0)
+        balance_history = list(parent_state.get("balance_history") or [])
+        readiness = dict(parent_state.get("readiness") or {})
+        progress_pct = float(parent_summary.get("progress_pct", 0.0) or 0.0)
+        readiness_status = str(parent_summary.get("readiness") or "paper_validating")
+    elif portfolio_id == "betfair_prediction_league":
+        bankroll = float(sum(float(m.get("shadow_starting_balance", 0.0) or 0.0) for m in parent_models))
+        realized_pnl = float(prediction_summary.get("realized_pnl_eur", 0.0) or 0.0)
+        roi_pct = float(prediction_summary.get("avg_roi_pct", 0.0) or 0.0)
+        open_count = int(prediction_summary.get("open_positions", 0) or 0)
+        models = parent_models
+        account = {
+            "portfolio_id": portfolio_id,
+            "currency": currency,
+            "starting_balance": bankroll,
+            "current_balance": bankroll + realized_pnl,
+            "realized_pnl": realized_pnl,
+            "unrealized_pnl": 0.0,
+            "fees_paid": 0.0,
+            "slippage_cost": 0.0,
+            "gross_exposure": 0.0,
+            "roi_pct": roi_pct,
+            "drawdown_pct": 0.0,
+            "wins": 0,
+            "losses": 0,
+            "trade_count": int(prediction_summary.get("settled_bets", 0) or 0),
+            "last_updated": parent_state.get("account", {}).get("last_updated"),
+        }
+        readiness = {
+            "status": "paper_validating",
+            "confidence": "low",
+            "blockers": ["no_promoted_prediction_models"] if not any((m.get("metrics") or {}).get("strict_gate_pass") for m in parent_models) else [],
+            "checks": [
+                {"name": "models_present", "ok": bool(parent_models), "reason": "Prediction league needs active model accounts"},
+                {"name": "promoted_models", "ok": any((m.get("metrics") or {}).get("strict_gate_pass") for m in parent_models), "reason": "At least one model should earn execution rights"},
+            ],
+        }
+        progress_pct = round(
+            sum(
+                min(100.0, (float(((m.get("metrics") or {}).get("learning_settled", 0) or 0)) / 200.0) * 100.0)
+                for m in parent_models
+            ) / max(1, len(parent_models)),
+            2,
+        ) if parent_models else 0.0
+        readiness_status = "paper_validating"
+    else:
+        account = {
+            "portfolio_id": portfolio_id,
+            "currency": currency,
+            "starting_balance": bankroll,
+            "current_balance": bankroll + realized_pnl,
+            "realized_pnl": realized_pnl,
+            "unrealized_pnl": 0.0,
+            "fees_paid": 0.0,
+            "slippage_cost": 0.0,
+            "gross_exposure": 0.0,
+            "roi_pct": 0.0,
+            "drawdown_pct": 0.0,
+            "wins": 0,
+            "losses": 0,
+            "trade_count": int(book.get("accepted_count", 0) or 0),
+            "last_updated": parent_state.get("account", {}).get("last_updated"),
+        }
+        open_count = int(book.get("candidate_count", 0) or 0)
+        recent_events = list(book.get("latest_candidates") or [])
+        recent_trades = list(book.get("latest_candidates") or [])
+        readiness = {
+            "status": "research_only" if portfolio_id == "polymarket_binary_research" else ("paper_validating" if mode in {"observe", "shadow", "canary"} else mode),
+            "confidence": "low",
+            "blockers": blockers,
+            "checks": [
+                {"name": "strategy_enabled", "ok": True, "reason": "Strategy book is publishing state"},
+                {"name": "active_candidates", "ok": bool(book.get("candidate_count", 0)), "reason": "Strategy needs candidate flow to learn"},
+            ],
+            "eta_to_readiness": "awaiting_more_progress",
+            "eta_hours": None,
+        }
+        readiness_status = str(readiness.get("status") or "paper_validating")
+
+    summary = PortfolioSummary(
+        portfolio_id=portfolio_id,
+        label=spec.label,
+        category=spec.category,
+        control_mode=spec.control_mode,
+        running=bool(parent_summary.get("running")),
+        mode=mode,
+        bankroll=bankroll,
+        currency=currency,
+        realized_pnl=realized_pnl,
+        unrealized_pnl=float(account.get("unrealized_pnl", 0.0) or 0.0),
+        roi_pct=roi_pct,
+        max_drawdown_pct=float(account.get("drawdown_pct", 0.0) or 0.0),
+        open_count=open_count,
+        readiness=readiness_status,
+        last_heartbeat_ts=parent_summary.get("last_heartbeat_ts"),
+        progress_pct=progress_pct,
+        trend_direction="flat",
+        progress_delta_24h=0.0,
+        blocker_count=len(blockers),
+        eta_to_readiness=readiness.get("eta_to_readiness") or "awaiting_more_progress",
+        eta_hours=readiness.get("eta_hours"),
+        status=str(parent_summary.get("status") or "idle"),
+        process_pid=parent_summary.get("process_pid"),
+        errors=[],
+    )
+    state = PortfolioState(
+        portfolio_id=portfolio_id,
+        running=bool(parent_summary.get("running")),
+        read_only=True,
+        status=str(parent_summary.get("status") or "idle"),
+        account=account,
+        config={"parent_portfolio": "betfair_core", "synthetic_view": True},
+        metrics={
+            "candidate_count": int(book.get("candidate_count", 0) or 0),
+            "accepted_count": int(book.get("accepted_count", 0) or 0),
+            "rejected_count": int(book.get("rejected_count", 0) or 0),
+            "expected_net_edge": float(book.get("expected_net_edge", 0.0) or 0.0),
+            "fillability_avg": float(book.get("fillability_avg", 0.0) or 0.0),
+        },
+        positions=[],
+        recent_events=recent_events,
+        recent_trades=recent_trades,
+        execution_quality={},
+        risk={},
+        readiness=readiness,
+        models=models,
+        balance_history=balance_history,
+        raw_state={
+            **book,
+            "parent_portfolio": "betfair_core",
+            "polymarket_signal_layer": raw_state.get("polymarket_signal_layer"),
+            "prediction_league_summary": prediction_summary,
+        },
+        control_mode=spec.control_mode,
+        error=None,
+        trend={
+            "latest_progress_pct": progress_pct,
+            "progress_delta_24h": 0.0,
+            "direction": "flat",
+            "history": [],
+            "eta_hours": readiness.get("eta_hours"),
+            "eta_to_readiness": readiness.get("eta_to_readiness") or "awaiting_more_progress",
+        },
+    )
+    return {"summary": summary.to_dict(), "state": state.to_dict()}
+
+
+def _build_base_snapshot(portfolio_id: str) -> Dict[str, Any]:
+    spec = _get_spec(portfolio_id)
     store = PortfolioStateStore(portfolio_id)
     raw_state = store.read_state() or {}
     account = (store.read_account().to_dict() if store.read_account() is not None else _default_account(spec))
@@ -770,6 +1032,12 @@ def _build_snapshot(portfolio_id: str) -> Dict[str, Any]:
     return {"summary": summary.to_dict(), "state": state.to_dict()}
 
 
+def _build_snapshot(portfolio_id: str) -> Dict[str, Any]:
+    if portfolio_id in _SYNTHETIC_PORTFOLIO_SPECS:
+        return _build_synthetic_betfair_snapshot(portfolio_id)
+    return _build_base_snapshot(portfolio_id)
+
+
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
     return _html()
@@ -792,7 +1060,7 @@ async def _shutdown() -> None:
 
 @app.get("/api/portfolios")
 def api_portfolios() -> Dict[str, Any]:
-    snapshots = [_build_snapshot(spec.portfolio_id) for spec in list_portfolios()]
+    snapshots = [_build_snapshot(spec.portfolio_id) for spec in _display_specs()]
     return {
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "git_sha": _git_sha(),
@@ -896,7 +1164,7 @@ def api_portfolio_restart(portfolio_id: str) -> Dict[str, Any]:
 
 @app.get("/api/compare/portfolios")
 def api_compare_portfolios() -> Dict[str, Any]:
-    snapshots = [_build_snapshot(spec.portfolio_id) for spec in list_portfolios()]
+    snapshots = [_build_snapshot(spec.portfolio_id) for spec in _display_specs()]
     return {
         "portfolios": [item["summary"] for item in snapshots],
         "series": {
@@ -966,7 +1234,7 @@ def api_live_readiness() -> Dict[str, Any]:
 
 @app.get("/api/strategy-overview")
 def api_strategy_overview() -> Dict[str, Any]:
-    snapshots = [_build_snapshot(spec.portfolio_id) for spec in list_portfolios()]
+    snapshots = [_build_snapshot(spec.portfolio_id) for spec in _display_specs()]
     summaries = [item["summary"] for item in snapshots]
     return {
         "enabled": True,

@@ -194,6 +194,12 @@
     </section>
 
     <section class="section" id="section-betfair_core"><h2>Betfair Lab</h2><div id="betfair_core-body"></div></section>
+    <section class="section" id="section-betfair_execution_book"><h2>Betfair Execution Book</h2><div id="betfair_execution_book-body"></div></section>
+    <section class="section" id="section-betfair_prediction_league"><h2>Betfair Prediction League</h2><div id="betfair_prediction_league-body"></div></section>
+    <section class="section" id="section-betfair_suspension_lag"><h2>Betfair Suspension-Lag</h2><div id="betfair_suspension_lag-body"></div></section>
+    <section class="section" id="section-betfair_crossbook_consensus"><h2>Betfair Cross-Book Consensus</h2><div id="betfair_crossbook_consensus-body"></div></section>
+    <section class="section" id="section-betfair_timezone_decay"><h2>Betfair Timezone Decay</h2><div id="betfair_timezone_decay-body"></div></section>
+    <section class="section" id="section-polymarket_binary_research"><h2>Polymarket Binary Research</h2><div id="polymarket_binary_research-body"></div></section>
     <section class="section" id="section-hedge_validation"><h2>Hedge Validation</h2><div id="hedge_validation-body"></div></section>
     <section class="section" id="section-hedge_research"><h2>Hedge Research</h2><div id="hedge_research-body"></div></section>
     <section class="section" id="section-cascade_alpha"><h2>Cascade Alpha</h2><div id="cascade_alpha-body"></div></section>
@@ -202,12 +208,31 @@
   </div>
 
   <script>
-    const portfolioOrder = ["betfair_core", "hedge_validation", "hedge_research", "cascade_alpha", "mev_scout_sol", "contrarian_legacy"];
+    const portfolioOrder = [
+      "betfair_core",
+      "betfair_execution_book",
+      "betfair_prediction_league",
+      "betfair_suspension_lag",
+      "betfair_crossbook_consensus",
+      "betfair_timezone_decay",
+      "polymarket_binary_research",
+      "hedge_validation",
+      "hedge_research",
+      "cascade_alpha",
+      "mev_scout_sol",
+      "contrarian_legacy"
+    ];
     const labels = {
       overview: "Overview",
       portfolios: "Portfolios",
       compare: "Compare",
       betfair_core: "Betfair Lab",
+      betfair_execution_book: "Execution Book",
+      betfair_prediction_league: "Prediction League",
+      betfair_suspension_lag: "Suspension-Lag",
+      betfair_crossbook_consensus: "Cross-Book Consensus",
+      betfair_timezone_decay: "Timezone Decay",
+      polymarket_binary_research: "Polymarket Research",
       hedge_validation: "Hedge Validation",
       hedge_research: "Hedge Research",
       cascade_alpha: "Cascade Alpha",
@@ -636,6 +661,60 @@
         ${polymarketPanel}`;
     }
 
+    function renderStrategyStandalone(state) {
+      const raw = state.raw_state || {};
+      const account = state.account || {};
+      const latest = raw.latest_candidates || state.recent_events || [];
+      const explainer = raw.explainer || 'Independent strategy view.';
+      return `
+        <details class="panel" style="margin-bottom:12px;" open>
+          <summary style="cursor:pointer;font-weight:700;">What this strategy does: <span class="muted">${explainer}</span></summary>
+          <div class="muted" style="margin-top:10px;">
+            <div>- Mode: ${raw.mode || state.status || 'observe'}</div>
+            <div>- Candidates: ${raw.candidate_count ?? state.metrics?.candidate_count ?? 0}</div>
+            <div>- Accepted: ${raw.accepted_count ?? state.metrics?.accepted_count ?? 0}</div>
+            <div>- Rejected: ${raw.rejected_count ?? state.metrics?.rejected_count ?? 0}</div>
+          </div>
+        </details>
+        <div class="grid">
+          ${metricCard('Mode', raw.mode || 'observe')}
+          ${metricCard('Candidates', raw.candidate_count ?? state.metrics?.candidate_count ?? 0)}
+          ${metricCard('Accepted', raw.accepted_count ?? state.metrics?.accepted_count ?? 0)}
+          ${metricCard('Rejected', raw.rejected_count ?? state.metrics?.rejected_count ?? 0)}
+          ${metricCard('Realized Net P&L', money(account.realized_pnl || 0, account.currency || 'EUR'))}
+          ${metricCard('Expected Edge', compactNumber(raw.expected_net_edge ?? state.metrics?.expected_net_edge ?? 0))}
+          ${metricCard('Fillability', compactNumber(raw.fillability_avg ?? state.metrics?.fillability_avg ?? 0))}
+          ${metricCard('Learning Progress', `${compactNumber(raw.learning_progress_pct || 0)}%`)}
+        </div>
+        ${progressBar(raw.learning_progress_pct || 0)}
+        <div class="panel" style="margin-top:12px;">
+          <h3>Top Blockers</h3>
+          <div class="muted">${(raw.top_blockers || []).join(', ') || 'none'}</div>
+        </div>
+        <div class="panel" style="margin-top:12px;">
+          <h3>Recent Candidates</h3>
+          <table><thead><tr><th>Event</th><th>Reason</th><th>Expected Edge</th><th>Sources</th></tr></thead><tbody>
+            ${(latest || []).slice(0, 12).map(item => `<tr>
+              <td>${item.event_name || item.selection_name || item.market_id || 'n/a'}</td>
+              <td>${item.reason || item.event_confirmation_level || 'n/a'}</td>
+              <td>${compactNumber(item.expected_edge || 0)}</td>
+              <td>${(item.source_mix || []).join('+') || 'n/a'}</td>
+            </tr>`).join('') || '<tr><td colspan="4" class="muted">No recent candidates</td></tr>'}
+          </tbody></table>
+        </div>
+        ${raw.polymarket_signal_layer ? `
+          <div class="panel" style="margin-top:12px;">
+            <h3>Polymarket Signal Layer</h3>
+            <div class="grid">
+              ${metricCard('Feed Health', raw.polymarket_signal_layer.feed_health || 'idle')}
+              ${metricCard('Matched Events', raw.polymarket_signal_layer.matched_events || 0)}
+              ${metricCard('Unmatched Events', raw.polymarket_signal_layer.unmatched_events || 0)}
+              ${metricCard('Second Source Events', raw.polymarket_signal_layer.thesportsdb_event_count || 0)}
+            </div>
+          </div>` : ''}
+      `;
+    }
+
     function sparkline(points) {
       if (!points || !points.length) return "";
       const balances = points.map(p => Number(p.balance || 0));
@@ -659,7 +738,7 @@
 
     function buildNav() {
       const nav = document.getElementById('nav');
-      nav.innerHTML = ["overview", "portfolios", "compare", "betfair_core", "hedge_validation", "hedge_research", "contrarian_legacy", "cascade_alpha", "mev_scout_sol"].map(id =>
+      nav.innerHTML = ["overview", "portfolios", "compare", ...portfolioOrder].map(id =>
         `<button data-section="${id}">${labels[id]}</button>`
       ).join('');
       nav.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => showSection(btn.dataset.section)));
@@ -826,7 +905,12 @@
           ${portfolioId === 'betfair_core' ? `<div class="metric"><div class="label">Prediction Bets Open</div><div class="value">${(((state.raw_state || {}).prediction_league_summary || {}).open_positions || 0)}</div></div>` : ''}
         </div>
         ${portfolioId === 'betfair_core' ? `<div class="panel"><h3>Betfair Model Accounts</h3>${renderModelCards(models)}</div>` : ''}
-        ${portfolioId === 'betfair_core' ? renderBetfairStrategyBooks(state.raw_state || {}) : ''}
+        ${portfolioId === 'betfair_core' ? `
+          <div class="panel">
+            <h3>Betfair Strategy Family</h3>
+            <div class="muted">Betfair strategy books and Polymarket research are now monitored as independent sections. Use the separate tabs to inspect performance instead of reading them as one bundled book.</div>
+          </div>` : ''}
+        ${['betfair_execution_book','betfair_prediction_league','betfair_suspension_lag','betfair_crossbook_consensus','betfair_timezone_decay','polymarket_binary_research'].includes(portfolioId) ? renderStrategyStandalone(state) : ''}
         <div class="two-col">
           <div class="panel">
             <h3>Recent Trades</h3>
