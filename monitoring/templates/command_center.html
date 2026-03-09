@@ -1,112 +1,289 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Strategy Command Center</title>
   <style>
-    :root{--bg:#f4efe6;--panel:#fffdfa;--line:#d7d0c3;--ink:#1f1e1a;--muted:#666055;--ok:#1f6b4a;--warn:#a06a12;--bad:#b43d2f;--accent:#c45f35;--mono:Consolas,monospace;--sans:"Segoe UI",system-ui,sans-serif}
-    *{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#fff8ec, #f4efe6);color:var(--ink);font-family:var(--sans)}
-    .page{display:grid;gap:16px;padding:16px}.card,.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:0 10px 30px rgba(45,34,20,.08)}
-    .hero{padding:20px 22px}.hero h1{margin:0 0 8px;font-size:36px;line-height:1}.hero p{margin:0;color:var(--muted);max-width:70ch;line-height:1.5}
-    .hero-meta,.tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}.chip{padding:7px 10px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--muted);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
-    .topgrid,.overview,.layout,.detail-grid,.metrics{display:grid;gap:16px}.topgrid{grid-template-columns:1.4fr 1fr}.overview{grid-template-columns:1fr 1fr}.layout{grid-template-columns:330px minmax(0,1fr)}.metrics{grid-template-columns:repeat(4,minmax(0,1fr))}.detail-grid{grid-template-columns:1fr 1fr}
-    .panel{padding:16px}.panel h2,.panel h3{margin:0 0 4px}.sub{margin:0 0 12px;color:var(--muted);font-size:13px;line-height:1.45}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .mini{padding:12px;border:1px solid var(--line);border-radius:12px;background:#fffcf7}.mini .k{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}.mini .v{margin-top:6px;font-size:22px;font-weight:800}
-    .sidebar{display:grid;gap:16px;align-content:start}.group{padding:14px}.group h3{margin:0 0 4px;font-size:14px;text-transform:uppercase;letter-spacing:.08em}.group p{margin:0 0 10px;color:var(--muted);font-size:12px;line-height:1.4}
-    .plist{display:grid;gap:10px}.pcard{padding:13px;border:1px solid var(--line);border-radius:14px;background:#fff;cursor:pointer}.pcard.active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(196,95,53,.12)}.pcard:hover{border-color:var(--accent)}.ph{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.pt{font-weight:800;font-size:16px;line-height:1.1}.pm{color:var(--muted);font-size:12px;line-height:1.35;margin-top:4px}.prow{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.pill{padding:6px 8px;border-radius:999px;background:#f5efe3;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
-    .progress{margin-top:10px}.bar{height:10px;border-radius:999px;background:#ece5d8;overflow:hidden}.fill{height:100%;background:linear-gradient(90deg,var(--accent),#d89957)}.progressline{display:flex;justify-content:space-between;color:var(--muted);font-size:12px;margin-bottom:5px}.note{margin-top:8px;color:var(--muted);font-size:12px;line-height:1.4}
-    .detail{display:grid;gap:16px}.header{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}.title{margin:0;font-size:32px;line-height:1}.copy{margin:8px 0 0;color:var(--muted);line-height:1.5}.stat{padding:13px;border:1px solid var(--line);border-radius:12px;background:#fff}.stat .k{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}.stat .v{margin-top:6px;font-size:24px;font-weight:800}.stat .s{margin-top:6px;color:var(--muted);font-size:12px;line-height:1.4}
-    .list{display:grid;gap:8px}.item{padding:11px;border:1px solid var(--line);border-radius:12px;background:#fffcf7}.item strong{display:block;font-size:13px}.item span,.item code{display:block;color:var(--muted);font-size:12px;line-height:1.45}code{font-family:var(--mono)}
-    .table{overflow:auto;border:1px solid var(--line);border-radius:12px;background:#fff}table{width:100%;border-collapse:collapse;min-width:760px}th,td{text-align:left;padding:10px 12px;border-bottom:1px solid #eee6d9;font-size:13px;vertical-align:top}th{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);background:#faf4ea}tr:last-child td{border-bottom:0}
-    details{margin-top:12px;padding:10px 12px;border:1px dashed var(--line);border-radius:12px;background:#fcf8ef}summary{cursor:pointer;font-weight:700;font-size:13px}.empty{padding:14px;border:1px dashed var(--line);border-radius:12px;background:#fcf8ef;color:var(--muted);font-size:13px;line-height:1.5}
-    .footer{color:var(--muted);font-size:12px;text-align:right}
-    @media(max-width:1120px){.topgrid,.overview,.layout,.detail-grid,.metrics,.grid2{grid-template-columns:1fr}}
+    :root{--bg:#f3efe5;--panel:#fffdfa;--panel2:#faf5eb;--line:#d8d0c1;--ink:#23211c;--muted:#6e675c;--ok:#1f6b4a;--warn:#9a6616;--bad:#b43d2f;--accent:#c45f35;--accent2:#e1a25d;--shadow:0 10px 24px rgba(48,38,24,.07);--mono:Consolas,monospace;--sans:"Segoe UI",system-ui,sans-serif}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top,#fff8ee 0,#f3efe5 52%,#ede7db 100%);color:var(--ink);font:12px/1.35 var(--sans)}button{font:inherit}
+    .page{display:grid;gap:12px;padding:12px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow)}.panel-inner{padding:14px}
+    .section-head,.focus-header,.portfolio-head,.model-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap}.section-head{margin-bottom:10px}
+    h1,h2,h3,p{margin:0}h1{font-size:24px;line-height:1}h2{font-size:14px;line-height:1.15}h3{font-size:12px;line-height:1.2}.sub,.muted{color:var(--muted);font-size:10px;line-height:1.4}
+    .hero{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(320px,1fr);gap:12px;padding:16px 18px}.hero-copy{display:grid;gap:8px}.hero-copy p{max-width:72ch;color:var(--muted)}
+    .hero-meta,.chips{display:flex;flex-wrap:wrap;gap:6px}.hero-side,.strip,.focus-stats,.portfolio-metrics,.focus-grid-2{display:grid;gap:8px}.hero-side,.strip,.focus-stats{grid-template-columns:repeat(4,minmax(0,1fr))}.portfolio-metrics,.focus-grid-2{grid-template-columns:1fr 1fr}
+    .chip,.eyebrow{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}.chip{display:inline-flex;align-items:center;padding:4px 7px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--muted)}.eyebrow{color:var(--muted)}
+    .ok,.tone-ok{color:var(--ok)}.warn,.tone-warn{color:var(--warn)}.bad,.tone-bad{color:var(--bad)}.metric-value,.value{font-weight:800;line-height:1}.metric-value{margin-top:3px;font-size:18px}.value{margin-top:2px;font-size:13px}.metric-copy{margin-top:4px;color:var(--muted);font-size:10px;line-height:1.3}
+    .hero-box,.strip-card,.focus-stat,.mini-card,.list-item,.model-card,.mini-metric{padding:9px 10px;border:1px solid var(--line);border-radius:12px;background:linear-gradient(180deg,#fffefb 0,#f8f3e9 100%)}.mini-metric,.list-item,.model-card{background:var(--panel2)}
+    .analytics,.focus-grid{display:grid;gap:12px}.analytics{grid-template-columns:minmax(0,1.15fr) minmax(360px,.85fr)}.focus-grid{grid-template-columns:minmax(0,1.25fr) minmax(320px,.75fr)}.focus-stack,.portfolio-groups,.group,.histogram-list,.list,.model-board{display:grid;gap:8px}
+    .group-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}.portfolio-card{width:100%;text-align:left;border:1px solid var(--line);border-radius:14px;background:#fff;padding:10px 11px;cursor:pointer;display:grid;gap:7px}.portfolio-card:hover{border-color:var(--accent)}.portfolio-card.active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(196,95,53,.13)}
+    .portfolio-title{font-size:13px;font-weight:800;line-height:1.1}.portfolio-copy,.note{color:var(--muted);font-size:10px;line-height:1.3}.progress{display:grid;gap:4px}.progress-row{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:10px}.bar,.model-bar{height:8px;border-radius:999px;background:#ece4d6;overflow:hidden}.fill,.model-bar span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+    .histogram-row{display:grid;grid-template-columns:220px minmax(0,1fr) 84px;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:var(--panel2)}.histogram-meta{display:grid;gap:2px}.histogram-label{font-weight:800;font-size:11px}.histogram-sub{color:var(--muted);font-size:9px}.histogram-value{text-align:right;font-size:11px;font-weight:800}
+    .histogram-track{position:relative;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(3px,1fr);gap:2px;height:52px;padding:4px 0}.histogram-track::after{content:"";position:absolute;left:0;right:0;top:50%;border-top:1px solid #dacfbf}.hist-slot{position:relative}.hist-bar{position:absolute;left:0;right:0;border-radius:999px}.hist-bar.up{bottom:50%;background:linear-gradient(180deg,#2f8b61,#1f6b4a)}.hist-bar.down{top:50%;background:linear-gradient(180deg,#d78063,#b43d2f)}
+    .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px;background:#fff}table{width:100%;border-collapse:collapse;min-width:700px}th,td{padding:7px 9px;border-bottom:1px solid #eee5d8;text-align:left;font-size:10px;vertical-align:top}th{background:#faf4e8;color:var(--muted);font-size:9px;letter-spacing:.08em;text-transform:uppercase}tr:last-child td{border-bottom:0}code{font-family:var(--mono);font-size:10px}
+    .focus-title{display:grid;gap:6px}.focus-title h2{font-size:18px}.focus-actions{display:flex;flex-wrap:wrap;gap:6px}.action{border:1px solid var(--line);border-radius:10px;padding:7px 9px;background:#fff;color:var(--ink);font-weight:700;cursor:pointer}.action:hover{border-color:var(--accent)}.action.warn{color:var(--warn)}.action.danger{color:var(--bad)}
+    .empty{padding:11px;border:1px dashed var(--line);border-radius:11px;background:#fcf8ef;color:var(--muted);font-size:10px;line-height:1.4}.footer{font-size:10px;color:var(--muted);text-align:right}
+    @media(max-width:1180px){.hero,.analytics,.focus-grid,.focus-grid-2{grid-template-columns:1fr}}
+    @media(max-width:920px){.hero-side,.strip,.focus-stats{grid-template-columns:1fr 1fr}.histogram-row{grid-template-columns:1fr}.histogram-value{text-align:left}}
+    @media(max-width:640px){.page{padding:10px}.hero{padding:12px}.panel-inner{padding:12px}.hero-side,.strip,.focus-stats,.portfolio-metrics{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
 <div class="page">
-  <section class="hero card">
-    <h1>Trading Control Tower</h1>
-    <p>Separate what is actually trading, what is still learning, what is technically blocked, and which models are closest to becoming useful. No hidden aggregation. No mixed books.</p>
-    <div class="hero-meta" id="heroMeta"></div>
+  <section class="panel hero">
+    <div class="hero-copy">
+      <h1>Trading Control Tower</h1>
+      <p>Compact operator view of what is running, what is actually trading, where open risk sits, and which robots are earning trust. The page favors dense cards and live boards over oversized detail panes.</p>
+      <div class="hero-meta" id="heroMeta"></div>
+    </div>
+    <div class="hero-side" id="heroSide"></div>
   </section>
-
-  <section class="topgrid">
-    <div class="panel" id="topMeta"></div>
-    <div class="panel">
-      <h2>What This Dashboard Optimizes For</h2>
-      <p class="sub">Operator clarity. Each card answers four questions: is it running, is it trading, is learning improving, and what blocks live trust.</p>
-      <div class="list" id="principles"></div>
+  <section class="strip" id="overviewStrip"></section>
+  <section class="analytics">
+    <div class="panel"><div class="panel-inner"><div class="section-head"><div><h2>Model P&amp;L Histograms</h2><p class="sub">Shadow P&amp;L evolution for each exposed model account, so you can compare the robots inside the books instead of only the books themselves.</p></div><div class="chip">Last refresh <span id="histRefresh">n/a</span></div></div><div id="pnlHistogram"></div></div></div>
+    <div class="panel"><div class="panel-inner"><div class="section-head"><div><h2>All Open Trades</h2><p class="sub">Open positions from every engine and strategy book, with the robot name and current P&amp;L when the runner exposes it.</p></div><div class="chip" id="openTradeCount">0 rows</div></div><div id="openTrades"></div></div></div>
+  </section>
+  <section class="panel"><div class="panel-inner"><div class="section-head"><div><h2>Portfolio Grid</h2><p class="sub">Click any card to focus the robot below. Cards are grouped, compact, and show only the metrics needed for triage.</p></div></div><div class="portfolio-groups" id="portfolioGroups"></div></div></section>
+  <section class="focus-grid">
+    <div class="panel"><div class="panel-inner" id="focusMain"></div></div>
+    <div class="focus-stack">
+      <div class="panel"><div class="panel-inner" id="focusContext"></div></div>
+      <div class="panel"><div class="panel-inner" id="focusModels"></div></div>
     </div>
   </section>
-
-  <section class="overview">
-    <div class="panel"><h2>Needs Attention</h2><p class="sub">Broken runners, hard blockers, and books with no usable evidence yet.</p><div class="grid2" id="attention"></div></div>
-    <div class="panel"><h2>Potential Winners</h2><p class="sub">Closest things to useful models or books right now.</p><div class="grid2" id="winners"></div></div>
-  </section>
-
-  <section class="layout">
-    <aside class="sidebar" id="sidebar"></aside>
-    <main class="detail" id="detail"></main>
-  </section>
-
   <div class="footer" id="footer"></div>
 </div>
-
 <script>
 const REFRESH_MS = 15000;
 const GROUPS = [
-  {label:'Execution Engines', copy:'Runtime health and orchestration views.', ids:['betfair_core','hedge_validation','hedge_research','cascade_alpha','contrarian_legacy','mev_scout_sol']},
+  {label:'Execution Engines', copy:'Runtime health, orchestration, and directly managed books.', ids:['betfair_core','hedge_validation','hedge_research','cascade_alpha','contrarian_legacy','mev_scout_sol']},
   {label:'Polymarket', copy:'Standalone paper trading and read-only research for Polymarket.', ids:['polymarket_quantum_fold','polymarket_binary_research']},
-  {label:'Betfair Strategy Books', copy:'Independent Betfair books. Do not blend these PnLs.', ids:['betfair_prediction_league','betfair_suspension_lag','betfair_crossbook_consensus','betfair_timezone_decay']},
+  {label:'Betfair Strategy Books', copy:'Independent Betfair strategy books backed by the Betfair engine.', ids:['betfair_prediction_league','betfair_suspension_lag','betfair_crossbook_consensus','betfair_timezone_decay']},
 ];
 const LABELS = {betfair_core:'Betfair Engine'};
-const state = {portfolios:[], snapshots:new Map(), generatedAt:null, gitSha:'unknown', deploy:null, selectedId:localStorage.getItem('dashboard:selectedPortfolio')||'hedge_validation', lastError:null};
+const state = {portfolios:[], snapshots:new Map(), modelHistories:new Map(), generatedAt:null, gitSha:'unknown', deploy:null, selectedId:localStorage.getItem('dashboard:selectedPortfolio') || 'polymarket_quantum_fold', lastError:null};
 function n(v,d=2){v=Number(v||0);return Number.isFinite(v)?new Intl.NumberFormat('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}).format(v):'n/a'}
 function i(v){v=Number(v||0);return Number.isFinite(v)?new Intl.NumberFormat('en-US',{maximumFractionDigits:0}).format(v):'0'}
-function money(v,c){v=Number(v||0);return Number.isFinite(v)?`${v>0?'+':''}${n(v,2)} ${c||''}`.trim():'n/a'}
+function money(v,c){if(v===null||v===undefined||Number.isNaN(Number(v)))return'n/a';v=Number(v||0);return`${v>0?'+':''}${n(v,2)} ${c||''}`.trim()}
 function pct(v,d=2){v=Number(v||0);return Number.isFinite(v)?`${v>0?'+':''}${n(v,d)}%`:'n/a'}
 function tc(v){return String(v||'').replace(/_/g,' ').replace(/\b\w/g,m=>m.toUpperCase())}
-function clip(v,l=140){v=String(v||'').trim();if(!v)return 'n/a';return v.length<=l?v:`${v.slice(0,l-1)}…`}
-function ago(ts){if(!ts)return 'n/a';const t=new Date(ts);if(Number.isNaN(t.getTime()))return'n/a';const s=Math.round((Date.now()-t.getTime())/1000);if(Math.abs(s)<60)return`${s}s ago`;const m=Math.round(s/60);if(Math.abs(m)<60)return`${m}m ago`;const h=Math.round(m/60);if(Math.abs(h)<24)return`${h}h ago`;return`${Math.round(h/24)}d ago`}
+function clip(v,l=140){v=String(v||'').trim();if(!v)return'n/a';return v.length<=l?v:`${v.slice(0,Math.max(1,l-3))}...`}
+function ago(ts){if(!ts)return'n/a';const t=new Date(ts);if(Number.isNaN(t.getTime()))return'n/a';const s=Math.round((Date.now()-t.getTime())/1000);if(Math.abs(s)<60)return`${s}s ago`;const m=Math.round(s/60);if(Math.abs(m)<60)return`${m}m ago`;const h=Math.round(m/60);if(Math.abs(h)<24)return`${h}h ago`;return`${Math.round(h/24)}d ago`}
 function label(p){return LABELS[p.portfolio_id]||p.label||p.portfolio_id}
-function tone(r){r=String(r||'').toLowerCase();if(['live_ready','ready','validated'].includes(r))return'ok';if(['paper_validating','candidate'].includes(r))return'warn';if(r==='research_only')return'';return'bad'}
-function readyLabel(r){const m={blocked:'Not Live Ready',paper_validating:'Paper Validating',research_only:'Research Only',candidate:'Candidate',live_ready:'Live Ready',validated:'Validated',ready:'Ready'};return m[String(r||'').toLowerCase()]||tc(r||'unknown')}
-function auditLabel(v){const m={learning_ok:'Learning OK',stalled_gating:'Stalled Gating',stalled_data:'Stalled Data',underperforming:'Underperforming',reseeding:'Reseeding',external_blocked:'External Blocked'};return m[String(v||'').toLowerCase()]||tc(v||'unknown')}
 function snap(id){return state.snapshots.get(id)||{summary:state.portfolios.find(p=>p.portfolio_id===id)||{},state:{}}}
+function historyKey(portfolioId,modelId){return`${portfolioId}:${modelId}`}
+function account(s){return s.state?.account||{}}
 function isEngine(id){return id==='betfair_core'}
+function tone(v){v=String(v||'').toLowerCase();if(['live_ready','ready','validated'].includes(v))return'ok';if(['paper_validating','candidate'].includes(v))return'warn';if(v==='research_only')return'';return'bad'}
+function readyLabel(v){const m={blocked:'Not Live Ready',paper_validating:'Paper Validating',research_only:'Research Only',candidate:'Candidate',live_ready:'Live Ready',validated:'Validated',ready:'Ready'};return m[String(v||'').toLowerCase()]||tc(v||'unknown')}
+function auditLabel(v){const m={learning_ok:'Learning OK',stalled_gating:'Stalled Gating',stalled_data:'Stalled Data',underperforming:'Underperforming',reseeding:'Reseeding',external_blocked:'External Blocked'};return m[String(v||'').toLowerCase()]||tc(v||'unknown')}
 function failedChecks(s){const r=s.state?.readiness||{};return (r.checks_v2||r.checks||[]).filter(x=>x&&x.ok===false)}
 function blockerText(s){const f=failedChecks(s);if(f.length)return clip(f[0].reason||f[0].name||'Blocked',110);const b=s.state?.readiness?.blockers_v2||s.state?.readiness?.blockers||s.summary?.errors||[];return b.length?tc(b[0]):'No active blocker'}
-function learn(s){const models=s.state?.models||[];if(models.length){let settled=0,updates=0,best=null;for(const model of models){const m=model.metrics||{};settled+=Number(m.learning_settled||m.settled_count||0);updates+=Number(m.learning_updates||m.model_updates||0);const lift=m.recent_learning_brier_lift??m.learning_brier_lift_abs??m.brier_lift_abs;if(lift!==undefined&&lift!==null&&Number.isFinite(Number(lift)))best=best===null?Number(lift):Math.max(best,Number(lift))}return {headline:`${i(models.length)} model${models.length===1?'':'s'}`, copy:`${i(settled)} settled outcomes | ${i(updates)} updates`, signal:best===null?'No quality signal yet':`Best recent quality signal ${pct(best*100,2)}`}}
-  const raw=s.state?.raw_state||{}; const learner=raw.learner||raw.training_quality||raw.research_summary||{}; const progress=raw.learning_progress_pct??raw.training_progress?.settled_trades??learner.settled_count??learner.labeled_examples; if(progress!==undefined)return{headline:'Learning active',copy:`Progress ${n(progress,0)}`,signal:clip(raw.explainer||s.summary?.description||'Learning is active in this strategy.',90)}; return{headline:'No structured learner',copy:'This book is mainly execution or observation driven.',signal:clip(raw.explainer||s.summary?.description||'',90)}
+function learn(s){
+  const models=s.state?.models||[];
+  if(models.length){
+    let settled=0,updates=0,best=null;
+    for(const model of models){
+      const m=model.metrics||{};
+      settled+=Number(m.learning_settled||m.settled_count||0);
+      updates+=Number(m.learning_updates||m.model_updates||0);
+      const lift=m.recent_learning_brier_lift??m.learning_brier_lift_abs??m.brier_lift_abs;
+      if(lift!==undefined&&lift!==null&&Number.isFinite(Number(lift)))best=best===null?Number(lift):Math.max(best,Number(lift));
+    }
+    return{headline:`${i(models.length)} model${models.length===1?'':'s'}`,copy:`${i(settled)} settled | ${i(updates)} updates`,signal:best===null?'No quality signal yet':`Best lift ${pct(best*100,2)}`};
+  }
+  const raw=s.state?.raw_state||{}, learner=raw.learner||raw.training_quality||raw.research_summary||{};
+  const progress=raw.learning_progress_pct??raw.training_progress?.settled_trades??learner.settled_count??learner.labeled_examples;
+  if(progress!==undefined)return{headline:'Learning active',copy:`Progress ${n(progress,0)}`,signal:clip(raw.explainer||s.summary?.description||'Learning is active in this strategy.',90)};
+  return{headline:'No learner',copy:'Execution or observation driven',signal:clip(raw.explainer||s.summary?.description||'',90)};
 }
-function direction(summary,s){const t=summary.trend_direction||s.state?.trend?.direction||'flat';const d=Number(summary.progress_delta_24h||s.state?.trend?.progress_delta_24h||0);if(t==='improving')return`Improving. Readiness moved ${pct(d,1)} over 24h.`;if(t==='worsening')return`Worsening. Readiness slipped ${pct(d,1)} over 24h.`;return failedChecks(s).length?`Flat. Main blocker is ${blockerText(s).toLowerCase()}.`:'Flat. No new blocker, but no material progress either.'}
-function allModels(){const rows=[];for(const s of state.snapshots.values()){for(const model of (s.state?.models||[])){const m=model.metrics||{};const lift=Number(m.recent_learning_brier_lift??m.learning_brier_lift_abs??m.brier_lift_abs??0);const roi=Number(m.roi_pct??model.shadow_roi_pct??0);const eta=model.eta_hours;let score=(m.strict_gate_pass?100:0)+Math.min(Number(m.learning_settled||0)/10,25)+Math.min(Number(m.learning_updates||m.model_updates||0)/20,15)+Math.max(-20,Math.min(20,lift*1000))+Math.max(-15,Math.min(15,roi*10));if(eta!==null&&eta!==undefined&&Number.isFinite(Number(eta)))score+=Math.max(0,24-Number(eta));rows.push({portfolio:label(s.summary),model:model.model_id,lift,roi,score,reason:m.policy_gate_reason||m.strict_gate_reason||'n/a',settled:Number(m.learning_settled||m.settled_count||0),updates:Number(m.learning_updates||m.model_updates||0),shadow:Number(model.shadow_realized_pnl||0),eta:model.eta_to_readiness||'unknown',strict:Boolean(m.strict_gate_pass)})}}return rows}
-function cardHtml(item){return `<article class="card mini"><div class="k ${item.tone||''}">${item.eyebrow}</div><div class="v">${item.title}</div><div class="sub">${item.copy||''}</div><div class="list">${(item.lines||[]).map(x=>`<div>${x}</div>`).join('')}</div></article>`}
-function groupedIds(){return new Set(GROUPS.flatMap(g=>g.ids))}
-function portfolioCard(p){const s=snap(p.portfolio_id);const l=learn(s);return `<article class="pcard ${state.selectedId===p.portfolio_id?'active':''}" data-id="${p.portfolio_id}"><div class="ph"><div><div class="pt">${label(p)}</div><div class="pm">${clip(s.state?.raw_state?.explainer||p.description||'',82)}</div></div><span class="pill ${tone(p.readiness)}">${readyLabel(p.readiness)}</span></div><div class="tags"><span class="chip">${auditLabel(p.audit_state)}</span>${p.latest_research_run?.run_id?`<span class="chip">Run ${clip(p.latest_research_run.run_id,16)}</span>`:''}</div><div class="prow"><div class="mini"><div class="k">Trading</div><div class="v ${Number(p.realized_pnl||0)>=0?'ok':'bad'}">${isEngine(p.portfolio_id)?'Engine view':money(p.realized_pnl,p.currency)}</div><div class="sub">${isEngine(p.portfolio_id)?clip(blockerText(s),52):pct(p.roi_pct)+' ROI'}</div></div><div class="mini"><div class="k">Learning</div><div class="v">${l.headline}</div><div class="sub">${clip(l.copy,48)}</div></div><div class="mini"><div class="k">Runtime</div><div class="v ${p.running?'ok':'bad'}">${p.running?'Live':'Down'}</div><div class="sub">Heartbeat ${ago(p.last_heartbeat_ts)}</div></div><div class="mini"><div class="k">Next Action</div><div class="v">${clip(tc(p.audit_next_action||'n/a'),22)}</div><div class="sub">Report ${ago(p.last_progress_report_ts)}</div></div></div><div class="progress"><div class="progressline"><span>Progress to trust</span><span>${n(p.progress_pct||0,0)}%</span></div><div class="bar"><div class="fill" style="width:${Math.max(0,Math.min(100,Number(p.progress_pct||0)))}%"></div></div></div><div class="note">${direction(p,s)}</div></article>`}
-function sidebarSections(){const seen=groupedIds();const sections=GROUPS.map(g=>({label:g.label,copy:g.copy,portfolios:g.ids.map(id=>state.portfolios.find(p=>p.portfolio_id===id)).filter(Boolean)})).filter(g=>g.portfolios.length);const ungrouped=state.portfolios.filter(p=>!seen.has(p.portfolio_id));if(ungrouped.length)sections.push({label:'Other Managed Portfolios',copy:'Fallback section for live books that are not yet assigned to a sidebar group.',portfolios:ungrouped});return sections}
-function renderTop(){const managed=state.portfolios.filter(p=>p.control_mode!=='disabled');const total=managed.length;const running=managed.filter(p=>p.running).length;const blocked=managed.filter(p=>String(p.readiness).toLowerCase()==='blocked').length;const validating=managed.filter(p=>['paper_validating','candidate'].includes(String(p.readiness).toLowerCase())).length;document.getElementById('heroMeta').innerHTML=`<span class="chip ${running===total?'ok':'warn'}">${running}/${total} managed runners live</span><span class="chip ${blocked?'bad':'ok'}">${blocked} not live ready</span><span class="chip warn">${validating} validating</span><span class="chip">Git ${state.gitSha}</span>`;
-  const deploy=state.deploy||{}; const health=snap('betfair_core').state?.raw_state?.health||{}; const hedgeBlocked=failedChecks(snap('hedge_validation')).some(c=>c.name==='futures_auth_ready');
-  document.getElementById('topMeta').innerHTML=`<h2>Live Meta</h2><p class="sub">Current host state, refresh status, and key infrastructure blockers.</p><div class="metrics"><div class="mini"><div class="k">Generated</div><div class="v">${state.generatedAt?new Date(state.generatedAt).toLocaleTimeString():'n/a'}</div><div class="sub">Auto-refresh every ${Math.round(REFRESH_MS/1000)}s</div></div><div class="mini"><div class="k">Deploy Watcher</div><div class="v ${deploy.running?'ok':'warn'}">${deploy.running?'Watching main':'Idle'}</div><div class="sub">${clip(deploy.status||'No deploy state',80)}</div></div><div class="mini"><div class="k">Betfair Feed</div><div class="v ${health.feed_ok?'ok':'bad'}">${health.feed_status||'unknown'}</div><div class="sub">Session ${health.session_status||'n/a'} | coverage ${pct((health.snapshot_coverage_ratio||0)*100,0)}</div></div><div class="mini"><div class="k">Crypto Futures Auth</div><div class="v ${hedgeBlocked?'bad':'ok'}">${hedgeBlocked?'blocked':'ready'}</div><div class="sub">${clip(blockerText(snap('hedge_validation')),90)}</div></div></div>`;
-  document.getElementById('principles').innerHTML=['Every strategy book is shown separately.','Engine health is separated from strategy P&L.','Only failed checks are shown as blockers.','Model tables show learning depth, shadow P&L, and gate reason.'].map(x=>`<div class="item"><strong>${x}</strong></div>`).join('')
+function direction(summary,s){const t=summary.trend_direction||s.state?.trend?.direction||'flat';const d=Number(summary.progress_delta_24h||s.state?.trend?.progress_delta_24h||0);if(t==='improving')return`Improving ${pct(d,1)} over 24h.`;if(t==='worsening')return`Worsening ${pct(d,1)} over 24h.`;return failedChecks(s).length?`Main blocker: ${blockerText(s)}.`:'No material change in trust state.'}
+function totalPnl(s){const a=account(s);return Number(a.realized_pnl||s.summary?.realized_pnl||0)+Number(a.unrealized_pnl||0)}
+function allModels(){const rows=[];for(const s of state.snapshots.values()){for(const model of (s.state?.models||[])){const m=model.metrics||{};rows.push({portfolio:label(s.summary),portfolioId:s.summary.portfolio_id,model:model.model_id,settled:Number(m.learning_settled||m.settled_count||0),updates:Number(m.learning_updates||m.model_updates||0),shadow:Number(model.shadow_realized_pnl||0),lift:Number(m.recent_learning_brier_lift??m.learning_brier_lift_abs??m.brier_lift_abs??0),strict:Boolean(m.strict_gate_pass),reason:m.policy_gate_reason||m.strict_gate_reason||'n/a',eta:model.eta_to_readiness||'unknown'})}}return rows}
+function portfolioGroups(){const seen=new Set(GROUPS.flatMap(g=>g.ids));const rows=GROUPS.map(g=>({label:g.label,copy:g.copy,portfolios:g.ids.map(id=>state.portfolios.find(p=>p.portfolio_id===id)).filter(Boolean)})).filter(g=>g.portfolios.length);const extra=state.portfolios.filter(p=>!seen.has(p.portfolio_id));if(extra.length)rows.push({label:'Other Managed Portfolios',copy:'Fallback section for managed books that are not explicitly grouped yet.',portfolios:extra});return rows}
+function sampleSeries(series,limit=28){if(series.length<=limit)return series;const out=[],step=(series.length-1)/(limit-1);for(let idx=0;idx<limit;idx+=1)out.push(series[Math.round(idx*step)]);return out}
+function modelHistoryPoints(summary,model){
+  const rows=state.modelHistories.get(historyKey(summary.portfolio_id,model.model_id))||[];
+  const start=Number(model.shadow_starting_balance||0);
+  const series=rows.map(row=>{
+    const direct=row.shadow_realized_pnl;
+    const derived=row.shadow_current_balance!==undefined&&row.shadow_current_balance!==null?Number(row.shadow_current_balance)-start:null;
+    const pnl=direct!==undefined&&direct!==null?Number(direct):derived;
+    return{ts:row.ts||'', pnl};
+  }).filter(row=>Number.isFinite(row.pnl));
+  if(series.length)return sampleSeries(series,28);
+  return[{ts:state.generatedAt||'', pnl:Number(model.shadow_realized_pnl||0)}];
 }
-function renderOverview(){const sorted=[...state.snapshots.values()].sort((a,b)=>failedChecks(b).length-failedChecks(a).length);document.getElementById('attention').innerHTML=sorted.slice(0,4).map(s=>cardHtml({eyebrow:s.summary.running?'Attention needed':'Runner down',title:label(s.summary),copy:direction(s.summary,s),lines:[`Readiness: ${readyLabel(s.summary.readiness)}`,`Main blocker: ${blockerText(s)}`,`Heartbeat: ${ago(s.summary.last_heartbeat_ts)}`],tone:failedChecks(s).length||!s.summary.running?'bad':'warn'})).join('')||'<div class="empty">No active blocker right now.</div>';
-  const models=allModels().sort((a,b)=>b.score-a.score); const books=state.portfolios.filter(p=>!isEngine(p.portfolio_id)).sort((a,b)=>Number(b.realized_pnl||0)-Number(a.realized_pnl||0)); const winCards=[]; for(const m of models.slice(0,2)){winCards.push(cardHtml({eyebrow:'Model',title:m.model,copy:`${m.portfolio} | ${m.eta==='ready_now'?'ready now':'eta '+m.eta}`,lines:[`Learning settled: ${i(m.settled)}`,`Recent signal: ${pct(m.lift*100,2)}`,`Issue: ${tc(m.reason)}`],tone:m.strict?'ok':'warn'}))} for(const b of books.slice(0,2)){winCards.push(cardHtml({eyebrow:'Strategy book',title:label(b),copy:`${readyLabel(b.readiness)} | ${clip(b.eta_to_readiness||'No ETA yet',40)}`,lines:[`Realized P&L: ${money(b.realized_pnl,b.currency)}`,`ROI: ${pct(b.roi_pct)}`,`Open positions: ${i(b.open_count)}`],tone:Number(b.realized_pnl||0)>=0?'ok':'warn'}))} document.getElementById('winners').innerHTML=winCards.join('')||'<div class="empty">No candidate is strong enough to call promising yet.</div>'}
-function renderSidebar(){document.getElementById('sidebar').innerHTML=sidebarSections().map(g=>`<section class="panel group"><h3>${g.label}</h3><p>${g.copy}</p><div class="plist">${g.portfolios.map(p=>portfolioCard(p)).join('')}</div></section>`).join(''); document.querySelectorAll('.pcard').forEach(n=>n.addEventListener('click',()=>{state.selectedId=n.dataset.id;localStorage.setItem('dashboard:selectedPortfolio',state.selectedId);renderSidebar();renderDetail()}))}
-function buttons(p){if(p.control_mode!=='local_managed')return'';const bits=[]; if(!p.running)bits.push('<button class="action" data-action="start">Start</button>'); if(p.running)bits.push('<button class="action warn" data-action="restart">Restart</button>'); if(p.running)bits.push('<button class="action danger" data-action="stop">Stop</button>'); return bits.join('')}
-function explainer(p,s){const raw=s.state?.raw_state||{};const bullets=[]; if(isEngine(p.portfolio_id)){bullets.push('This is the engine and health view for the Betfair family, not a standalone strategy P&L book.');bullets.push('Use the separate Betfair books below for execution-book, prediction, and information-arbitrage performance.')} else {bullets.push(raw.explainer||p.description||'No plain-English strategy description is available yet.'); if(p.mode)bullets.push(`Current operating mode: ${tc(p.mode)}.`); if(p.control_mode==='disabled')bullets.push('This is an independent monitor view backed by the Betfair engine, not a separate runner process.')} bullets.push(`Current trust state: ${readyLabel(p.readiness)}.`); return `<details><summary>What this book does, in plain English</summary>${bullets.map(x=>`<div class="sub">${x}</div>`).join('')}</details>`}
-function checkList(s){const fails=failedChecks(s); if(!fails.length)return '<div class="empty">No active failed checks. That does not mean the strategy is good. It means there is no structured technical blocker right now.</div>'; return `<div class="list">${fails.map(c=>`<div class="item"><strong>${tc(c.name)}</strong><span>${clip(c.reason||'Failed check',150)}</span>${c.actual!==undefined?`<code>Actual: ${clip(JSON.stringify(c.actual),160)}</code>`:''}${c.required!==undefined?`<code>Required: ${clip(JSON.stringify(c.required),100)}</code>`:''}</div>`).join('')}</div>`}
-function modelsTable(s){const models=s.state?.models||[]; if(!models.length)return '<div class="empty">No model accounts are exposed for this book.</div>'; return `<div class="table"><table><thead><tr><th>Model</th><th>Learning Stage</th><th>Execution Stage</th><th>Tracked</th><th>Learning Settled</th><th>Updates</th><th>Shadow P&L</th><th>Recent Quality Signal</th><th>ETA</th><th>Current Gate Reason</th></tr></thead><tbody>${models.map(model=>{const m=model.metrics||{};const mode=m.policy_gate_mode||(m.strict_gate_pass?'execute':'shadow');const lift=m.recent_learning_brier_lift??m.learning_brier_lift_abs??m.brier_lift_abs??0;const stage=m.strict_gate_pass?'Ready':(model.settled_remaining>0?'Warming up':'Observed, still failing');return `<tr><td><strong>${model.model_id}</strong><br><span class="muted">${tc(m.model_kind||'')}</span></td><td>${stage}</td><td>${tc(mode)}</td><td>${i(m.learning_tracked||0)}</td><td>${i(m.learning_settled||m.settled_count||0)}</td><td>${i(m.learning_updates||m.model_updates||0)}</td><td class="${Number(model.shadow_realized_pnl||0)>=0?'ok':'bad'}">${money(model.shadow_realized_pnl,s.summary.currency)}</td><td class="${Number(lift||0)>=0?'ok':'bad'}">${pct(Number(lift||0)*100,2)}</td><td>${model.eta_to_readiness||'unknown'}</td><td>${tc(m.policy_gate_reason||m.strict_gate_reason||'n/a')}</td></tr>`}).join('')}</tbody></table></div>`}
-function tradesTable(s){const trades=s.state?.recent_trades||[]; if(!trades.length)return '<div class="empty">No recent closed or open trades are exposed for this book.</div>'; return `<div class="table"><table><thead><tr><th>Trade</th><th>Side</th><th>Realized</th><th>Reason</th><th>When</th></tr></thead><tbody>${trades.slice(0,12).map(t=>{const label=t.symbol||t.market_name||t.selection||t.trade_id||'trade'; const pnl=t.net_pnl_usd??t.realized_pnl??t.pnl??t.total_pnl_eur??0; const reason=t.close_reason||t.status||t.result||'n/a'; const when=t.closed_at||t.settled_at||t.updated_at||t.opened_at||''; return `<tr><td>${clip(label,40)}</td><td>${t.side||t.direction||'n/a'}</td><td class="${Number(pnl||0)>=0?'ok':'bad'}">${money(pnl,s.summary.currency)}</td><td>${clip(reason,40)}</td><td>${when?ago(when):'n/a'}</td></tr>`}).join('')}</tbody></table></div>`}
-function eventsList(s){const events=s.state?.recent_events||[]; const candidates=s.state?.raw_state?.latest_candidates||[]; if(!events.length&&!candidates.length)return '<div class="empty">No recent events or candidates are exposed right now.</div>'; const rows=events.length?events.slice(0,10).map(e=>`<div class="item"><strong>${tc(e.kind||e.event_type||'event')}</strong><span>${clip(JSON.stringify(e.data||e.payload||e),220)}</span></div>`):candidates.slice(0,10).map(c=>`<div class="item"><strong>${tc(c.symbol||c.selection_key||'candidate')}</strong><span>${clip(JSON.stringify(c),220)}</span></div>`); return `<div class="list">${rows.join('')}</div>`}
-function extra(p,s){const raw=s.state?.raw_state||{};const blocks=[]; if(p.portfolio_id==='betfair_core'){const health=raw.health||{}; const poller=raw.poller||{}; blocks.push(`<div class="item"><strong>Betfair Engine</strong><span>${health.feed_status||'unknown'} | session ${health.session_status||'n/a'} | login ${health.login_mode||'n/a'}</span><span>Snapshot coverage ${pct((health.snapshot_coverage_ratio||0)*100,0)} | books ${i(poller.books_received||0)} | snapshots ${i(poller.snapshots_set||0)}</span></div>`)} if(p.portfolio_id==='polymarket_quantum_fold'){const source=raw.source_health||{}; const gamma=source.gamma||{}; const clob=source.clob||{}; const training=raw.training_progress||{}; const league=raw.model_league||{}; const ranked=league.ranked_models||[]; const leader=ranked[0]||{}; blocks.push(`<div class="item"><strong>Gamma Health</strong><span>${gamma.healthy?'healthy':'degraded'} | events ${i(gamma.event_count||0)} | markets ${i(gamma.market_count||0)}</span><span>Tokens ${i(gamma.token_count||0)} | refresh ${gamma.last_refresh_ts?ago(gamma.last_refresh_ts):'n/a'}</span></div>`); blocks.push(`<div class="item"><strong>CLOB Health</strong><span>${clob.healthy?'healthy':'degraded'} | rest books ${i(clob.rest_book_count||0)} | ws ${clob.ws_connected?'connected':'down'}</span><span>Last message ${clob.ws_last_message_ts?ago(clob.ws_last_message_ts):'n/a'} | error ${clip(clob.last_error||'none',70)}</span></div>`); blocks.push(`<div class="item"><strong>Quote Freshness And Label Backlog</strong><span>Average freshness ${raw.quote_freshness_sec!==null&&raw.quote_freshness_sec!==undefined?`${n(raw.quote_freshness_sec,2)}s`:'n/a'} | pending ${i(training.pending_labels||0)}</span><span>Labeled ${i(training.labeled_examples||0)}/${i(training.targets?.labeled_examples||0)} | closed trades ${i(training.closed_trades||0)}/${i(training.targets?.closed_trades||0)}</span></div>`); blocks.push(`<div class="item"><strong>Model League</strong><span>Leader ${leader.model_id||'n/a'} | recent lift ${pct((leader.recent_learning_brier_lift||0)*100,2)}</span><span>Ranked models ${(ranked||[]).map(item=>item.model_id).join(', ')||'n/a'}</span></div>`)} const poly=raw.polymarket_signal_layer; if(poly){blocks.push(`<div class="item"><strong>Polymarket Confirmation Layer</strong><span>${poly.feed_health||'unknown'} | matched ${i(poly.matched_events||0)} | unmatched ${i(poly.unmatched_events||0)}</span><span>Useful sports: ${(poly.useful_sports||[]).slice(0,8).join(', ')||'n/a'}</span></div>`)} const rs=raw.research_summary; if(rs){blocks.push(`<div class="item"><strong>Research Quality</strong><span>${i(rs.labeled_examples||0)} labeled | ${i(rs.pending_labels||0)} pending</span><span>Average realized edge ${pct((rs.avg_realized_edge||0)*100,2)} | win rate ${pct((rs.win_rate||0)*100,1)}</span></div>`)} return blocks.length?`<div class="list">${blocks.join('')}</div>`:'<div class="empty">No additional context for this book right now.</div>'}
-function renderDetail(){const p=state.portfolios.find(x=>x.portfolio_id===state.selectedId)||state.portfolios[0]; if(!p){document.getElementById('detail').innerHTML='<div class="panel"><div class="empty">No portfolio data available.</div></div>'; return;} state.selectedId=p.portfolio_id; const s=snap(p.portfolio_id); const acct=s.state?.account||{}; const raw=s.state?.raw_state||{}; const l=learn(s); document.getElementById('detail').innerHTML=`<section class="panel"><div class="header"><div><div class="tags"><span class="chip ${tone(p.readiness)}">${readyLabel(p.readiness)}</span><span class="chip">${auditLabel(p.audit_state)}</span><span class="chip">${tc(p.mode||'n/a')}</span><span class="chip ${p.running?'ok':'bad'}">${p.running?'running':'down'}</span><span class="chip">Heartbeat ${ago(p.last_heartbeat_ts)}</span>${p.latest_research_run?.run_id?`<span class="chip">Research ${clip(p.latest_research_run.run_id,18)}</span>`:''}</div><h2 class="title">${label(p)}</h2><p class="copy">${isEngine(p.portfolio_id)?'Use this to judge operational health, feed quality, and recovery behavior. Use the separate Betfair books for strategy performance.':clip(raw.explainer||p.description||'No strategy description available yet.',220)}</p>${explainer(p,s)}</div><div class="tags">${buttons(p)}</div></div><div class="metrics">${[{k:isEngine(p.portfolio_id)?'Role':'Realized P&L',v:isEngine(p.portfolio_id)?'Engine':money(acct.realized_pnl??p.realized_pnl,p.currency),s:isEngine(p.portfolio_id)?'Health and orchestration view':`ROI ${pct(acct.roi_pct??p.roi_pct)}`},{k:'Open risk',v:i(p.open_count),s:`${i(acct.trade_count||s.state?.metrics?.trade_count||0)} trades on record`},{k:'Audit next',v:clip(tc(p.audit_next_action||'n/a'),24),s:`Owner ${tc(p.audit_owner||'ops')} | report ${ago(p.last_progress_report_ts)}`},{k:'Technical blockers',v:i(p.blocker_count||failedChecks(s).length),s:blockerText(s)}].map(x=>`<div class="stat"><div class="k">${x.k}</div><div class="v">${x.v}</div><div class="s">${x.s}</div></div>`).join('')}</div></section><section class="detail-grid"><div class="panel"><h3>Operator Reading</h3><p class="sub">Plain-language summary so you can decide whether this book is trading well, learning well, or simply blocked.</p><div class="list"><div class="item"><strong>Trading</strong><span>${isEngine(p.portfolio_id)?'This view is not a strategy P&L book.':`Realized ${money(acct.realized_pnl??p.realized_pnl,p.currency)} with ${i(acct.trade_count||s.state?.metrics?.trade_count||0)} recorded trades and ${i(p.open_count)} open positions.`}</span></div><div class="item"><strong>Learning</strong><span>${l.copy}. ${l.signal}</span></div><div class="item"><strong>Direction</strong><span>${direction(p,s)}</span></div><div class="item"><strong>Audit</strong><span>${auditLabel(p.audit_state)}. ${tc(p.audit_next_action||'n/a')}</span></div></div></div><div class="panel"><h3>Technical Blockers</h3><p class="sub">Only failed checks are shown here. This should answer why a book is blocked without making you read raw JSON.</p>${checkList(s)}</div></section><section class="detail-grid"><div class="panel"><h3>Recent Trades</h3><p class="sub">What actually closed or remains open in this specific book.</p>${tradesTable(s)}</div><div class="panel"><h3>Recent Events and Candidates</h3><p class="sub">Rejected signals, new candidates, and recent state changes. This is where you see if the strategy is active but blocked by rules.</p>${eventsList(s)}</div></section><section class="detail-grid"><div class="panel"><h3>Model Accounts</h3><p class="sub">Separate model-level learning and shadow performance. This is where promising models should become visible.</p>${modelsTable(s)}</div><div class="panel"><h3>Additional Context</h3><p class="sub">Source health, research summaries, engine diagnostics, and strategy-specific side channels.</p>${extra(p,s)}</div></section>`; document.querySelectorAll('[data-action]').forEach(btn=>btn.addEventListener('click',()=>act(p.portfolio_id,btn.dataset.action)))}
-async function act(id,action){try{const r=await fetch(`/api/portfolios/${id}/${action}`,{method:'POST'}); if(!r.ok)throw new Error(await r.text()); await load(false)}catch(e){alert(`Action failed: ${String(e.message||e)}`)}}
-async function load(showErrors=true){try{const pr=await fetch('/api/portfolios'); if(!pr.ok)throw new Error('Failed to load portfolio summaries'); const pp=await pr.json(); state.generatedAt=pp.generated_at; state.gitSha=pp.git_sha||'unknown'; state.portfolios=pp.portfolios||[]; const items=await Promise.all(state.portfolios.map(async p=>{const r=await fetch(`/api/portfolios/${p.portfolio_id}/state`); if(!r.ok)throw new Error(`Failed to load ${p.portfolio_id}`); return {summary:p,state:await r.json()}})); state.snapshots=new Map(items.map(x=>[x.summary.portfolio_id,x])); const dr=await fetch('/api/deploy/state'); state.deploy=dr.ok?await dr.json():null; if(!state.portfolios.find(p=>p.portfolio_id===state.selectedId))state.selectedId=state.portfolios.find(p=>p.portfolio_id==='polymarket_quantum_fold')?.portfolio_id||state.portfolios[0]?.portfolio_id||null; render(); state.lastError=null}catch(e){state.lastError=String(e.message||e); if(showErrors)document.getElementById('detail').innerHTML=`<div class="panel"><div class="empty">Dashboard failed to load: ${clip(state.lastError,220)}</div></div>`}}
-function render(){renderTop(); renderOverview(); renderSidebar(); renderDetail(); document.getElementById('footer').textContent=state.lastError?`Last UI error: ${state.lastError}`:`Live data from this host. Generated ${state.generatedAt||'n/a'} | git ${state.gitSha}`}
-load(); setInterval(()=>load(false),REFRESH_MS);
+function histogramRows(){
+  const rows=[];
+  for(const summary of state.portfolios){
+    const snapshot=snap(summary.portfolio_id), currency=account(snapshot).currency||summary.currency;
+    for(const model of (snapshot.state?.models||[])){
+      const metrics=model.metrics||{}, series=modelHistoryPoints(summary,model), current=series.length?Number(series[series.length-1].pnl||0):Number(model.shadow_realized_pnl||0);
+      rows.push({summary,snapshot,model,series,current,currency,settled:Number(metrics.learning_settled||metrics.settled_count||model.settled_count||0),selected:Boolean(model.selected_for_execution)});
+    }
+  }
+  return rows.filter(row=>row.series.length>1||Math.abs(row.current)>0||row.settled>0).sort((a,b)=>b.current-a.current);
+}
+function positionStatus(row){return String(row.status||row.result||'').toUpperCase()}
+function positionOpenedAt(row){return row.opened_at||row.entry_time||row.openedAt||row.created_at||''}
+function positionExposure(row){const explicit=Number(row.notional_usd||row.notional||row.stake||0);if(Number.isFinite(explicit)&&explicit>0)return explicit;const estimate=Number(row.quantity||0)*Number(row.entry_price||row.price||0);return Number.isFinite(estimate)?estimate:0}
+function positionPnl(row){const v=row.unrealized_pnl_usd??row.unrealized_pnl??row.net_pnl_usd??row.realized_pnl??row.pnl??row.total_pnl_eur;return v===undefined||v===null||v===''?null:Number(v)}
+function tradeLabel(row){return clip(row.market_name||row.symbol||row.selection||row.id||row.trade_id||'position',56)}
+function openTradeRows(){
+  const rows=[];
+  for(const summary of state.portfolios){
+    const snapshot=snap(summary.portfolio_id), acct=account(snapshot), positions=(Array.isArray(snapshot.state?.positions)?snapshot.state.positions:[]).filter(row=>{const status=positionStatus(row);return status==='OPEN'||status==='RUNNING'||status===''});
+    if(positions.length){for(const row of positions){rows.push({robot:label(summary),portfolioId:summary.portfolio_id,trade:tradeLabel(row),side:row.side||row.direction||'n/a',pnl:positionPnl(row),currency:acct.currency||summary.currency,openedAt:positionOpenedAt(row),exposure:positionExposure(row),compact:row.symbol||row.trade_id||''})}continue}
+    if(Number(summary.open_count||0)>0)rows.push({robot:label(summary),portfolioId:summary.portfolio_id,trade:`${i(summary.open_count)} open positions`,side:tc(summary.mode||'aggregate'),pnl:acct.unrealized_pnl??null,currency:acct.currency||summary.currency,openedAt:summary.last_heartbeat_ts,exposure:acct.gross_exposure??0,compact:'Aggregate source'});
+  }
+  return rows.sort((a,b)=>{const ap=a.pnl===null?Number.POSITIVE_INFINITY:Number(a.pnl),bp=b.pnl===null?Number.POSITIVE_INFINITY:Number(b.pnl);if(ap!==bp)return ap-bp;return new Date(b.openedAt||0).getTime()-new Date(a.openedAt||0).getTime()});
+}
+function focusSnapshot(){const selected=state.portfolios.find(p=>p.portfolio_id===state.selectedId);if(selected)return snap(selected.portfolio_id);const fallback=state.portfolios[0];return fallback?snap(fallback.portfolio_id):null}
+function checkList(snapshot){const checks=failedChecks(snapshot);if(!checks.length)return'<div class="empty">No active failed checks. This does not guarantee quality; it means there is no structured technical blocker right now.</div>';return `<div class="list">${checks.map(check=>`<div class="list-item"><strong>${tc(check.name)}</strong><span>${clip(check.reason||'Failed check',150)}</span>${check.actual!==undefined?`<span><code>Actual ${clip(JSON.stringify(check.actual),120)}</code></span>`:''}${check.required!==undefined?`<span><code>Required ${clip(JSON.stringify(check.required),120)}</code></span>`:''}</div>`).join('')}</div>`}
+function focusTradeRows(snapshot){const trades=Array.isArray(snapshot.state?.recent_trades)?snapshot.state.recent_trades:[];if(trades.length)return trades;return Array.isArray(snapshot.state?.positions)?snapshot.state.positions:[]}
+function renderHero(){
+  const managed=state.portfolios.filter(p=>p.control_mode!=='disabled'), live=managed.filter(p=>p.running).length, blocked=managed.filter(p=>String(p.readiness).toLowerCase()==='blocked').length, openTrades=openTradeRows(), withRisk=state.portfolios.filter(p=>Number(p.open_count||0)>0).length;
+  document.getElementById('heroMeta').innerHTML=[
+    `<span class="chip ${live===managed.length?'ok':'warn'}">${live}/${managed.length} managed live</span>`,
+    `<span class="chip ${blocked?'bad':'ok'}">${blocked} blocked</span>`,
+    `<span class="chip warn">${withRisk} robots with open risk</span>`,
+    `<span class="chip">${openTrades.length} open rows</span>`,
+    `<span class="chip">Git ${state.gitSha}</span>`
+  ].join('');
+  const deploy=state.deploy||{}, betfair=snap('betfair_core').state?.raw_state?.health||{}, hedgeBlock=blockerText(snap('hedge_validation'));
+  document.getElementById('heroSide').innerHTML=[
+    {k:'Generated',v:state.generatedAt?new Date(state.generatedAt).toLocaleTimeString():'n/a',s:`Auto refresh ${Math.round(REFRESH_MS/1000)}s`},
+    {k:'Deploy watcher',v:deploy.running?'Watching main':'Idle',s:clip(deploy.status||'No deploy state',72),tone:deploy.running?'ok':'warn'},
+    {k:'Betfair feed',v:betfair.feed_status||'unknown',s:`Session ${betfair.session_status||'n/a'}`,tone:betfair.feed_ok?'ok':'bad'},
+    {k:'Futures auth',v:clip(tc(hedgeBlock),24),s:'Primary crypto blocker',tone:String(hedgeBlock).toLowerCase().includes('ready')?'ok':'bad'}
+  ].map(box=>`<div class="hero-box"><div class="eyebrow ${box.tone?`tone-${box.tone}`:''}">${box.k}</div><div class="metric-value ${box.tone||''}">${box.v}</div><div class="metric-copy">${box.s}</div></div>`).join('');
+}
+function renderOverviewStrip(){
+  const openTrades=openTradeRows(), worstTrade=openTrades.find(row=>row.pnl!==null), profitable=state.portfolios.filter(summary=>totalPnl(snap(summary.portfolio_id))>0).length, models=allModels(), bestModel=[...models].sort((a,b)=>b.shadow-a.shadow)[0], focus=focusSnapshot();
+  const cards=[
+    {k:'Open trades',v:i(openTrades.length),s:worstTrade?`Worst live row ${money(worstTrade.pnl,worstTrade.currency)} on ${worstTrade.robot}`:'No open rows right now',tone:openTrades.length?'warn':'ok'},
+    {k:'Positive robots',v:`${profitable}/${i(state.portfolios.length)}`,s:'Using realized plus unrealized P&L where available',tone:profitable?'ok':'bad'},
+    {k:'Top shadow model',v:bestModel?clip(bestModel.model,20):'n/a',s:bestModel?`${bestModel.portfolio} | ${money(bestModel.shadow, snap(bestModel.portfolioId).summary?.currency)}`:'No models exposed',tone:bestModel&&bestModel.shadow>=0?'ok':'warn'},
+    {k:'Focus robot',v:focus?clip(label(focus.summary),22):'n/a',s:focus?direction(focus.summary,focus):'No portfolio selected',tone:focus?tone(focus.summary.readiness):''}
+  ];
+  document.getElementById('overviewStrip').innerHTML=cards.map(card=>`<article class="strip-card"><div class="eyebrow ${card.tone?`tone-${card.tone}`:''}">${card.k}</div><div class="metric-value ${card.tone||''}">${card.v}</div><div class="metric-copy">${card.s}</div></article>`).join('');
+}
+function histogramRow(row,limit){
+  const bars=row.series.map(point=>{const value=Number(point.pnl||0), height=Math.max(3,Math.round((Math.abs(value)/limit)*22)), cls=value>=0?'up':'down'; return `<span class="hist-slot" title="${clip(`${row.model.model_id} ${money(value,row.currency)} ${point.ts||''}`,120)}"><span class="hist-bar ${cls}" style="height:${height}px"></span></span>`}).join('');
+  return `<div class="histogram-row"><div class="histogram-meta"><div class="histogram-label">${row.model.model_id}</div><div class="histogram-sub">${label(row.summary)} | ${row.selected?'execution model':'shadow model'} | ${auditLabel(row.summary.audit_state)}</div></div><div class="histogram-track">${bars}</div><div class="histogram-value ${row.current>=0?'tone-ok':'tone-bad'}">${money(row.current,row.currency)}</div></div>`;
+}
+function renderHistogram(){
+  const rows=histogramRows().slice(0,16);
+  document.getElementById('histRefresh').textContent=state.generatedAt?new Date(state.generatedAt).toLocaleTimeString():'n/a';
+  if(!rows.length){document.getElementById('pnlHistogram').innerHTML='<div class="empty">No model shadow P&amp;L history is exposed yet. Fresh rows begin filling as the runners publish model snapshots.</div>';return}
+  const limit=Math.max(1,...rows.flatMap(row=>row.series.map(point=>Math.abs(Number(point.pnl||0)))));
+  document.getElementById('pnlHistogram').innerHTML=`<div class="histogram-list">${rows.map(row=>histogramRow(row,limit)).join('')}</div>`;
+}
+function renderOpenTrades(){
+  const rows=openTradeRows();
+  document.getElementById('openTradeCount').textContent=`${rows.length} rows`;
+  if(!rows.length){document.getElementById('openTrades').innerHTML='<div class="empty">No open positions are currently exposed by the active runners.</div>';return}
+  document.getElementById('openTrades').innerHTML=`<div class="table-wrap"><table><thead><tr><th>Robot</th><th>Trade</th><th>Side</th><th>Current P&amp;L</th><th>Exposure</th><th>Since</th></tr></thead><tbody>${rows.slice(0,18).map(row=>`<tr><td><strong>${row.robot}</strong><br><span class="muted">${clip(row.compact,26)}</span></td><td>${row.trade}</td><td>${row.side}</td><td class="${row.pnl===null?'muted':(row.pnl>=0?'tone-ok':'tone-bad')}">${row.pnl===null?'n/a':money(row.pnl,row.currency)}</td><td>${money(row.exposure,row.currency)}</td><td>${ago(row.openedAt)}</td></tr>`).join('')}</tbody></table></div>`;
+}
+function portfolioCard(summary){
+  const snapshot=snap(summary.portfolio_id), acct=account(snapshot), learning=learn(snapshot), pnl=totalPnl(snapshot);
+  return `<button class="portfolio-card ${state.selectedId===summary.portfolio_id?'active':''}" data-id="${summary.portfolio_id}"><div class="portfolio-head"><div><div class="portfolio-title">${label(summary)}</div><div class="portfolio-copy">${clip(snapshot.state?.raw_state?.explainer||summary.description||'',92)}</div></div><span class="chip ${tone(summary.readiness)}">${readyLabel(summary.readiness)}</span></div><div class="chips"><span class="chip">${auditLabel(summary.audit_state)}</span><span class="chip ${summary.running?'ok':'bad'}">${summary.running?'Live':'Down'}</span></div><div class="portfolio-metrics"><div class="mini-metric"><div class="eyebrow">P&amp;L</div><div class="value ${pnl>=0?'tone-ok':'tone-bad'}">${money(pnl,acct.currency||summary.currency)}</div></div><div class="mini-metric"><div class="eyebrow">Open risk</div><div class="value">${i(summary.open_count)}</div></div><div class="mini-metric"><div class="eyebrow">Learning</div><div class="value">${learning.headline}</div></div><div class="mini-metric"><div class="eyebrow">Heartbeat</div><div class="value">${ago(summary.last_heartbeat_ts)}</div></div></div><div class="progress"><div class="progress-row"><span>Trust progress</span><span>${n(summary.progress_pct||0,0)}%</span></div><div class="bar"><div class="fill" style="width:${Math.max(0,Math.min(100,Number(summary.progress_pct||0)))}%"></div></div></div><div class="note">${direction(summary,snapshot)}</div></button>`;
+}
+function renderPortfolioGrid(){
+  document.getElementById('portfolioGroups').innerHTML=portfolioGroups().map(group=>`<section class="group"><div class="section-head"><div><h3>${group.label}</h3><p class="sub">${group.copy}</p></div></div><div class="group-grid">${group.portfolios.map(portfolioCard).join('')}</div></section>`).join('');
+  document.querySelectorAll('.portfolio-card').forEach(node=>node.addEventListener('click',()=>{state.selectedId=node.dataset.id;localStorage.setItem('dashboard:selectedPortfolio',state.selectedId);renderPortfolioGrid();renderFocus();}));
+}
+function buttons(summary){if(summary.control_mode!=='local_managed')return'';const rows=[];if(!summary.running)rows.push('<button class="action" data-action="start">Start</button>');if(summary.running)rows.push('<button class="action warn" data-action="restart">Restart</button>');if(summary.running)rows.push('<button class="action danger" data-action="stop">Stop</button>');return rows.join('')}
+function tradesTable(snapshot){
+  const rows=focusTradeRows(snapshot), currency=account(snapshot).currency||snapshot.summary.currency;
+  if(!rows.length)return'<div class="empty">No recent closed or open trades are exposed for this robot.</div>';
+  return `<div class="table-wrap"><table><thead><tr><th>Trade</th><th>Side</th><th>Status</th><th>P&amp;L</th><th>When</th></tr></thead><tbody>${rows.slice(0,10).map(row=>{const pnl=positionPnl(row), when=row.closed_at||row.settled_at||row.updated_at||row.exit_time||row.opened_at||row.entry_time||''; return `<tr><td>${tradeLabel(row)}</td><td>${row.side||row.direction||'n/a'}</td><td>${row.status||row.result||'n/a'}</td><td class="${pnl===null?'muted':(pnl>=0?'tone-ok':'tone-bad')}">${pnl===null?'n/a':money(pnl,currency)}</td><td>${when?ago(when):'n/a'}</td></tr>`}).join('')}</tbody></table></div>`;
+}
+function eventsList(snapshot){
+  const events=snapshot.state?.recent_events||snapshot.state?.raw_state?.events||[], candidates=snapshot.state?.raw_state?.latest_candidates||[], rows=events.length?events.slice(-8).reverse():candidates.slice(0,8);
+  if(!rows.length)return'<div class="empty">No recent events or candidate payloads are exposed right now.</div>';
+  return `<div class="list">${rows.map(row=>`<div class="list-item"><strong>${tc(row.kind||row.event_type||row.symbol||row.selection_key||'event')}</strong><span>${clip(JSON.stringify(row.data||row.payload||row),220)}</span></div>`).join('')}</div>`;
+}
+function contextBlocks(snapshot){
+  const raw=snapshot.state?.raw_state||{}, learning=learn(snapshot), acct=account(snapshot), rows=[
+    `<div class="list-item"><strong>Operator summary</strong><span>${direction(snapshot.summary,snapshot)}</span></div>`,
+    `<div class="list-item"><strong>Learning state</strong><span>${learning.copy}. ${learning.signal}</span></div>`,
+    `<div class="list-item"><strong>Audit next</strong><span>${auditLabel(snapshot.summary.audit_state)} | ${tc(snapshot.summary.audit_next_action||'n/a')}</span></div>`,
+    `<div class="list-item"><strong>Account</strong><span>Realized ${money(acct.realized_pnl,acct.currency)} | Unrealized ${money(acct.unrealized_pnl,acct.currency)} | Exposure ${money(acct.gross_exposure,acct.currency)}</span></div>`
+  ];
+  if(snapshot.summary.portfolio_id==='polymarket_quantum_fold'){
+    const source=raw.source_health||{}, gamma=source.gamma||{}, clob=source.clob||{};
+    rows.push(`<div class="list-item"><strong>Gamma discovery</strong><span>${gamma.healthy?'healthy':'degraded'} | events ${i(gamma.event_count)} | markets ${i(gamma.market_count)} | tokens ${i(gamma.token_count)}</span></div>`);
+    rows.push(`<div class="list-item"><strong>CLOB execution</strong><span>${clob.healthy?'healthy':'degraded'} | rest books ${i(clob.rest_book_count)} | websocket ${clob.ws_connected?'connected':'down'}</span></div>`);
+  }
+  if(raw.polymarket_signal_layer){
+    const layer=raw.polymarket_signal_layer;
+    rows.push(`<div class="list-item"><strong>Polymarket confirmation layer</strong><span>${layer.feed_health||'unknown'} | matched ${i(layer.matched_events)} | unmatched ${i(layer.unmatched_events)}</span></div>`);
+  }
+  return `<div class="list">${rows.join('')}</div>`;
+}
+function renderModelBoard(snapshot){
+  const models=snapshot.state?.models||[];
+  if(!models.length)return{board:'<div class="empty">No model accounts are exposed for this robot.</div>', table:'<div class="empty">No model metrics are available.</div>'};
+  const maxPnl=Math.max(1,...models.map(model=>Math.abs(Number(model.shadow_realized_pnl||0))));
+  const board=`<div class="model-board">${models.map(model=>{const metrics=model.metrics||{}, pnl=Number(model.shadow_realized_pnl||0), width=Math.max(4,Math.round((Math.abs(pnl)/maxPnl)*100)); return `<div class="model-card"><div class="model-top"><div><div><strong>${model.model_id}</strong></div><div class="muted">${tc(metrics.model_kind||'model')} | ${model.eta_to_readiness||'unknown'}</div></div><div class="${pnl>=0?'tone-ok':'tone-bad'}"><strong>${money(pnl,account(snapshot).currency||snapshot.summary.currency)}</strong></div></div><div class="model-bar"><span style="width:${width}%"></span></div><div class="muted" style="margin-top:6px;">Settled ${i(metrics.learning_settled||metrics.settled_count||0)} | Lift ${pct(Number(metrics.recent_learning_brier_lift??metrics.learning_brier_lift_abs??metrics.brier_lift_abs??0)*100,2)}</div></div>`}).join('')}</div>`;
+  const table=`<div class="table-wrap"><table><thead><tr><th>Model</th><th>Shadow P&amp;L</th><th>Settled</th><th>Updates</th><th>Recent lift</th><th>Gate</th></tr></thead><tbody>${models.map(model=>{const metrics=model.metrics||{}, lift=Number(metrics.recent_learning_brier_lift??metrics.learning_brier_lift_abs??metrics.brier_lift_abs??0); return `<tr><td><strong>${model.model_id}</strong><br><span class="muted">${tc(metrics.model_kind||'')}</span></td><td class="${Number(model.shadow_realized_pnl||0)>=0?'tone-ok':'tone-bad'}">${money(model.shadow_realized_pnl,account(snapshot).currency||snapshot.summary.currency)}</td><td>${i(metrics.learning_settled||metrics.settled_count||0)}</td><td>${i(metrics.learning_updates||metrics.model_updates||0)}</td><td class="${lift>=0?'tone-ok':'tone-bad'}">${pct(lift*100,2)}</td><td>${tc(metrics.policy_gate_reason||metrics.strict_gate_reason||'n/a')}</td></tr>`}).join('')}</tbody></table></div>`;
+  return {board, table};
+}
+function renderFocus(){
+  const snapshot=focusSnapshot();
+  if(!snapshot){const empty='<div class="empty">No portfolio data available.</div>';document.getElementById('focusMain').innerHTML=empty;document.getElementById('focusContext').innerHTML=empty;document.getElementById('focusModels').innerHTML=empty;return}
+  const summary=snapshot.summary, acct=account(snapshot), models=renderModelBoard(snapshot);
+  document.getElementById('focusMain').innerHTML=`<div class="focus-header"><div class="focus-title"><div class="chips"><span class="chip ${tone(summary.readiness)}">${readyLabel(summary.readiness)}</span><span class="chip">${auditLabel(summary.audit_state)}</span><span class="chip">${tc(summary.mode||'n/a')}</span><span class="chip ${summary.running?'ok':'bad'}">${summary.running?'running':'down'}</span><span class="chip">Heartbeat ${ago(summary.last_heartbeat_ts)}</span></div><h2>${label(summary)}</h2><p class="sub">${clip(snapshot.state?.raw_state?.explainer||summary.description||'No strategy description available yet.',240)}</p></div><div class="focus-actions">${buttons(summary)}</div></div><div class="focus-stats"><div class="focus-stat"><div class="eyebrow">Current P&amp;L</div><div class="metric-value ${totalPnl(snapshot)>=0?'ok':'bad'}">${money(totalPnl(snapshot),acct.currency||summary.currency)}</div><div class="metric-copy">Realized plus unrealized</div></div><div class="focus-stat"><div class="eyebrow">Open positions</div><div class="metric-value">${i(summary.open_count)}</div><div class="metric-copy">${i(acct.trade_count||snapshot.state?.metrics?.trade_count||0)} trades on record</div></div><div class="focus-stat"><div class="eyebrow">Technical blockers</div><div class="metric-value">${i(summary.blocker_count||failedChecks(snapshot).length)}</div><div class="metric-copy">${clip(blockerText(snapshot),72)}</div></div><div class="focus-stat"><div class="eyebrow">Trust progress</div><div class="metric-value">${n(summary.progress_pct||0,0)}%</div><div class="metric-copy">${direction(summary,snapshot)}</div></div></div><div class="focus-grid-2"><div><div class="section-head"><div><h3>Recent Trades</h3><p class="sub">Closed and open rows exposed by the selected robot.</p></div></div>${tradesTable(snapshot)}</div><div><div class="section-head"><div><h3>Events And Candidates</h3><p class="sub">Signals, openings, closures, and recent candidate payloads.</p></div></div>${eventsList(snapshot)}</div></div>`;
+  document.getElementById('focusContext').innerHTML=`<div class="section-head"><div><h3>Context And Blockers</h3><p class="sub">Compact operational context for the selected robot.</p></div></div>${contextBlocks(snapshot)}<div class="section-head" style="margin-top:12px;"><div><h3>Failed Checks</h3><p class="sub">Only failed checks are shown.</p></div></div>${checkList(snapshot)}`;
+  document.getElementById('focusModels').innerHTML=`<div class="section-head"><div><h3>Model Board</h3><p class="sub">Current shadow P&amp;L and gate state for models exposed by the selected robot.</p></div></div>${models.board}<div class="section-head" style="margin-top:12px;"><div><h3>Model Metrics</h3><p class="sub">Compact table of the currently exposed model accounts.</p></div></div>${models.table}`;
+  document.querySelectorAll('[data-action]').forEach(btn=>btn.addEventListener('click',()=>act(summary.portfolio_id,btn.dataset.action)));
+}
+async function act(portfolioId,action){
+  try{
+    const response=await fetch(`/api/portfolios/${portfolioId}/${action}`,{method:'POST'});
+    if(!response.ok)throw new Error(await response.text());
+    await load(false);
+  }catch(error){
+    alert(`Action failed: ${String(error.message||error)}`);
+  }
+}
+async function load(showErrors=true){
+  try{
+    const summaryResponse=await fetch('/api/portfolios');
+    if(!summaryResponse.ok)throw new Error('Failed to load portfolio summaries');
+    const summaryPayload=await summaryResponse.json();
+    state.generatedAt=summaryPayload.generated_at;
+    state.gitSha=summaryPayload.git_sha||'unknown';
+    state.portfolios=summaryPayload.portfolios||[];
+    const snapshots=await Promise.all(state.portfolios.map(async summary=>{const response=await fetch(`/api/portfolios/${summary.portfolio_id}/state`);if(!response.ok)throw new Error(`Failed to load ${summary.portfolio_id}`);return {summary,state:await response.json()};}));
+    state.snapshots=new Map(snapshots.map(item=>[item.summary.portfolio_id,item]));
+    const modelHistoryEntries=await Promise.all(snapshots.flatMap(item=>(item.state.models||[]).map(async model=>{
+      const response=await fetch(`/api/portfolios/${item.summary.portfolio_id}/models/${encodeURIComponent(model.model_id)}/history?limit=180`);
+      if(!response.ok)return[historyKey(item.summary.portfolio_id,model.model_id),[]];
+      const payload=await response.json();
+      return[historyKey(item.summary.portfolio_id,model.model_id),payload.history||[]];
+    })));
+    state.modelHistories=new Map(modelHistoryEntries);
+    const deployResponse=await fetch('/api/deploy/state');
+    state.deploy=deployResponse.ok?await deployResponse.json():null;
+    if(!state.portfolios.find(p=>p.portfolio_id===state.selectedId))state.selectedId=state.portfolios.find(p=>p.portfolio_id==='polymarket_quantum_fold')?.portfolio_id||state.portfolios[0]?.portfolio_id||null;
+    render();
+    state.lastError=null;
+  }catch(error){
+    state.lastError=String(error.message||error);
+    if(showErrors){
+      const message=`<div class="empty">Dashboard failed to load: ${clip(state.lastError,220)}</div>`;
+      document.getElementById('focusMain').innerHTML=message;
+      document.getElementById('focusContext').innerHTML=message;
+      document.getElementById('focusModels').innerHTML=message;
+    }
+  }
+}
+function render(){renderHero();renderOverviewStrip();renderHistogram();renderOpenTrades();renderPortfolioGrid();renderFocus();document.getElementById('footer').textContent=state.lastError?`Last UI error: ${state.lastError}`:`Live data from this host. Generated ${state.generatedAt||'n/a'} | git ${state.gitSha}`;}
+load();
+setInterval(()=>load(false),REFRESH_MS);
 </script>
 </body>
 </html>

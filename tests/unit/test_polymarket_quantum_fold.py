@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from portfolio.types import ModelShadowAccount
+from polymarket.engine import PolymarketQuantumFoldEngine
 from polymarket.clob_client import PolymarketClobClient
 from polymarket.features import build_feature_rows
 from polymarket.gamma_client import PolymarketGammaClient
@@ -400,3 +401,28 @@ def test_paper_executor_rejects_resolved_and_extreme_price_markets():
     assert resolved_reason == "market_inactive"
     assert extreme_ok is False
     assert extreme_reason == "extreme_price"
+
+
+def test_quantum_fold_display_open_positions_marks_to_market(tmp_path):
+    engine = PolymarketQuantumFoldEngine(tmp_path, initial_balance=1000.0)
+    engine.executor.open_positions = [
+        {
+            "trade_id": "pmqf-1",
+            "token_id": "tok-1",
+            "entry_price": 0.40,
+            "quantity": 100.0,
+            "status": "OPEN",
+        }
+    ]
+    engine.quote_map = {
+        "tok-1": {
+            "best_bid": 0.46,
+            "quote_freshness_sec": 3.5,
+        }
+    }
+
+    positions = engine._display_open_positions()
+
+    assert positions[0]["mark_price"] == 0.46
+    assert positions[0]["unrealized_pnl_usd"] == 6.0
+    assert positions[0]["quote_freshness_sec"] == 3.5

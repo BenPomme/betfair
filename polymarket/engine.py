@@ -447,6 +447,27 @@ class PolymarketQuantumFoldEngine:
                 trade = self.executor.close_trade(position, quote, reason=close_reason)
                 self.events.append({"kind": "trade_closed", "data": trade})
 
+    def _display_open_positions(self) -> List[Dict[str, Any]]:
+        positions: List[Dict[str, Any]] = []
+        for position in self.executor.open_positions:
+            payload = dict(position)
+            quote = dict(self.quote_map.get(str(position.get("token_id") or "")) or {})
+            mark_price = clamp(to_float(quote.get("best_bid") or quote.get("midpoint"), 0.0))
+            quantity = to_float(position.get("quantity"), 0.0)
+            entry_price = to_float(position.get("entry_price"), 0.0)
+            unrealized_pnl = 0.0
+            if mark_price > 0 and quantity > 0 and entry_price > 0:
+                unrealized_pnl = (mark_price - entry_price) * quantity
+            payload.update(
+                {
+                    "mark_price": round(mark_price, 6) if mark_price > 0 else None,
+                    "unrealized_pnl_usd": round(unrealized_pnl, 6),
+                    "quote_freshness_sec": to_float(quote.get("quote_freshness_sec"), 0.0) if quote else None,
+                }
+            )
+            positions.append(payload)
+        return positions
+
     def _open_trade(self, feature_row: Dict[str, Any], quote_map: Dict[str, Dict[str, Any]]) -> None:
         approved, reason = self.executor.can_open(feature_row, quote_map)
         if not approved:
@@ -571,6 +592,7 @@ class PolymarketQuantumFoldEngine:
         blockers = [item["name"] for item in readiness_checks if not item["ok"]]
         readiness_status = "candidate" if not blockers else "paper_validating"
         avg_freshness = summarize_feature_rows(tracked_features).get("avg_quote_freshness_sec")
+        display_open_positions = self._display_open_positions()
         raw_state = {
             "portfolio_id": "polymarket_quantum_fold",
             "running": self._running,
@@ -578,7 +600,7 @@ class PolymarketQuantumFoldEngine:
             "status": "running" if self._running else "idle",
             "explainer": "Sports-only Polymarket paper book that combines coherence, interference, and folding-confidence features, learns online from live Gamma+CLOB observations, and executes only in a standalone paper account.",
             "scan_count": self._scan_count,
-            "open_positions": list(self.executor.open_positions),
+            "open_positions": display_open_positions,
             "closed_trades": list(self.executor.closed_trades),
             "trade_count": len(self.executor.closed_trades),
             "realized_pnl_usd": self.executor.realized_pnl(),
@@ -591,7 +613,7 @@ class PolymarketQuantumFoldEngine:
                 "drawdown_pct": self.executor.drawdown_pct(self.quote_map),
                 "drawdown_halt_active": self.executor.drawdown_halt_active,
                 "stale_quote_halts": self.executor.stale_halt_count,
-                "open_positions": len(self.executor.open_positions),
+                "open_positions": len(display_open_positions),
             },
             "source_health": source_health,
             "quote_freshness_sec": avg_freshness,

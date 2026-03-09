@@ -217,6 +217,36 @@ def test_command_center_exposes_polymarket_quantum_fold_portfolio(tmp_path, monk
     assert state["models"][0]["model_id"] == "hybrid_transition"
 
 
+def test_command_center_model_history_endpoint_exposes_shadow_pnl(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "PORTFOLIO_STATE_ROOT", str(tmp_path))
+    monkeypatch.setattr(command_center, "_process_manager", _DummyManager())
+
+    store = PortfolioStateStore("polymarket_quantum_fold")
+    history_path = store.models_dir / "hybrid_transition" / "progress_history.jsonl"
+    store.append_jsonl(
+        history_path,
+        {
+            "ts": "2026-03-09T08:00:00Z",
+            "settled_count": 12,
+            "model_updates": 12,
+            "strict_gate_pass": False,
+            "current_auc": 0.64,
+            "brier_lift_abs": 0.03,
+            "shadow_current_balance": 7514.5,
+            "shadow_realized_pnl": 14.5,
+            "shadow_roi_pct": 0.19,
+        },
+    )
+
+    client = TestClient(command_center.app)
+    payload = client.get("/api/portfolios/polymarket_quantum_fold/models/hybrid_transition/history").json()
+
+    assert payload["portfolio_id"] == "polymarket_quantum_fold"
+    assert payload["model_id"] == "hybrid_transition"
+    assert payload["history"][0]["shadow_realized_pnl"] == 14.5
+    assert payload["history"][0]["model_updates"] == 12
+
+
 def test_command_center_exposes_latest_research_run_and_reseeding_audit(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "PORTFOLIO_STATE_ROOT", str(tmp_path))
     monkeypatch.setattr(config, "RESEARCH_RUNTIME_ROOT", str(tmp_path / "research"), raising=False)
@@ -534,6 +564,51 @@ def test_command_center_enrich_models_adds_eta(tmp_path, monkeypatch):
     assert models[0]["settled_target"] == config.PREDICTION_STRICT_GATE_MIN_SETTLED
     assert models[0]["eta_to_readiness"] not in {"unknown", "quality_blocker"}
     assert models[0]["settled_remaining"] == config.PREDICTION_STRICT_GATE_MIN_SETTLED - 85
+
+
+def test_command_center_appends_model_shadow_pnl_to_history(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "PORTFOLIO_STATE_ROOT", str(tmp_path))
+
+    summary = {
+        "portfolio_id": "polymarket_quantum_fold",
+        "readiness": "paper_validating",
+        "open_count": 0,
+    }
+    state = {
+        "account": {"realized_pnl": 0.0, "roi_pct": 0.0},
+        "models": [
+            {
+                "portfolio_id": "polymarket_quantum_fold",
+                "model_id": "hybrid_transition",
+                "shadow_starting_balance": 7500.0,
+                "shadow_current_balance": 7522.25,
+                "shadow_realized_pnl": 22.25,
+                "shadow_roi_pct": 0.2967,
+                "settled_count": 18,
+                "metrics": {
+                    "settled_count": 18,
+                    "strict_gate_pass": False,
+                    "strict_gate_reason": "insufficient_labeled_examples",
+                    "model_updates": 18,
+                    "current_auc": 0.61,
+                    "rolling_200": {"brier_lift_abs": 0.012},
+                },
+            }
+        ],
+        "raw_state": {},
+    }
+    readiness = {"status": "paper_validating", "blockers": ["closed_trades_minimum"]}
+
+    command_center._append_history_if_due(summary, state, readiness, previous={})
+
+    rows = command_center._read_jsonl(
+        PortfolioStateStore("polymarket_quantum_fold").models_dir / "hybrid_transition" / "progress_history.jsonl"
+    )
+
+    assert rows[-1]["shadow_realized_pnl"] == 22.25
+    assert rows[-1]["shadow_current_balance"] == 7522.25
+    assert rows[-1]["shadow_roi_pct"] == 0.2967
+    assert rows[-1]["model_updates"] == 18
 
 
 def test_trade_close_alert_filter_uses_threshold(monkeypatch):

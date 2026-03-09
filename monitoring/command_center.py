@@ -202,9 +202,14 @@ def _append_history_if_due(summary: Dict[str, Any], state: Dict[str, Any], readi
             {
                 "ts": row["ts"],
                 "settled_count": int(settled or 0),
+                "model_updates": int(metrics.get("learning_updates", metrics.get("model_updates", 0)) or 0),
                 "strict_gate_pass": bool(metrics.get("strict_gate_pass", False)),
+                "strict_gate_reason": metrics.get("strict_gate_reason") or metrics.get("policy_gate_reason"),
                 "current_auc": metrics.get("current_auc"),
                 "brier_lift_abs": lift,
+                "shadow_current_balance": float(model.get("shadow_current_balance", 0.0) or 0.0),
+                "shadow_realized_pnl": float(model.get("shadow_realized_pnl", 0.0) or 0.0),
+                "shadow_roi_pct": float(model.get("shadow_roi_pct", 0.0) or 0.0),
             },
         )
 
@@ -1388,6 +1393,16 @@ def api_portfolio_events(portfolio_id: str) -> Dict[str, Any]:
 def api_portfolio_models(portfolio_id: str) -> Dict[str, Any]:
     state = _build_snapshot(portfolio_id)["state"]
     return {"portfolio_id": portfolio_id, "models": state.get("models") or []}
+
+
+@app.get("/api/portfolios/{portfolio_id}/models/{model_id}/history")
+def api_portfolio_model_history(portfolio_id: str, model_id: str, limit: int = 200) -> Dict[str, Any]:
+    rows = _read_jsonl(_model_history_path(portfolio_id, model_id), limit=max(1, min(int(limit), 1000)))
+    return {
+        "portfolio_id": portfolio_id,
+        "model_id": model_id,
+        "history": rows,
+    }
 
 
 @app.get("/api/portfolios/{portfolio_id}/readiness")
