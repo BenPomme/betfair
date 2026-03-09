@@ -72,6 +72,10 @@ DISCORD_BOT_STATUS_PORTFOLIOS: str = os.getenv(
     "DISCORD_BOT_STATUS_PORTFOLIOS",
     "betfair_core,hedge_validation,hedge_research,cascade_alpha,contrarian_legacy,mev_scout_sol",
 )
+DISCORD_BOT_ALLOW_DMS: bool = os.getenv("DISCORD_BOT_ALLOW_DMS", "true").lower() == "true"
+DISCORD_BOT_INBOX_PATH: str = os.getenv(
+    "DISCORD_BOT_INBOX_PATH", "data/runtime/discord_operator_inbox.jsonl"
+)
 NOTIFICATIONS_ENABLED: bool = os.getenv("NOTIFICATIONS_ENABLED", "true").lower() == "true"
 NOTIFY_DEDUPE_WINDOW_SECONDS: int = int(os.getenv("NOTIFY_DEDUPE_WINDOW_SECONDS", "600"))
 
