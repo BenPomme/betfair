@@ -17,9 +17,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 
 from monitoring.live_readiness import evaluate_live_trading_readiness
+from monitoring.model_audit import classify_portfolio
 from monitoring.notifier import NotificationManager
 from monitoring.portfolio_process_manager import PortfolioProcessManager
 from monitoring.portfolio_registry import get_portfolio_spec, list_portfolios
+from monitoring.research_bridge import load_latest_research_run
 from portfolio.accounting import build_strategy_account
 from portfolio.state_store import PortfolioStateStore
 from portfolio.types import PortfolioRunnerSpec, PortfolioState, PortfolioSummary
@@ -31,21 +33,11 @@ _notifier = NotificationManager()
 _snapshot_cache: Dict[str, Dict[str, Any]] = {}
 _digest_sent_at: float = 0.0
 _daily_digest_sent_slots: set[str] = set()
+_progress_digest_sent_at: float = 0.0
 _template_path = Path(__file__).parent / "templates" / "command_center.html"
 _deploy_state_path = Path("data/runtime/deploy_watcher_state.json")
 _deploy_watcher_script = Path(__file__).resolve().parent.parent / "scripts" / "run_deploy_watcher.py"
 _SYNTHETIC_PORTFOLIO_SPECS = {
-    "betfair_execution_book": PortfolioRunnerSpec(
-        portfolio_id="betfair_execution_book",
-        label="Betfair Execution Book",
-        category="betfair_strategy",
-        control_mode="disabled",
-        currency="EUR",
-        initial_balance=0.0,
-        enabled=True,
-        description="Independent execution-book view for Betfair paper trades.",
-        ui_group="Betfair Strategies",
-    ),
     "betfair_prediction_league": PortfolioRunnerSpec(
         portfolio_id="betfair_prediction_league",
         label="Betfair Prediction League",
@@ -229,6 +221,53 @@ def _parse_iso(ts: str) -> datetime | None:
 
 def _clamp(value: float, low: float = 0.0, high: float = 100.0) -> float:
     return max(low, min(high, value))
+
+
+def _count_candidates(summary: Dict[str, Any], state: Dict[str, Any]) -> int:
+    metrics = dict(state.get("metrics") or {})
+    raw_state = dict(state.get("raw_state") or {})
+    latest_candidates = raw_state.get("latest_candidates") or []
+    return max(
+        int(metrics.get("candidate_count", 0) or 0),
+        len(latest_candidates) if isinstance(latest_candidates, list) else 0,
+        int(summary.get("open_count", 0) or 0),
+    )
+
+
+def _count_closed_trades(state: Dict[str, Any]) -> int:
+    trades = [item for item in (state.get("recent_trades") or []) if isinstance(item, dict)]
+    closed = 0
+    for trade in trades:
+        status = str(trade.get("status") or "").upper()
+        if status in {"CLOSED", "SETTLED"} or trade.get("closed_at") or trade.get("settled_at"):
+            closed += 1
+    account = dict(state.get("account") or {})
+    return max(closed, int(account.get("trade_count", 0) or 0))
+
+
+def _apply_audit_metadata(summary: Dict[str, Any], state: Dict[str, Any]) -> None:
+    latest_research_run = load_latest_research_run(str(summary.get("portfolio_id") or ""))
+    audit = classify_portfolio(summary, state, latest_research_run=latest_research_run)
+    cache = _snapshot_cache.get(str(summary.get("portfolio_id") or ""), {})
+    last_progress_report_ts = cache.get("last_progress_report_ts")
+    trade_delta_1h = int(_count_closed_trades(state) - int(cache.get("closed_trade_count", 0) or 0))
+    candidate_delta_1h = int(_count_candidates(summary, state) - int(cache.get("candidate_count", 0) or 0))
+    summary.update(
+        {
+            **audit,
+            "last_progress_report_ts": last_progress_report_ts,
+            "latest_research_run": latest_research_run,
+            "trade_delta_1h": trade_delta_1h,
+            "candidate_delta_1h": candidate_delta_1h,
+        }
+    )
+    state.update(
+        {
+            **audit,
+            "last_progress_report_ts": last_progress_report_ts,
+            "latest_research_run": latest_research_run,
+        }
+    )
 
 
 def _progress_from_readiness(readiness: Dict[str, Any], portfolio_id: str | None = None, state: Dict[str, Any] | None = None) -> float:
@@ -748,8 +787,9 @@ def _model_update_message(model: Dict[str, Any], previous: Dict[str, Any]) -> tu
 
 
 def _emit_snapshot_notifications(snapshots: List[Dict[str, Any]]) -> None:
-    global _digest_sent_at
+    global _digest_sent_at, _progress_digest_sent_at
     now = time.time()
+    now_iso = _utc_now_iso()
     for item in snapshots:
         summary = item["summary"]
         state = item["state"]
@@ -759,40 +799,88 @@ def _emit_snapshot_notifications(snapshots: List[Dict[str, Any]]) -> None:
         previous_running = bool(previous.get("running"))
         previous_readiness = previous.get("readiness")
         previous_status = previous.get("status")
+        last_progress_report_ts = previous.get("last_progress_report_ts")
         if previous_running != bool(summary.get("running")):
             event_type = "portfolio_started" if summary.get("running") else "portfolio_stopped"
-            _notifier.send_event(
+            if _notifier.send_event(
                 portfolio_id=portfolio_id,
                 severity="info" if summary.get("running") else "warning",
                 event_type=event_type,
                 title=f"{summary.get('label')} {'started' if summary.get('running') else 'stopped'}",
                 message=f"status={summary.get('status')} readiness={summary.get('readiness')}",
                 dedupe_key=f"{portfolio_id}:{event_type}:{summary.get('running')}",
-            )
+            ):
+                last_progress_report_ts = now_iso
         if previous_readiness and previous_readiness != summary.get("readiness"):
-            _notifier.send_event(
+            if _notifier.send_event(
                 portfolio_id=portfolio_id,
                 severity="warning" if summary.get("readiness") == "blocked" else "info",
                 event_type="readiness_changed",
                 title=f"{summary.get('label')} readiness changed",
                 message=f"{previous_readiness} -> {summary.get('readiness')}",
+                payload={"blockers": readiness.get("blockers_v2") or readiness.get("blockers") or []},
                 dedupe_key=f"{portfolio_id}:readiness:{summary.get('readiness')}",
-            )
+            ):
+                last_progress_report_ts = now_iso
         if previous_status and previous_status != summary.get("status") and summary.get("status") == "error":
-            _notifier.send_event(
+            if _notifier.send_event(
                 portfolio_id=portfolio_id,
                 severity="critical",
                 event_type="portfolio_error",
                 title=f"{summary.get('label')} error",
                 message="Portfolio entered error state",
                 dedupe_key=f"{portfolio_id}:error",
-            )
+            ):
+                last_progress_report_ts = now_iso
+        previous_audit_state = previous.get("audit_state")
+        if previous_audit_state and previous_audit_state != summary.get("audit_state"):
+            if _notifier.send_event(
+                portfolio_id=portfolio_id,
+                severity="warning" if summary.get("audit_state") in {"underperforming", "stalled_gating", "stalled_data"} else "info",
+                event_type="audit_state_changed",
+                title=f"{summary.get('label')} audit state changed",
+                message=f"{previous_audit_state} -> {summary.get('audit_state')}",
+                payload={
+                    "audit_state": summary.get("audit_state"),
+                    "audit_owner": summary.get("audit_owner"),
+                    "audit_next_action": summary.get("audit_next_action"),
+                },
+                dedupe_key=f"{portfolio_id}:audit:{summary.get('audit_state')}",
+                allow_unlisted=True,
+            ):
+                last_progress_report_ts = now_iso
         current_closed_trade_ids = {
             _trade_identifier(trade)
             for trade in (state.get("recent_trades") or [])
             if isinstance(trade, dict) and _trade_closed(trade)
         }
         previous_closed_trade_ids = set(previous.get("closed_trade_ids") or [])
+        current_closed_trade_count = _count_closed_trades(state)
+        previous_closed_trade_count = int(previous.get("closed_trade_count", 0) or 0)
+        current_candidate_count = _count_candidates(summary, state)
+        previous_candidate_count = int(previous.get("candidate_count", 0) or 0)
+        if previous and previous_candidate_count == 0 and current_candidate_count > 0:
+            if _notifier.send_event(
+                portfolio_id=portfolio_id,
+                severity="info",
+                event_type="first_candidate",
+                title=f"{summary.get('label')} produced fresh candidates",
+                message=f"candidate_count={current_candidate_count} next={summary.get('audit_next_action')}",
+                dedupe_key=f"{portfolio_id}:first_candidate",
+                allow_unlisted=True,
+            ):
+                last_progress_report_ts = now_iso
+        if previous and previous_closed_trade_count == 0 and current_closed_trade_count > 0:
+            if _notifier.send_event(
+                portfolio_id=portfolio_id,
+                severity="info",
+                event_type="first_closed_trade",
+                title=f"{summary.get('label')} closed its first paper trades",
+                message=f"closed_trades={current_closed_trade_count} pnl={float(summary.get('realized_pnl', 0.0) or 0.0):+.2f}",
+                dedupe_key=f"{portfolio_id}:first_closed_trade",
+                allow_unlisted=True,
+            ):
+                last_progress_report_ts = now_iso
         if previous:
             for trade in state.get("recent_trades") or []:
                 if not isinstance(trade, dict) or not _trade_closed(trade):
@@ -803,7 +891,7 @@ def _emit_snapshot_notifications(snapshots: List[Dict[str, Any]]) -> None:
                 if not _should_alert_trade_close(trade, summary):
                     continue
                 severity, title, message = _closed_trade_message(trade, summary)
-                _notifier.send_event(
+                sent = _notifier.send_event(
                     portfolio_id=portfolio_id,
                     severity=severity,
                     event_type="trade_closed",
@@ -821,6 +909,8 @@ def _emit_snapshot_notifications(snapshots: List[Dict[str, Any]]) -> None:
                     },
                     dedupe_key=f"{portfolio_id}:trade_closed:{trade_id}",
                 )
+                if sent:
+                    last_progress_report_ts = now_iso
         current_models = {
             str(model.get("model_id")): _model_metric_bundle(model)
             for model in (state.get("models") or [])
@@ -836,7 +926,7 @@ def _emit_snapshot_notifications(snapshots: List[Dict[str, Any]]) -> None:
                 if not update:
                     continue
                 severity, title, message = update
-                _notifier.send_event(
+                sent = _notifier.send_event(
                     portfolio_id=portfolio_id,
                     severity=severity,
                     event_type="model_update",
@@ -853,20 +943,67 @@ def _emit_snapshot_notifications(snapshots: List[Dict[str, Any]]) -> None:
                         f"{(model.get('metrics') or {}).get('strict_gate_pass')}"
                     ),
                 )
+                if sent:
+                    last_progress_report_ts = now_iso
+        current_research_run = dict(summary.get("latest_research_run") or {})
+        previous_research_run = dict(previous.get("latest_research_run") or {})
+        current_run_ref = (
+            current_research_run.get("run_id"),
+            current_research_run.get("status"),
+            current_research_run.get("decision"),
+        )
+        previous_run_ref = (
+            previous_research_run.get("run_id"),
+            previous_research_run.get("status"),
+            previous_research_run.get("decision"),
+        )
+        if previous and current_research_run and current_run_ref != previous_run_ref:
+            if _notifier.send_event(
+                portfolio_id=portfolio_id,
+                severity="info",
+                event_type="research_run_update",
+                title=f"{summary.get('label')} research run updated",
+                message=(
+                    f"run_id={current_research_run.get('run_id')} "
+                    f"status={current_research_run.get('status')} "
+                    f"decision={current_research_run.get('decision')}"
+                ),
+                payload=current_research_run,
+                dedupe_key=(
+                    f"{portfolio_id}:research:{current_research_run.get('run_id')}:"
+                    f"{current_research_run.get('status')}:{current_research_run.get('decision')}"
+                ),
+                allow_unlisted=True,
+            ):
+                last_progress_report_ts = now_iso
         _append_history_if_due(summary, state, readiness, previous)
         _snapshot_cache[portfolio_id] = {
             "running": summary.get("running"),
             "readiness": summary.get("readiness"),
             "status": summary.get("status"),
+            "audit_state": summary.get("audit_state"),
+            "candidate_count": current_candidate_count,
+            "closed_trade_count": current_closed_trade_count,
             "closed_trade_ids": sorted(current_closed_trade_ids),
             "models": current_models,
             "last_history_write": previous.get("last_history_write"),
+            "last_progress_report_ts": last_progress_report_ts,
+            "latest_research_run": current_research_run,
         }
 
     digest_interval = max(5, int(config.DISCORD_DIGEST_INTERVAL_MINUTES)) * 60
     if getattr(config, "DISCORD_DIGEST_ENABLED", True) and now - _digest_sent_at >= digest_interval:
         _notifier.send_digest([item["summary"] for item in snapshots], snapshots=snapshots)
         _digest_sent_at = now
+    progress_digest_interval = max(15, int(getattr(config, "DISCORD_PROGRESS_DIGEST_INTERVAL_MINUTES", 60))) * 60
+    if getattr(config, "DISCORD_PROGRESS_DIGEST_ENABLED", True) and now - _progress_digest_sent_at >= progress_digest_interval:
+        progress_rows = [item["summary"] for item in snapshots]
+        if _notifier.send_progress_digest(progress_rows):
+            _progress_digest_sent_at = now
+            for item in snapshots:
+                portfolio_id = str((item.get("summary") or {}).get("portfolio_id") or "")
+                if portfolio_id in _snapshot_cache:
+                    _snapshot_cache[portfolio_id]["last_progress_report_ts"] = now_iso
     _maybe_send_daily_digest([item["summary"] for item in snapshots], snapshots)
 
 
@@ -929,19 +1066,7 @@ def _build_synthetic_betfair_snapshot(portfolio_id: str) -> Dict[str, Any]:
     bankroll = 0.0
     currency = spec.currency
 
-    if portfolio_id == "betfair_execution_book":
-        account = dict(parent_state.get("account") or {})
-        bankroll = float(account.get("starting_balance", 0.0) or 0.0)
-        realized_pnl = float(account.get("realized_pnl", 0.0) or 0.0)
-        roi_pct = float(account.get("roi_pct", 0.0) or 0.0)
-        recent_trades = list(parent_state.get("recent_trades") or [])
-        recent_events = list(parent_state.get("recent_events") or [])
-        open_count = int(parent_summary.get("open_count", 0) or 0)
-        balance_history = list(parent_state.get("balance_history") or [])
-        readiness = dict(parent_state.get("readiness") or {})
-        progress_pct = float(parent_summary.get("progress_pct", 0.0) or 0.0)
-        readiness_status = str(parent_summary.get("readiness") or "paper_validating")
-    elif portfolio_id == "betfair_prediction_league":
+    if portfolio_id == "betfair_prediction_league":
         bankroll = float(sum(float(m.get("shadow_starting_balance", 0.0) or 0.0) for m in parent_models))
         realized_pnl = float(prediction_summary.get("realized_pnl_eur", 0.0) or 0.0)
         roi_pct = float(prediction_summary.get("avg_roi_pct", 0.0) or 0.0)
@@ -982,6 +1107,11 @@ def _build_synthetic_betfair_snapshot(portfolio_id: str) -> Dict[str, Any]:
         ) if parent_models else 0.0
         readiness_status = "paper_validating"
     else:
+        open_positions = list(book.get("open_positions") or [])
+        closed_trades = list(book.get("closed_trades") or [])
+        recent_trades = (closed_trades + open_positions)[-100:]
+        recent_events = list(book.get("recent_events") or book.get("latest_candidates") or [])[-100:]
+        open_count = len(open_positions)
         account = {
             "portfolio_id": portfolio_id,
             "currency": currency,
@@ -996,12 +1126,9 @@ def _build_synthetic_betfair_snapshot(portfolio_id: str) -> Dict[str, Any]:
             "drawdown_pct": 0.0,
             "wins": 0,
             "losses": 0,
-            "trade_count": int(book.get("accepted_count", 0) or 0),
+            "trade_count": len(closed_trades),
             "last_updated": parent_state.get("account", {}).get("last_updated"),
         }
-        open_count = int(book.get("candidate_count", 0) or 0)
-        recent_events = list(book.get("latest_candidates") or [])
-        recent_trades = list(book.get("latest_candidates") or [])
         readiness = {
             "status": "research_only" if portfolio_id == "polymarket_binary_research" else ("paper_validating" if mode in {"observe", "shadow", "canary"} else mode),
             "confidence": "low",
@@ -1009,6 +1136,7 @@ def _build_synthetic_betfair_snapshot(portfolio_id: str) -> Dict[str, Any]:
             "checks": [
                 {"name": "strategy_enabled", "ok": True, "reason": "Strategy book is publishing state"},
                 {"name": "active_candidates", "ok": bool(book.get("candidate_count", 0)), "reason": "Strategy needs candidate flow to learn"},
+                {"name": "closed_outcomes", "ok": bool(closed_trades), "reason": "Strategy should settle paper trades instead of staying observational"},
             ],
             "eta_to_readiness": "awaiting_more_progress",
             "eta_hours": None,
@@ -1080,7 +1208,10 @@ def _build_synthetic_betfair_snapshot(portfolio_id: str) -> Dict[str, Any]:
             "eta_to_readiness": readiness.get("eta_to_readiness") or "awaiting_more_progress",
         },
     )
-    return {"summary": summary.to_dict(), "state": state.to_dict()}
+    summary_payload = summary.to_dict()
+    state_payload = state.to_dict()
+    _apply_audit_metadata(summary_payload, state_payload)
+    return {"summary": summary_payload, "state": state_payload}
 
 
 def _build_base_snapshot(portfolio_id: str) -> Dict[str, Any]:
@@ -1179,7 +1310,10 @@ def _build_base_snapshot(portfolio_id: str) -> Dict[str, Any]:
         error=raw_state.get("error"),
         trend=trend,
     )
-    return {"summary": summary.to_dict(), "state": state.to_dict()}
+    summary_payload = summary.to_dict()
+    state_payload = state.to_dict()
+    _apply_audit_metadata(summary_payload, state_payload)
+    return {"summary": summary_payload, "state": state_payload}
 
 
 def _build_snapshot(portfolio_id: str) -> Dict[str, Any]:

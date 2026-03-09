@@ -46,10 +46,12 @@ class CascadeRiskManager:
         side = str(position.get("side", "LONG")).upper()
         move = ((current_price - entry) / entry) * (1.0 if side == "LONG" else -1.0)
         hold_seconds = max(0.0, (datetime.now(timezone.utc) - datetime.fromisoformat(position["opened_at"])).total_seconds())
-        if hold_seconds >= int(config.CASCADE_ALPHA_MAX_HOLD_SECONDS):
+        if hold_seconds >= min(int(config.CASCADE_ALPHA_MAX_HOLD_SECONDS), 600):
             return True, "max_hold"
-        if move >= 0.012:
+        if hold_seconds >= 300 and abs(move) < 0.002:
+            return True, "stale_setup"
+        if move >= 0.009:
             return True, "take_profit"
-        if move <= -0.008:
+        if move <= -0.006:
             return True, "stop_loss"
         return False, "hold"

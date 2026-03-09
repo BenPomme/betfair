@@ -65,6 +65,7 @@ class BetfairInformationArbManager:
         self._ranker = PolymarketBinaryRanker("betfair_core")
         self._state: Dict[str, Any] = self._empty_state()
         self._seen_keys: Dict[Tuple[str, str, str], datetime] = {}
+        self._trade_sequence: int = 0
 
     @staticmethod
     def _empty_book(strategy_id: str, label: str, explainer: str, mode: str) -> Dict[str, Any]:
@@ -82,18 +83,15 @@ class BetfairInformationArbManager:
             "top_blockers": [],
             "learning_progress_pct": 0.0,
             "latest_candidates": [],
+            "open_positions": [],
+            "closed_trades": [],
+            "recent_events": [],
         }
 
     def _empty_state(self) -> Dict[str, Any]:
         return {
             "observed_at": None,
             "strategy_books": {
-                "betfair_execution_book": self._empty_book(
-                    "betfair_execution_book",
-                    "Betfair Execution Book",
-                    "Executes the currently approved Betfair paper-trading strategies and tracks real paper P&L.",
-                    "execute",
-                ),
                 "betfair_prediction_league": self._empty_book(
                     "betfair_prediction_league",
                     "Prediction League",
@@ -172,6 +170,44 @@ class BetfairInformationArbManager:
     def _book(self, strategy_id: str) -> Dict[str, Any]:
         return self._state["strategy_books"][strategy_id]
 
+    def _push_book_event(self, book: Dict[str, Any], kind: str, data: Dict[str, Any]) -> None:
+        book["recent_events"] = ([{"kind": kind, "data": dict(data)}] + list(book.get("recent_events") or []))[:40]
+
+    def _maybe_open_trade(self, book: Dict[str, Any], candidate: Dict[str, Any]) -> None:
+        open_positions = list(book.get("open_positions") or [])
+        if len(open_positions) >= int(getattr(config, "BETFAIR_INFO_ARB_MAX_OPEN_POSITIONS_PER_STRATEGY", 5)):
+            return
+        if any(
+            str(item.get("market_id") or "") == str(candidate.get("market_id") or "")
+            and str(item.get("selection_key") or "") == str(candidate.get("selection_key") or "")
+            for item in open_positions
+        ):
+            return
+        if float(candidate.get("fillability_score", 0.0) or 0.0) < 0.08:
+            return
+        if float(candidate.get("expected_edge", 0.0) or 0.0) <= 0.0:
+            return
+        self._trade_sequence += 1
+        trade = {
+            "trade_id": f"{candidate['strategy_id']}-{self._trade_sequence}",
+            "candidate_id": candidate["candidate_id"],
+            "market_id": candidate["market_id"],
+            "selection_key": candidate["selection_key"],
+            "selection_name": candidate.get("selection_name"),
+            "symbol": candidate.get("selection_name") or candidate.get("selection_key"),
+            "side": str(candidate.get("entry_side") or "back").upper(),
+            "status": "OPEN",
+            "opened_at": candidate["observed_at"],
+            "entry_back_odds": float(candidate.get("entry_back_odds", 0.0) or 0.0),
+            "entry_lay_odds": float(candidate.get("entry_lay_odds", 0.0) or 0.0),
+            "expected_edge": float(candidate.get("expected_edge", 0.0) or 0.0),
+            "signal_strength": float(candidate.get("signal_strength", 0.0) or 0.0),
+            "event_name": candidate.get("event_name"),
+        }
+        candidate["trade_id"] = trade["trade_id"]
+        book["open_positions"] = ([trade] + open_positions)[:20]
+        self._push_book_event(book, "trade_opened", trade)
+
     def _register_candidate(
         self,
         *,
@@ -196,6 +232,8 @@ class BetfairInformationArbManager:
             4,
         )
         book["latest_candidates"] = ([candidate] + book["latest_candidates"])[:8]
+        self._maybe_open_trade(book, candidate)
+        self._push_book_event(book, "candidate_registered", candidate)
         if candidate_logger is not None:
             candidate_logger.log(
                 build_strategy_record(
@@ -251,11 +289,32 @@ class BetfairInformationArbManager:
             if not updates:
                 continue
             completed = all(horizon in payload["horizons_done"] for horizon in horizon_targets)
-            net_pnl = updates.get("forward_pnl_60s")
+            longest_horizon = max(payload["horizons_done"]) if payload["horizons_done"] else None
+            net_pnl = updates.get(f"forward_pnl_{longest_horizon}s") if longest_horizon is not None else None
             if completed:
                 book = self._book(candidate["strategy_id"])
                 if net_pnl is not None:
                     book["realized_net_pnl"] = round(float(book["realized_net_pnl"]) + float(net_pnl or 0.0), 4)
+                trade_id = candidate.get("trade_id")
+                if trade_id:
+                    closed_trade = None
+                    remaining_open = []
+                    for trade in list(book.get("open_positions") or []):
+                        if str(trade.get("trade_id") or "") == str(trade_id):
+                            closed_trade = {
+                                **trade,
+                                "status": "CLOSED",
+                                "closed_at": _utc_now_iso(),
+                                "close_reason": f"horizon_{longest_horizon}s" if longest_horizon is not None else "labeled",
+                                "realized_pnl": round(float(net_pnl or 0.0), 6),
+                                "net_pnl_usd": round(float(net_pnl or 0.0), 6),
+                            }
+                        else:
+                            remaining_open.append(trade)
+                    if closed_trade is not None:
+                        book["open_positions"] = remaining_open[:20]
+                        book["closed_trades"] = ([closed_trade] + list(book.get("closed_trades") or []))[:40]
+                        self._push_book_event(book, "trade_closed", closed_trade)
                 to_remove.append(candidate_id)
             if candidate_logger is not None:
                 candidate_logger.log(
@@ -292,7 +351,10 @@ class BetfairInformationArbManager:
 
     def _progress(self, book: Dict[str, Any], min_target: float = 25.0) -> float:
         candidates = float(book["candidate_count"] or 0)
-        return round(min(100.0, (candidates / max(1.0, min_target)) * 100.0), 2)
+        closed_trades = float(len(book.get("closed_trades") or []))
+        progress = min(60.0, (candidates / max(1.0, min_target)) * 60.0)
+        progress += min(40.0, (closed_trades / 10.0) * 40.0)
+        return round(min(100.0, progress), 2)
 
     def _persist_polymarket_research_state(self, state: Dict[str, Any]) -> None:
         path = self._runtime_store.runtime_dir / "polymarket_binary_research_state.json"
@@ -397,12 +459,30 @@ class BetfairInformationArbManager:
         for market_id, snapshot in snapshots.items():
             meta = market_metadata.get(market_id, {})
             market_matches = list(matches_by_market.get(market_id, []))
+            grouped_sources = sorted({str(match.get("external_source") or "unknown") for match in market_matches})
+            matched_event_keys = {
+                str(match.get("external_event_key") or "")
+                for match in market_matches
+                if str(match.get("external_event_key") or "")
+            }
+            crossbook_match_context: Dict[str, Any] = {}
             if market_matches:
-                grouped_sources = sorted({str(match.get("external_source") or "unknown") for match in market_matches})
                 best_polymarket_match = max(
                     (match for match in market_matches if str(match.get("external_source") or "") == "polymarket"),
                     key=lambda match: float(match.get("match_confidence", 0.0) or 0.0),
                     default=None,
+                )
+                best_market_match = max(
+                    market_matches,
+                    key=lambda match: float(match.get("match_confidence", 0.0) or 0.0),
+                )
+                crossbook_match_context = dict(best_market_match)
+                crossbook_match_context["source_mix"] = grouped_sources
+                crossbook_match_context["external_source_count"] = len(grouped_sources)
+                crossbook_match_context["polymarket_confirmed"] = "polymarket" in grouped_sources
+                crossbook_match_context["event_confirmation_level"] = self._confidence_level(
+                    len(grouped_sources),
+                    bool(crossbook_match_context["polymarket_confirmed"]),
                 )
                 if best_polymarket_match is not None:
                     quote = next(
@@ -430,16 +510,13 @@ class BetfairInformationArbManager:
                     if candidate:
                         self._register_candidate(candidate=candidate, book=self._book("betfair_suspension_lag"), candidate_logger=candidate_logger)
             for consensus_row in consensus.values():
-                if str(consensus_row.get("event_key") or "") not in {
-                    str(match.get("external_event_key") or "") for match in matches_by_market.get(market_id, [])
-                }:
+                if str(consensus_row.get("event_key") or "") not in matched_event_keys:
                     continue
-                matched_event = matches_by_market.get(market_id, [{}])[0] if matches_by_market.get(market_id) else {}
                 candidate = evaluate_crossbook_consensus(
                     consensus_row=consensus_row,
                     snapshot=snapshot,
                     market_meta=meta,
-                    matched_event=matched_event,
+                    matched_event=crossbook_match_context,
                 )
                 if candidate:
                     self._register_candidate(candidate=candidate, book=self._book("betfair_crossbook_consensus"), candidate_logger=candidate_logger)

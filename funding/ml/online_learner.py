@@ -460,7 +460,8 @@ class FundingOnlineLearner:
                 x = float(series.iloc[-1])
             except Exception:
                 continue
-            sample_features[str(col)] = x
+            abs_max = float(config.FUNDING_FEATURE_ABS_MAX)
+            sample_features[str(col)] = max(-abs_max, min(abs_max, x))
         if not sample_features:
             return None
         reject = self._quality.validate_features(

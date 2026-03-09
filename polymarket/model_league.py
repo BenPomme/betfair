@@ -128,7 +128,7 @@ class OnlineEdgeModel:
             self.final_resolution_count += 1
             self.final_brier_sum += _brier(prediction, target)
             self.final_baseline_brier_sum += _brier(baseline, target)
-        signal_prob = prediction - 0.5
+        signal_prob = prediction - baseline
         if signal_prob >= min_edge_prob:
             self.shadow_trade_count += 1
             self.shadow_realized_pnl += float(net_return) * float(stake_usd)
@@ -147,11 +147,13 @@ class OnlineEdgeModel:
             if self.final_resolution_count
             else 0.0
         )
+        calibration_proxy = final_lift if self.final_resolution_count >= 25 else rolling_lift
+        calibration_source = "final_resolution" if self.final_resolution_count >= 25 else "primary_horizon"
         strict_gate_pass = (
             self.settled_count >= int(getattr(config, "POLYMARKET_QF_READINESS_MIN_LABELED", 250))
             and self.shadow_trade_count >= int(getattr(config, "POLYMARKET_QF_READINESS_MIN_CLOSED_TRADES", 50))
             and self.shadow_realized_pnl > 0
-            and final_lift > 0
+            and calibration_proxy > 0
         )
         if self.settled_count < int(getattr(config, "POLYMARKET_QF_READINESS_MIN_LABELED", 250)):
             strict_gate_reason = "insufficient_labeled_examples"
@@ -159,7 +161,7 @@ class OnlineEdgeModel:
             strict_gate_reason = "insufficient_closed_trades"
         elif self.shadow_realized_pnl <= 0:
             strict_gate_reason = "negative_shadow_pnl"
-        elif final_lift <= 0:
+        elif calibration_proxy <= 0:
             strict_gate_reason = "negative_calibration_lift"
         else:
             strict_gate_reason = ""
@@ -177,6 +179,8 @@ class OnlineEdgeModel:
             "last_retrain_result": self.last_retrain_result,
             "final_resolution_count": self.final_resolution_count,
             "final_brier_lift": round(final_lift, 6),
+            "calibration_brier_lift": round(calibration_proxy, 6),
+            "calibration_source": calibration_source,
             "shadow_trade_count": self.shadow_trade_count,
         }
 

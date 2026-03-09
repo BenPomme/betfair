@@ -98,6 +98,7 @@ class QuantumFoldLabelStore:
                     "horizon_label": f"{horizon}s",
                     "entry_midpoint": round(entry_midpoint, 6),
                     "exit_midpoint": round(exit_midpoint, 6),
+                    "baseline_probability": round(entry_midpoint, 6),
                     "cost_buffer": round(cost_buffer, 6),
                     "net_return": round(net_return, 6),
                     "target": 1 if net_return > 0 else 0,

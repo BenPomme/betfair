@@ -1,0 +1,31 @@
+stages:
+  - name: extract_dataset
+    module: scripts/goldfish_stage.py
+    config:
+      family: betfair_prediction
+      stage: extract_dataset
+  - name: build_features
+    module: scripts/goldfish_stage.py
+    config:
+      family: betfair_prediction
+      stage: build_features
+  - name: train_candidates
+    module: scripts/goldfish_stage.py
+    config:
+      family: betfair_prediction
+      stage: train_candidates
+  - name: replay_or_walkforward
+    module: scripts/goldfish_stage.py
+    config:
+      family: betfair_prediction
+      stage: replay_or_walkforward
+  - name: calibrate
+    module: scripts/goldfish_stage.py
+    config:
+      family: betfair_prediction
+      stage: calibrate
+  - name: publish_artifact_manifest
+    module: scripts/goldfish_stage.py
+    config:
+      family: betfair_prediction
+      stage: publish_artifact_manifest

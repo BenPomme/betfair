@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 import json
+import math
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -32,6 +33,10 @@ class PolymarketQuantumFoldEngine:
         self.max_trade_hold_seconds = int(getattr(config, "POLYMARKET_QF_MAX_HOLD_SECONDS", 1800))
         self.example_interval_seconds = int(getattr(config, "POLYMARKET_QF_EXAMPLE_INTERVAL_SECONDS", 60))
         self.max_tracked_tokens = int(getattr(config, "POLYMARKET_QF_MAX_TRACKED_TOKENS", 18))
+        self.book_universe_size = max(
+            self.max_tracked_tokens,
+            int(getattr(config, "POLYMARKET_QF_BOOK_UNIVERSE_SIZE", 80)),
+        )
         self.history_refresh_seconds = int(getattr(config, "POLYMARKET_QF_HISTORY_REFRESH_SECONDS", 60))
         self.history_interval = str(getattr(config, "POLYMARKET_QF_HISTORY_INTERVAL", "1m"))
         self.history_fidelity = int(getattr(config, "POLYMARKET_QF_HISTORY_FIDELITY", 60))
@@ -110,6 +115,48 @@ class PolymarketQuantumFoldEngine:
             )
         return merged
 
+    def _candidate_universe_score(self, token: Dict[str, Any]) -> float:
+        gamma_price = clamp(to_float(token.get("gamma_price"), 0.0))
+        liquidity = max(1.0, to_float(token.get("liquidity"), 0.0))
+        volume_24hr = max(0.0, to_float(token.get("volume_24hr"), 0.0))
+        price_midness = max(0.0, 1.0 - abs(gamma_price - 0.5) * 2.0)
+        return (volume_24hr + 1.0) * (0.25 + price_midness) * math.sqrt(liquidity)
+
+    def _select_book_universe(self, gamma_tokens: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        viable: List[Dict[str, Any]] = []
+        fallback: List[Dict[str, Any]] = []
+        for token in gamma_tokens:
+            if bool(token.get("resolved") or token.get("closed")):
+                continue
+            gamma_price = clamp(to_float(token.get("gamma_price"), 0.0))
+            if 0.04 <= gamma_price <= 0.96:
+                viable.append(token)
+            elif 0.02 <= gamma_price <= 0.98:
+                fallback.append(token)
+        ranked_viable = sorted(
+            viable,
+            key=self._candidate_universe_score,
+            reverse=True,
+        )
+        if len(ranked_viable) >= self.book_universe_size:
+            return ranked_viable[: self.book_universe_size]
+        ranked_fallback = sorted(
+            fallback,
+            key=self._candidate_universe_score,
+            reverse=True,
+        )
+        selected = ranked_viable + ranked_fallback
+        if selected:
+            return selected[: self.book_universe_size]
+        return sorted(
+            [token for token in gamma_tokens if not bool(token.get("resolved") or token.get("closed"))],
+            key=lambda item: (
+                to_float(item.get("volume_24hr"), 0.0),
+                to_float(item.get("liquidity"), 0.0),
+            ),
+            reverse=True,
+        )[: self.book_universe_size]
+
     def _refresh_histories(self, token_rows: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
         now = utc_now()
         result: Dict[str, List[Dict[str, Any]]] = {}
@@ -141,8 +188,14 @@ class PolymarketQuantumFoldEngine:
         return result
 
     def _trade_features(self, feature_rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        viable: List[Dict[str, Any]] = []
+        for row in feature_rows:
+            if not self._is_viable_feature_row(row):
+                self._rejections["non_tradable_market"] += 1
+                continue
+            viable.append(row)
         ranked = sorted(
-            feature_rows,
+            viable,
             key=lambda item: (
                 to_float(item.get("folding_confidence"), 0.0),
                 to_float(item.get("depth_total_usd"), 0.0),
@@ -151,6 +204,33 @@ class PolymarketQuantumFoldEngine:
             reverse=True,
         )[: self.max_tracked_tokens]
         return ranked
+
+    def _is_viable_feature_row(self, row: Dict[str, Any], *, for_execution: bool = False) -> bool:
+        if bool(row.get("resolved") or row.get("closed")):
+            return False
+        price = clamp(
+            to_float(row.get("best_ask"), to_float(row.get("midpoint"), to_float(row.get("price"), 0.0)))
+        )
+        if price <= 0.02 or price >= 0.98:
+            return False
+        midpoint = clamp(to_float(row.get("midpoint"), price))
+        if midpoint <= 0.02 or midpoint >= 0.98:
+            return False
+        if to_float(row.get("depth_total_usd"), 0.0) < 50.0:
+            return False
+        freshness_limit = self.stale_quote_seconds if for_execution else max(self.stale_quote_seconds * 6, 180)
+        if to_float(row.get("quote_freshness_sec"), freshness_limit) > freshness_limit:
+            return False
+        return True
+
+    def _adaptive_min_edge_after_costs(self) -> float:
+        adaptive = self.min_edge_after_costs
+        closed_trades = len(self.executor.closed_trades)
+        if self._tracked_examples >= 500 and closed_trades == 0:
+            adaptive = min(adaptive, 0.004)
+        elif self._tracked_examples >= 250 and closed_trades < 10:
+            adaptive = min(adaptive, 0.0075)
+        return round(max(0.0025, adaptive), 6)
 
     def _track_examples(self, feature_rows: List[Dict[str, Any]]) -> Dict[str, int]:
         examples: List[Dict[str, Any]] = []
@@ -196,19 +276,34 @@ class PolymarketQuantumFoldEngine:
 
     def _select_execution_candidate(self, feature_rows: List[Dict[str, Any]]) -> Dict[str, Any] | None:
         best: Dict[str, Any] | None = None
+        min_edge_after_costs = self._adaptive_min_edge_after_costs()
         for row in feature_rows:
+            if not self._is_viable_feature_row(row, for_execution=True):
+                self._rejections["non_tradable_market"] += 1
+                continue
             predictions = self.model_league.predict_all(row)
             hybrid_probability = to_float(predictions.get("hybrid_transition"), 0.5)
-            edge_after_costs = hybrid_probability - 0.5 - to_float(row.get("cost_buffer"), 0.0)
-            if edge_after_costs < self.min_edge_after_costs:
+            entry_price = clamp(to_float(row.get("best_ask"), to_float(row.get("midpoint"), 0.0)))
+            if entry_price <= 0:
+                self._rejections["missing_best_ask"] += 1
+                continue
+            edge_after_costs = hybrid_probability - entry_price - to_float(row.get("cost_buffer"), 0.0)
+            if edge_after_costs < min_edge_after_costs:
                 self._rejections["edge_after_costs"] += 1
                 continue
             if to_float(row.get("quote_freshness_sec"), self.stale_quote_seconds) > self.stale_quote_seconds:
                 self.executor.stale_halt_count += 1
                 self._rejections["stale_quote"] += 1
                 continue
+            candidate = {
+                **row,
+                "hybrid_probability": hybrid_probability,
+                "entry_price_reference": round(entry_price, 6),
+                "edge_after_costs": round(edge_after_costs, 6),
+                "adaptive_min_edge_after_costs": min_edge_after_costs,
+            }
             if best is None or edge_after_costs > to_float(best.get("edge_after_costs"), -1.0):
-                best = {**row, "hybrid_probability": hybrid_probability, "edge_after_costs": round(edge_after_costs, 6)}
+                best = candidate
         return best
 
     def _manage_positions(self) -> None:
@@ -238,10 +333,13 @@ class PolymarketQuantumFoldEngine:
         if not approved:
             self._rejections[reason] += 1
             return
+        notional_usd = float(getattr(config, "POLYMARKET_QF_MAX_NOTIONAL_PER_TRADE_USD", 150.0))
+        if not self.executor.closed_trades:
+            notional_usd *= 0.35
         trade = self.executor.open_trade(
             feature_row,
             score_probability=to_float(feature_row.get("hybrid_probability"), 0.5),
-            notional_usd=float(getattr(config, "POLYMARKET_QF_MAX_NOTIONAL_PER_TRADE_USD", 150.0)),
+            notional_usd=notional_usd,
         )
         self.events.append({"kind": "trade_opened", "data": trade})
 
@@ -251,19 +349,12 @@ class PolymarketQuantumFoldEngine:
         gamma_snapshot = self.gamma.fetch_snapshot()
         self.gamma_snapshot = gamma_snapshot
         gamma_tokens = list(gamma_snapshot.get("tokens") or [])
-        top_tokens = [
-            str(item.get("token_id") or "")
-            for item in sorted(
-                gamma_tokens,
-                key=lambda row: (to_float(row.get("liquidity"), 0.0), to_float(row.get("volume_24hr"), 0.0)),
-                reverse=True,
-            )[: self.max_tracked_tokens]
-            if str(item.get("token_id") or "")
-        ]
+        candidate_universe = self._select_book_universe(gamma_tokens)
+        top_tokens = [str(item.get("token_id") or "") for item in candidate_universe if str(item.get("token_id") or "")]
         rest_books = self.clob.fetch_books(top_tokens)
         self.stream.ensure_subscription(top_tokens)
         ws_books = (self.stream.snapshot().get("books") or {}) if getattr(config, "POLYMARKET_QF_CLOB_WS_ENABLED", True) else {}
-        merged_quotes = self._merge_quotes(gamma_tokens, rest_books, ws_books)
+        merged_quotes = self._merge_quotes(candidate_universe, rest_books, ws_books)
         histories = self._refresh_histories(merged_quotes)
         feature_rows = build_feature_rows(
             merged_quotes,
@@ -322,7 +413,10 @@ class PolymarketQuantumFoldEngine:
             },
             "primary_horizon_seconds": self.primary_horizon,
         }
-        calibration_lift = to_float(hybrid_metrics.get("final_brier_lift"), 0.0)
+        calibration_lift = to_float(
+            hybrid_metrics.get("calibration_brier_lift", hybrid_metrics.get("final_brier_lift")),
+            0.0,
+        )
         readiness_checks = [
             {
                 "name": "gamma_feed_healthy",
@@ -384,6 +478,8 @@ class PolymarketQuantumFoldEngine:
             "quote_freshness_sec": avg_freshness,
             "market_count": int(gamma_snapshot.get("market_count", 0) or 0),
             "token_count": len(tracked_features),
+            "book_universe_size": len(candidate_universe),
+            "adaptive_min_edge_after_costs": self._adaptive_min_edge_after_costs(),
             "training_progress": training_progress,
             "research_summary": {
                 "labeled_examples": len(primary_labels),

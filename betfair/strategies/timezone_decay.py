@@ -36,9 +36,28 @@ def evaluate_timezone_decay(
     liquidity = sum(float(selection.available_to_back or 0) for selection in backable)
     if liquidity <= 0:
         return None
-    favorite = min(backable, key=lambda selection: float(selection.best_back_price))
-    score = (low_attention * 0.45) + min(0.35, stale_snapshot_ratio * 0.4) + min(0.2, 80.0 / liquidity)
-    if score < 0.35:
+    viable = []
+    for selection in backable:
+        back_price = float(selection.best_back_price or 0.0)
+        lay_price = float(selection.best_lay_price or 0.0)
+        available = float(selection.available_to_back or 0.0)
+        spread = (lay_price - back_price) if lay_price > 1.01 else 0.0
+        if available < 20.0:
+            continue
+        if spread > 0.22:
+            continue
+        viable.append(selection)
+    if not viable:
+        return None
+    favorite = max(
+        viable,
+        key=lambda selection: (
+            float(selection.available_to_back or 0.0) / max(float(selection.best_back_price or 1.01), 1.01),
+            -float(selection.best_back_price or 0.0),
+        ),
+    )
+    score = (low_attention * 0.42) + min(0.33, stale_snapshot_ratio * 0.45) + min(0.25, 100.0 / liquidity)
+    if score < 0.32:
         return None
     return {
         "strategy_id": "betfair_timezone_decay",

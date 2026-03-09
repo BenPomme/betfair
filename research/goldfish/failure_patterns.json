@@ -1,0 +1,8 @@
+[
+  {"id":"negative_brier_lift","symptom":"model loses to baseline on Brier lift","root_cause":"wrong horizon or stale feature family","prevention":"replay before promotion"},
+  {"id":"negative_roi","symptom":"paper ROI stays negative","root_cause":"cost model or entry assumptions wrong","prevention":"tighten walk-forward and artifact gate"},
+  {"id":"edge_after_costs","symptom":"execution candidates rejected after costs","root_cause":"entry edge too small or price reference wrong","prevention":"price-aware edge calc and tradable-market filters"},
+  {"id":"not_enough_external_quote_sources","symptom":"cross-book strategy starves","root_cause":"source threshold too strict for live mix","prevention":"replay threshold changes before restart"},
+  {"id":"non_finite_feature","symptom":"learner update rejected for NaN/inf features","root_cause":"feature sanitation gap","prevention":"clip and sanitize retrain sample inputs"},
+  {"id":"duplicate_signature_rate","symptom":"training quality fails on duplicate signatures","root_cause":"same trade outcome logged multiple times","prevention":"dedupe closed-position logging"}
+]

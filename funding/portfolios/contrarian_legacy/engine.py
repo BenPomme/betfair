@@ -74,6 +74,7 @@ class ContrarianLegacyEngine:
         self._last_cycle_diag: Dict[str, object] = {}
         self._events: List[Dict[str, object]] = []
         self._trade_log_path = Path(trade_log_path)
+        self._logged_closed_ids: set[str] = set()
 
     def _load_model(self):
         model = None
@@ -238,6 +239,10 @@ class ContrarianLegacyEngine:
                 risk_rejections += 1
                 risk_reason_counts["max_directional"] = risk_reason_counts.get("max_directional", 0) + 1
                 continue
+            if self._recent_trade_share(signal.symbol) > float(config.CONTRARIAN_MAX_SYMBOL_CONCENTRATION):
+                risk_rejections += 1
+                risk_reason_counts["symbol_concentration_cap"] = risk_reason_counts.get("symbol_concentration_cap", 0) + 1
+                continue
             balance = Decimal(str(config.CONTRARIAN_PORTFOLIO_INITIAL_BALANCE_USD))
             params = self._contrarian_strategy.calculate_position_params(signal=signal, balance=balance)
             if gate_mult < 1.0:
@@ -271,6 +276,8 @@ class ContrarianLegacyEngine:
         if closed:
             for symbol in closed:
                 for p in self._position_manager.all_positions():
+                    if p.id in self._logged_closed_ids:
+                        continue
                     if p.symbol == symbol and p.exit_price > 0 and p.entry_price > 0 and p.status != DirectionalPositionStatus.OPEN:
                         self._contrarian_learner.log_trade_outcome(
                             symbol=p.symbol,
@@ -278,6 +285,7 @@ class ContrarianLegacyEngine:
                             entry_price=float(p.entry_price),
                             exit_price=float(p.exit_price),
                         )
+                        self._logged_closed_ids.add(p.id)
                 self._events.append(
                     {
                         "kind": "contrarian_position_closed",
@@ -293,6 +301,22 @@ class ContrarianLegacyEngine:
         if risk_reason_counts:
             diag["risk_rejection_reasons"] = risk_reason_counts
         self._last_cycle_diag = diag
+
+    def _recent_trade_share(self, symbol: str, limit: int = 50) -> float:
+        if not self._trade_log_path.exists():
+            return 0.0
+        rows = []
+        for line in self._trade_log_path.read_text(encoding="utf-8").splitlines()[-limit:]:
+            if not line.strip():
+                continue
+            try:
+                rows.append(json.loads(line))
+            except Exception:
+                continue
+        if len(rows) < 10:
+            return 0.0
+        symbol_rows = [row for row in rows if str(row.get("symbol", "")).upper() == str(symbol).upper()]
+        return len(symbol_rows) / len(rows)
 
     def _trade_log_quality(self) -> Dict[str, object]:
         if not self._trade_log_path.exists():

@@ -17,6 +17,7 @@ class NotificationState:
     last_notification_ts: Optional[str] = None
     last_digest_ts: Optional[str] = None
     last_daily_digest_ts: Optional[str] = None
+    last_progress_digest_ts: Optional[str] = None
     notification_failures: int = 0
     discord_configured: bool = False
     sent_events: List[Dict[str, Any]] = field(default_factory=list)
@@ -26,6 +27,7 @@ class NotificationState:
             "last_notification_ts": self.last_notification_ts,
             "last_digest_ts": self.last_digest_ts,
             "last_daily_digest_ts": self.last_daily_digest_ts,
+            "last_progress_digest_ts": self.last_progress_digest_ts,
             "notification_failures": self.notification_failures,
             "discord_configured": self.discord_configured,
             "sent_events": self.sent_events[-50:],
@@ -123,6 +125,22 @@ class NotificationManager:
             blockers = payload.get("blockers") or []
             if blockers:
                 embed["fields"].append({"name": "Blockers", "value": ", ".join(map(str, blockers[:5])), "inline": False})
+        elif event_type == "audit_state_changed":
+            embed["fields"].extend(
+                [
+                    {"name": "Audit", "value": str(payload.get("audit_state") or "unknown"), "inline": True},
+                    {"name": "Owner", "value": str(payload.get("audit_owner") or "ops"), "inline": True},
+                    {"name": "Next", "value": str(payload.get("audit_next_action") or "n/a"), "inline": False},
+                ]
+            )
+        elif event_type == "research_run_update":
+            embed["fields"].extend(
+                [
+                    {"name": "Run", "value": str(payload.get("run_id") or "unknown"), "inline": True},
+                    {"name": "Status", "value": str(payload.get("status") or "unknown"), "inline": True},
+                    {"name": "Decision", "value": str(payload.get("decision") or "unknown"), "inline": True},
+                ]
+            )
         elif event_type == "deploy_updated":
             embed["fields"].extend(
                 [
@@ -287,6 +305,79 @@ class NotificationManager:
         ok = send_discord("\n".join(lines[:8]), username="Strategy Daily Digest", embeds=[embed])
         if ok:
             self._state.last_daily_digest_ts = self._utc_now_iso()
+        else:
+            self._state.notification_failures += 1
+        return ok
+
+    def send_progress_digest(self, snapshots: Iterable[Dict[str, Any]]) -> bool:
+        if not (config.NOTIFICATIONS_ENABLED and getattr(config, "DISCORD_PROGRESS_DIGEST_ENABLED", True)):
+            return False
+        if not discord_configured():
+            self._state.discord_configured = False
+            return False
+        rows = [dict(item) for item in snapshots if isinstance(item, dict)]
+        if not rows:
+            return False
+        by_audit: Dict[str, List[Dict[str, Any]]] = {}
+        for row in rows:
+            by_audit.setdefault(str(row.get("audit_state") or "unknown"), []).append(row)
+        ordered_states = [
+            "underperforming",
+            "stalled_gating",
+            "stalled_data",
+            "reseeding",
+            "external_blocked",
+            "learning_ok",
+        ]
+        embed_fields = []
+        for audit_state in ordered_states:
+            items = by_audit.get(audit_state) or []
+            if not items:
+                continue
+            items = sorted(
+                items,
+                key=lambda item: (
+                    float(item.get("progress_delta_24h", 0.0) or 0.0),
+                    float(item.get("realized_pnl", 0.0) or 0.0),
+                ),
+                reverse=True,
+            )
+            embed_fields.append(
+                {
+                    "name": audit_state.replace("_", " ").title(),
+                    "value": "\n".join(
+                        (
+                            f"{item.get('label')}: "
+                            f"trade_delta={int(item.get('trade_delta_1h', 0) or 0):+d}, "
+                            f"candidate_delta={int(item.get('candidate_delta_1h', 0) or 0):+d}, "
+                            f"next={item.get('audit_next_action') or 'n/a'}, "
+                            f"run={((item.get('latest_research_run') or {}).get('run_id') or 'n/a')}"
+                        )
+                        for item in items[:4]
+                    ),
+                    "inline": False,
+                }
+            )
+        body_lines = ["Strategy progress digest"]
+        body_lines.extend(
+            f"- {state.replace('_', ' ')}: {len(by_audit.get(state) or [])}"
+            for state in ordered_states
+            if by_audit.get(state)
+        )
+        ok = send_discord(
+            "\n".join(body_lines),
+            username="Strategy Progress",
+            embeds=[
+                {
+                    "title": "Audit Progress",
+                    "description": "Hourly audit-state digest",
+                    "color": self._severity_color("info"),
+                    "fields": embed_fields[:8],
+                }
+            ],
+        )
+        if ok:
+            self._state.last_progress_digest_ts = self._utc_now_iso()
         else:
             self._state.notification_failures += 1
         return ok

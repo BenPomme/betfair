@@ -60,12 +60,17 @@ def evaluate_suspension_lag(
         signal_strength -= 0.03
     source_mix = list(matched_event.get("source_mix") or ["polymarket", "betfair_suspend_resume"])
     external_source_count = int(matched_event.get("external_source_count", 1) or 1)
+    dynamic_min_signal = 0.04
+    if external_source_count >= 2 or in_play:
+        dynamic_min_signal = max(0.025, float(config.BETFAIR_SUSPENSION_LAG_MIN_SIGNAL_STRENGTH) * 0.45)
+    elif float(matched_event.get("match_confidence", 0.0) or 0.0) >= 0.75:
+        dynamic_min_signal = max(0.03, float(config.BETFAIR_SUSPENSION_LAG_MIN_SIGNAL_STRENGTH) * 0.5)
     confidence = "low"
-    if signal_strength >= float(config.BETFAIR_SUSPENSION_LAG_MIN_SIGNAL_STRENGTH):
+    if signal_strength >= dynamic_min_signal:
         confidence = "medium"
     if signal_strength >= (float(config.BETFAIR_SUSPENSION_LAG_MIN_SIGNAL_STRENGTH) + 0.08) or external_source_count >= 2:
         confidence = "high"
-    if signal_strength < 0.05:
+    if signal_strength < dynamic_min_signal:
         return None
     match_confidence = float(matched_event.get("match_confidence", 0.0) or 0.0)
     quote_freshness_sec = float(matched_event.get("quote_freshness_sec", 0.0) or 0.0)

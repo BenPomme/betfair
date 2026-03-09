@@ -1,0 +1,8 @@
+svs:
+  enabled: true
+  default_policy: warn
+  default_enforcement: warning
+
+project:
+  name: betfair-research-sidecar
+  workspace_state_file: STATE.md

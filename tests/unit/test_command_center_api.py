@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 import config
 from monitoring import command_center
+from monitoring.research_bridge import publish_research_run
 from portfolio.accounting import build_strategy_account
 from portfolio.state_store import PortfolioStateStore
 from portfolio.types import ModelShadowAccount
@@ -64,6 +65,7 @@ def test_command_center_portfolio_endpoints(tmp_path, monkeypatch):
     portfolios = client.get("/api/portfolios").json()["portfolios"]
     ids = {item["portfolio_id"] for item in portfolios}
     assert {"betfair_core", "hedge_validation"}.issubset(ids)
+    assert "betfair_execution_book" not in ids
 
     betfair_state = client.get("/api/state").json()
     hedge_state = client.get("/api/funding/state").json()
@@ -118,6 +120,7 @@ def test_command_center_notification_endpoints(tmp_path, monkeypatch):
 
 def test_command_center_exposes_polymarket_quantum_fold_portfolio(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "PORTFOLIO_STATE_ROOT", str(tmp_path))
+    monkeypatch.setattr(config, "RESEARCH_RUNTIME_ROOT", str(tmp_path / "research"), raising=False)
     monkeypatch.setattr(command_center, "_process_manager", _DummyManager())
 
     store = PortfolioStateStore("polymarket_quantum_fold")
@@ -209,8 +212,47 @@ def test_command_center_exposes_polymarket_quantum_fold_portfolio(tmp_path, monk
     assert any(item["portfolio_id"] == "polymarket_quantum_fold" for item in portfolios)
     assert summary["running"] is True
     assert summary["progress_pct"] > 0
+    assert "audit_state" in summary
     assert state["raw_state"]["source_health"]["gamma"]["healthy"] is True
     assert state["models"][0]["model_id"] == "hybrid_transition"
+
+
+def test_command_center_exposes_latest_research_run_and_reseeding_audit(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "PORTFOLIO_STATE_ROOT", str(tmp_path))
+    monkeypatch.setattr(config, "RESEARCH_RUNTIME_ROOT", str(tmp_path / "research"), raising=False)
+    monkeypatch.setattr(command_center, "_process_manager", _DummyManager())
+
+    publish_research_run(
+        family="polymarket",
+        run_id="pmqf-run-1",
+        status="reseeding",
+        decision="reseed",
+        portfolios=["polymarket_quantum_fold"],
+        subject="polymarket_quantum_fold",
+        git_sha="abc1234",
+    )
+
+    store = PortfolioStateStore("polymarket_quantum_fold")
+    store.write_account(
+        build_strategy_account(
+            portfolio_id="polymarket_quantum_fold",
+            currency="USD",
+            starting_balance=7500.0,
+            current_balance=7500.0,
+            realized_pnl=0.0,
+        )
+    )
+    store.write_state({"portfolio_id": "polymarket_quantum_fold", "running": True, "status": "running", "mode": "paper"})
+    store.write_readiness({"status": "paper_validating"})
+    store.write_pid(2468)
+
+    client = TestClient(command_center.app)
+    summary = client.get("/api/portfolios/polymarket_quantum_fold/summary").json()
+    state = client.get("/api/portfolios/polymarket_quantum_fold/state").json()
+
+    assert summary["audit_state"] == "reseeding"
+    assert summary["latest_research_run"]["run_id"] == "pmqf-run-1"
+    assert state["latest_research_run"]["decision"] == "reseed"
 
 
 def test_command_center_betfair_strategy_endpoints(tmp_path, monkeypatch):
@@ -274,6 +316,7 @@ def test_emit_snapshot_notifications_sends_closed_trade_alert(monkeypatch):
             {
                 "send_event": staticmethod(lambda **kwargs: sent.append(kwargs) or True),
                 "send_digest": staticmethod(lambda *_args, **_kwargs: True),
+                "send_progress_digest": staticmethod(lambda *_args, **_kwargs: True),
             },
         )(),
     )
@@ -327,6 +370,7 @@ def test_emit_snapshot_notifications_sends_model_update_alert(monkeypatch):
             {
                 "send_event": staticmethod(lambda **kwargs: sent.append(kwargs) or True),
                 "send_digest": staticmethod(lambda *_args, **_kwargs: True),
+                "send_progress_digest": staticmethod(lambda *_args, **_kwargs: True),
             },
         )(),
     )

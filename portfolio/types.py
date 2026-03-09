@@ -82,6 +82,11 @@ class PortfolioSummary:
     status: str = "idle"
     process_pid: Optional[int] = None
     errors: List[str] = field(default_factory=list)
+    audit_state: str = "learning_ok"
+    audit_owner: str = "ops"
+    audit_next_action: Optional[str] = None
+    last_progress_report_ts: Optional[str] = None
+    latest_research_run: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -108,6 +113,11 @@ class PortfolioState:
     control_mode: PortfolioControlMode = "local_managed"
     error: Optional[str] = None
     trend: Dict[str, Any] = field(default_factory=dict)
+    audit_state: str = "learning_ok"
+    audit_owner: str = "ops"
+    audit_next_action: Optional[str] = None
+    last_progress_report_ts: Optional[str] = None
+    latest_research_run: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

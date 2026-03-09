@@ -15,13 +15,17 @@ def build_polymarket_binary_candidates(quotes: Iterable[Dict[str, Any]]) -> List
         spread = max(0.0, ask - bid) if bid > 0 and ask > 0 else 0.0
         spread_bps = (spread / max(price, 0.01)) * 10000.0 if spread > 0 else 0.0
 
-        momentum_signal = abs(one_day_move) >= 0.08 and liquidity >= 1000 and 0.1 <= price <= 0.9 and spread_bps <= 400
-        mean_reversion_signal = abs(one_week_move) >= 0.15 and spread_bps <= 300 and liquidity >= 1500 and (price <= 0.2 or price >= 0.8)
-        if not (momentum_signal or mean_reversion_signal):
+        momentum_signal = abs(one_day_move) >= 0.04 and liquidity >= 300 and 0.05 <= price <= 0.95 and spread_bps <= 650
+        mean_reversion_signal = abs(one_week_move) >= 0.08 and spread_bps <= 500 and liquidity >= 500 and (price <= 0.25 or price >= 0.75)
+        flow_dislocation_signal = abs(one_day_move) >= 0.025 and liquidity >= 250 and spread_bps <= 250 and 0.08 <= price <= 0.92
+        if not (momentum_signal or mean_reversion_signal or flow_dislocation_signal):
             continue
 
-        fillability = min(1.0, max(0.05, liquidity / 5000.0))
-        heuristic_edge = max(0.0, abs(one_day_move) * 0.35 + abs(one_week_move) * 0.2 - (spread_bps / 10000.0))
+        fillability = min(1.0, max(0.05, liquidity / 3000.0))
+        heuristic_edge = max(
+            0.0,
+            abs(one_day_move) * 0.45 + abs(one_week_move) * 0.28 - (spread_bps / 12000.0)
+        )
         signal_strength = abs(one_day_move) + abs(one_week_move)
         candidates.append(
             {
@@ -30,7 +34,7 @@ def build_polymarket_binary_candidates(quotes: Iterable[Dict[str, Any]]) -> List
                 "selection_key": row.get("market_slug") or row.get("title"),
                 "event_name": row.get("title"),
                 "event_key": row.get("event_slug") or row.get("title"),
-                "reason": "momentum" if momentum_signal else "mean_reversion",
+                "reason": "momentum" if momentum_signal else ("mean_reversion" if mean_reversion_signal else "flow_dislocation"),
                 "source_mix": ["polymarket"],
                 "signal_strength": round(signal_strength, 4),
                 "expected_edge": round(heuristic_edge, 6),
