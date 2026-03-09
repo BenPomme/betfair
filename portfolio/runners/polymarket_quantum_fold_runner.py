@@ -32,6 +32,8 @@ class PolymarketQuantumFoldPortfolioRunner(PortfolioRunnerBase):
                 "max_open_positions": int(config.POLYMARKET_QF_MAX_OPEN_POSITIONS),
                 "max_notional_per_trade_usd": float(config.POLYMARKET_QF_MAX_NOTIONAL_PER_TRADE_USD),
                 "stale_quote_seconds": int(config.POLYMARKET_QF_STALE_QUOTE_SECONDS),
+                "match_markets_only": bool(config.POLYMARKET_QF_MATCH_MARKETS_ONLY),
+                "max_settlement_hours": int(config.POLYMARKET_QF_MAX_SETTLEMENT_HOURS),
                 "clob_ws_enabled": bool(config.POLYMARKET_QF_CLOB_WS_ENABLED),
             }
         )

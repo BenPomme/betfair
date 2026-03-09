@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from portfolio.types import ModelShadowAccount
 from polymarket.clob_client import PolymarketClobClient
 from polymarket.features import build_feature_rows
@@ -18,6 +20,7 @@ def test_gamma_client_normalizes_binary_sports_market():
             "tags": [{"slug": "sports"}, {"slug": "soccer"}],
             "league": "La Liga",
             "startDate": "2026-03-08T20:00:00Z",
+            "endDate": "2026-03-08T22:00:00Z",
             "markets": [
                 {
                     "id": "mkt-1",
@@ -41,8 +44,89 @@ def test_gamma_client_normalizes_binary_sports_market():
     assert snapshot["market_count"] == 1
     assert snapshot["token_count"] == 2
     assert snapshot["tokens"][0]["token_id"] == "tok-rm"
+    assert snapshot["tokens"][0]["end_time"] == "2026-03-08T22:00:00+00:00"
+    assert snapshot["tokens"][0]["teams_or_players"] == ["Real Madrid", "Barcelona"]
     assert snapshot["tokens"][1]["outcome"] == "Barcelona"
     assert snapshot["tokens"][1]["gamma_price"] == 0.38
+
+
+def test_gamma_client_fetch_snapshot_uses_active_short_horizon_event_window(monkeypatch):
+    captured = []
+
+    class _Response:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._payload
+
+    class _Client:
+        def __init__(self, *args, **kwargs):
+            return None
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def get(self, url, params):
+            captured.append((url, params))
+            if len(captured) == 1:
+                return _Response(
+                    [
+                        {
+                            "id": "evt-1",
+                            "slug": "flames-vs-capitals",
+                            "title": "Flames vs. Capitals",
+                            "tags": [{"slug": "sports"}, {"slug": "hockey"}],
+                            "league": "NHL",
+                            "startDate": "2026-03-09T18:00:00Z",
+                            "endDate": "2026-03-09T23:00:00Z",
+                            "markets": [
+                                {
+                                    "id": "mkt-1",
+                                    "slug": "flames-vs-capitals-moneyline",
+                                    "question": "Flames vs. Capitals",
+                                    "clobTokenIds": '["tok-1","tok-2"]',
+                                    "outcomes": '["Flames","Capitals"]',
+                                    "outcomePrices": '["0.51","0.49"]',
+                                    "bestBid": 0.5,
+                                    "bestAsk": 0.52,
+                                    "liquidityNum": 5000,
+                                    "volume24hrClob": 3200,
+                                }
+                            ],
+                        }
+                    ]
+                )
+            return _Response([])
+
+    monkeypatch.setattr("polymarket.gamma_client.httpx.Client", _Client)
+
+    client = PolymarketGammaClient(max_events=150)
+    snapshot = client.fetch_snapshot()
+
+    assert snapshot["event_count"] == 1
+    assert snapshot["token_count"] == 2
+    assert snapshot["tokens"][0]["teams_or_players"] == ["Flames", "Capitals"]
+    assert len(captured) == 1
+    first_url, first_params = captured[0]
+    assert first_url == "https://gamma-api.polymarket.com/events"
+    assert first_params["active"] == "true"
+    assert first_params["closed"] == "false"
+    assert first_params["tag_id"] == "1"
+    assert first_params["limit"] == "100"
+    assert first_params["offset"] == "0"
+    assert "end_date_min" in first_params
+    assert "end_date_max" in first_params
+    min_dt = datetime.fromisoformat(first_params["end_date_min"].replace("Z", "+00:00"))
+    max_dt = datetime.fromisoformat(first_params["end_date_max"].replace("Z", "+00:00"))
+    assert max_dt > min_dt
+    assert (max_dt - min_dt).total_seconds() == 168 * 3600
 
 
 def test_clob_client_parses_books_and_applies_best_bid_ask_updates():
@@ -281,3 +365,38 @@ def test_paper_executor_models_fill_and_realized_pnl():
 
     assert closed["status"] == "CLOSED"
     assert closed["net_pnl_usd"] > 0
+
+
+def test_paper_executor_rejects_resolved_and_extreme_price_markets():
+    executor = PolymarketPaperExecutor(
+        starting_balance=1000.0,
+        fee_bps=20.0,
+        queue_penalty_bps=8.0,
+        max_open_positions=5,
+        max_notional_per_trade=150.0,
+        max_positions_per_event=1,
+        drawdown_halt_pct=10.0,
+    )
+
+    resolved_ok, resolved_reason = executor.can_open(
+        {
+            "token_id": "tok-rm",
+            "event_slug": "event-1",
+            "best_ask": 0.62,
+            "resolved": True,
+        },
+        {},
+    )
+    extreme_ok, extreme_reason = executor.can_open(
+        {
+            "token_id": "tok-barca",
+            "event_slug": "event-2",
+            "best_ask": 0.002,
+        },
+        {},
+    )
+
+    assert resolved_ok is False
+    assert resolved_reason == "market_inactive"
+    assert extreme_ok is False
+    assert extreme_reason == "extreme_price"

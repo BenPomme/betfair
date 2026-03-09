@@ -15,6 +15,30 @@ from polymarket.model_league import QuantumFoldModelLeague
 from polymarket.paper_executor import PolymarketPaperExecutor
 from polymarket.utils import clamp, parse_ts, to_float, utc_now, utc_now_iso
 
+_MATCHUP_MARKERS = (" vs ", " vs. ", " versus ", " @ ")
+_LONG_HORIZON_MARKET_TERMS = (
+    "winner",
+    "qualify",
+    "qualified",
+    "relegated",
+    "division",
+    "playoffs",
+    "playoff",
+    "league",
+    "season",
+    "cup",
+    "tournament",
+    "award",
+    "rookie of the year",
+    "top scorer",
+    "manager",
+    "finish in",
+    "finish ",
+    "make the",
+    "ranked first",
+    "at the end of",
+)
+
 
 class PolymarketQuantumFoldEngine:
     def __init__(self, runtime_dir: str | Path, *, initial_balance: float) -> None:
@@ -41,6 +65,8 @@ class PolymarketQuantumFoldEngine:
         self.history_interval = str(getattr(config, "POLYMARKET_QF_HISTORY_INTERVAL", "1m"))
         self.history_fidelity = int(getattr(config, "POLYMARKET_QF_HISTORY_FIDELITY", 60))
         self.stale_quote_seconds = int(getattr(config, "POLYMARKET_QF_STALE_QUOTE_SECONDS", 30))
+        self.match_markets_only = bool(getattr(config, "POLYMARKET_QF_MATCH_MARKETS_ONLY", True))
+        self.max_settlement_hours = int(getattr(config, "POLYMARKET_QF_MAX_SETTLEMENT_HOURS", 168))
         self.fee_bps = float(getattr(config, "POLYMARKET_QF_FEE_BUFFER_BPS", 20.0))
         self.queue_penalty_bps = float(getattr(config, "POLYMARKET_QF_QUEUE_PENALTY_BPS", 8.0))
         self.gamma_snapshot: Dict[str, Any] = {}
@@ -49,6 +75,7 @@ class PolymarketQuantumFoldEngine:
         self.events: List[Dict[str, Any]] = []
         self.balance_history: List[Dict[str, Any]] = []
         self.raw_snapshots_path = self.runtime_dir / "quantum_fold_raw_snapshots.jsonl"
+        self.policy_manifest_path = self.runtime_dir / "quantum_fold_policy_manifest.json"
         self.label_store = QuantumFoldLabelStore(self.runtime_dir, horizons=self.label_horizons)
         self.model_league = QuantumFoldModelLeague("polymarket_quantum_fold", starting_balance=initial_balance)
         self.executor = PolymarketPaperExecutor(
@@ -71,6 +98,7 @@ class PolymarketQuantumFoldEngine:
         self._last_state: Dict[str, Any] = {}
 
     def start(self) -> None:
+        self._sync_runtime_policy()
         self._running = True
 
     def stop(self) -> None:
@@ -80,6 +108,83 @@ class PolymarketQuantumFoldEngine:
     def _append_snapshot(self, payload: Dict[str, Any]) -> None:
         with self.raw_snapshots_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(payload, default=str) + "\n")
+
+    def _policy_manifest(self) -> Dict[str, Any]:
+        return {
+            "policy_version": 1,
+            "match_markets_only": self.match_markets_only,
+            "max_settlement_hours": self.max_settlement_hours,
+            "sports_filter": sorted(self.gamma.sports_filter),
+        }
+
+    def _runtime_learning_paths(self) -> List[Path]:
+        return [
+            self.label_store.pending_path,
+            self.label_store.examples_path,
+            self.label_store.labels_path,
+            self.raw_snapshots_path,
+            self.runtime_dir / "summary_history.jsonl",
+        ]
+
+    def _sync_runtime_policy(self) -> None:
+        current_policy = self._policy_manifest()
+        previous_policy: Dict[str, Any] = {}
+        if self.policy_manifest_path.exists():
+            try:
+                previous_policy = json.loads(self.policy_manifest_path.read_text(encoding="utf-8"))
+            except Exception:
+                previous_policy = {}
+        learning_paths = [path for path in self._runtime_learning_paths() if path.exists() and path.stat().st_size > 0]
+        if learning_paths and previous_policy != current_policy:
+            archive_dir = self.runtime_dir / "archive" / utc_now().strftime("%Y%m%dT%H%M%SZ")
+            archive_dir.mkdir(parents=True, exist_ok=True)
+            archived_files: List[str] = []
+            for path in learning_paths:
+                destination = archive_dir / path.name
+                path.replace(destination)
+                archived_files.append(path.name)
+            archive_manifest = {
+                "archived_at": utc_now_iso(),
+                "reason": "quantum_fold_policy_changed",
+                "previous_policy": previous_policy,
+                "current_policy": current_policy,
+                "files": archived_files,
+            }
+            (archive_dir / "archive_manifest.json").write_text(
+                json.dumps(archive_manifest, indent=2),
+                encoding="utf-8",
+            )
+        self.policy_manifest_path.write_text(json.dumps(current_policy, indent=2), encoding="utf-8")
+
+    @staticmethod
+    def _market_policy_text(row: Dict[str, Any]) -> str:
+        return " ".join(
+            str(
+                row.get(key)
+                or ""
+            )
+            for key in ("title", "market_slug", "event_slug", "competition")
+        ).strip().lower()
+
+    def _is_short_horizon_market(self, row: Dict[str, Any]) -> bool:
+        text = self._market_policy_text(row)
+        participants = [str(item).strip() for item in (row.get("teams_or_players") or []) if str(item).strip()]
+        has_matchup_marker = any(marker in f" {text} " for marker in _MATCHUP_MARKERS)
+        has_two_sided_participants = len(participants) >= 2
+        is_match_market = has_matchup_marker or has_two_sided_participants
+        if self.match_markets_only and not is_match_market:
+            return False
+        if not is_match_market and any(term in text for term in _LONG_HORIZON_MARKET_TERMS):
+            return False
+        settlement_time = parse_ts(row.get("end_time")) or parse_ts(row.get("start_time"))
+        if settlement_time is None:
+            return False
+        hours_to_settlement = (settlement_time - utc_now()).total_seconds() / 3600.0
+        if hours_to_settlement <= 0:
+            return False
+        if hours_to_settlement > float(self.max_settlement_hours):
+            return False
+        return True
 
     def _merge_quotes(
         self,
@@ -120,13 +225,24 @@ class PolymarketQuantumFoldEngine:
         liquidity = max(1.0, to_float(token.get("liquidity"), 0.0))
         volume_24hr = max(0.0, to_float(token.get("volume_24hr"), 0.0))
         price_midness = max(0.0, 1.0 - abs(gamma_price - 0.5) * 2.0)
-        return (volume_24hr + 1.0) * (0.25 + price_midness) * math.sqrt(liquidity)
+        urgency_bonus = 1.0
+        settlement_time = parse_ts(token.get("end_time")) or parse_ts(token.get("start_time"))
+        if settlement_time is not None:
+            hours_to_settlement = (settlement_time - utc_now()).total_seconds() / 3600.0
+            if hours_to_settlement >= 0:
+                urgency_bonus = max(
+                    0.5,
+                    1.5 - min(hours_to_settlement, float(self.max_settlement_hours)) / max(float(self.max_settlement_hours), 1.0),
+                )
+        return (volume_24hr + 1.0) * (0.25 + price_midness) * urgency_bonus * math.sqrt(liquidity)
 
     def _select_book_universe(self, gamma_tokens: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         viable: List[Dict[str, Any]] = []
         fallback: List[Dict[str, Any]] = []
         for token in gamma_tokens:
             if bool(token.get("resolved") or token.get("closed")):
+                continue
+            if not self._is_short_horizon_market(token):
                 continue
             gamma_price = clamp(to_float(token.get("gamma_price"), 0.0))
             if 0.04 <= gamma_price <= 0.96:
@@ -208,6 +324,8 @@ class PolymarketQuantumFoldEngine:
     def _is_viable_feature_row(self, row: Dict[str, Any], *, for_execution: bool = False) -> bool:
         if bool(row.get("resolved") or row.get("closed")):
             return False
+        if not self._is_short_horizon_market(row):
+            return False
         price = clamp(
             to_float(row.get("best_ask"), to_float(row.get("midpoint"), to_float(row.get("price"), 0.0)))
         )
@@ -249,6 +367,7 @@ class PolymarketQuantumFoldEngine:
                     "market_slug": row.get("market_slug"),
                     "event_slug": row.get("event_slug"),
                     "tracked_at": utc_now_iso(),
+                    "settlement_time": row.get("end_time") or row.get("start_time"),
                     "entry_midpoint": round(to_float(row.get("midpoint"), 0.0), 6),
                     "cost_buffer": round(to_float(row.get("cost_buffer"), 0.0), 6),
                     "features": {

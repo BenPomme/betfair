@@ -1,14 +1,22 @@
 from __future__ import annotations
 
+from datetime import timedelta
+import re
 from typing import Any, Dict, Iterable, List, Optional
 import logging
 
 import httpx
 
 import config
-from polymarket.utils import clamp, parse_ts, safe_json_list, to_float, utc_now_iso
+from polymarket.utils import clamp, parse_ts, safe_json_list, to_float, utc_now, utc_now_iso
 
 logger = logging.getLogger(__name__)
+_SPORTS_TAG_ID = "1"
+_PARTICIPANT_SPLITTERS = (
+    re.compile(r"\s+vs\.?\s+", re.IGNORECASE),
+    re.compile(r"\s+versus\s+", re.IGNORECASE),
+    re.compile(r"\s+@\s+", re.IGNORECASE),
+)
 
 _KNOWN_SPORT_TAGS = {
     "soccer",
@@ -52,15 +60,14 @@ def _tag_values(row: Dict[str, Any]) -> List[str]:
 
 
 def _participants(title: str) -> List[str]:
-    lowered = str(title or "")
-    for token in (" vs ", " v ", " @ ", " at "):
-        idx = lowered.lower().find(token)
-        if idx >= 0:
-            normalized = lowered[:idx] + token + lowered[idx + len(token):]
-            parts = [part.strip() for part in normalized.split(token) if part.strip()]
-            if len(parts) >= 2:
-                return parts[:2]
-    return [str(title or "").strip()] if title else []
+    text = " ".join(str(title or "").strip().split())
+    if not text:
+        return []
+    for splitter in _PARTICIPANT_SPLITTERS:
+        parts = [part.strip(" -") for part in splitter.split(text) if part.strip(" -")]
+        if len(parts) >= 2 and all(len(part) >= 2 for part in parts[:2]):
+            return parts[:2]
+    return [text]
 
 
 class PolymarketGammaClient:
@@ -123,6 +130,7 @@ class PolymarketGammaClient:
             event_title = str(event_row.get("title") or event_row.get("slug") or "")
             event_slug = str(event_row.get("slug") or event_row.get("id") or event_title)
             start_time = parse_ts(event_row.get("startDate") or event_row.get("start_time") or event_row.get("gameStartTime"))
+            event_end_time = parse_ts(event_row.get("endDate") or event_row.get("end_time"))
             competition = str(
                 event_row.get("seriesSlug")
                 or event_row.get("league")
@@ -137,6 +145,7 @@ class PolymarketGammaClient:
                 "sport": sport,
                 "competition": competition,
                 "start_time": start_time.isoformat() if start_time else None,
+                "end_time": event_end_time.isoformat() if event_end_time else None,
                 "teams_or_players": _participants(event_title),
                 "observed_at": observed_at,
                 "source_confidence": 0.8,
@@ -160,6 +169,9 @@ class PolymarketGammaClient:
                         outcome_prices = [last_trade, clamp(1.0 - last_trade)]
                     else:
                         outcome_prices = [0.0 for _ in token_ids]
+                market_end_time = parse_ts(
+                    market_row.get("endDate") or event_row.get("endDate") or market_row.get("end_time")
+                )
                 market_payload = {
                     "event_slug": event_slug,
                     "market_id": str(market_row.get("id") or market_slug),
@@ -168,6 +180,7 @@ class PolymarketGammaClient:
                     "sport": sport,
                     "competition": competition,
                     "start_time": start_time.isoformat() if start_time else None,
+                    "end_time": market_end_time.isoformat() if market_end_time else None,
                     "observed_at": observed_at,
                     "liquidity": to_float(market_row.get("liquidityNum") or market_row.get("liquidity")),
                     "volume_24hr": to_float(market_row.get("volume24hrClob") or market_row.get("volume24hr") or market_row.get("volume")),
@@ -194,6 +207,7 @@ class PolymarketGammaClient:
                         "sport": sport,
                         "competition": competition,
                         "start_time": start_time.isoformat() if start_time else None,
+                        "end_time": market_payload["end_time"],
                         "teams_or_players": event_payload["teams_or_players"],
                         "gamma_price": gamma_price,
                         "last_trade_price": gamma_price,
@@ -223,16 +237,32 @@ class PolymarketGammaClient:
         }
 
     def fetch_snapshot(self) -> Dict[str, Any]:
+        page_size = max(1, min(self.max_events, 100))
+        now = utc_now()
+        end_date_max = now + timedelta(hours=max(1, int(getattr(config, "POLYMARKET_QF_MAX_SETTLEMENT_HOURS", 168))))
         params = {
+            "active": "true",
             "closed": "false",
-            "limit": str(self.max_events),
-            "tag_slug": "sports",
+            "limit": str(page_size),
+            "tag_id": _SPORTS_TAG_ID,
+            "end_date_min": now.isoformat().replace("+00:00", "Z"),
+            "end_date_max": end_date_max.isoformat().replace("+00:00", "Z"),
         }
+        rows: List[Dict[str, Any]] = []
         with httpx.Client(timeout=self.timeout_seconds, headers=self._headers, follow_redirects=True) as client:
-            response = client.get(f"{self.base_url}/events", params=params)
-            response.raise_for_status()
-            payload = response.json()
-        rows = payload if isinstance(payload, list) else (payload.get("data") or payload.get("events") or [])
+            offset = 0
+            while len(rows) < self.max_events:
+                response = client.get(f"{self.base_url}/events", params={**params, "offset": str(offset)})
+                response.raise_for_status()
+                payload = response.json()
+                batch = payload if isinstance(payload, list) else (payload.get("data") or payload.get("events") or [])
+                if not batch:
+                    break
+                rows.extend(batch)
+                if len(batch) < page_size:
+                    break
+                offset += page_size
+        rows = rows[: self.max_events]
         snapshot = self.normalize_events(rows, sports_filter=self.sports_filter)
         snapshot["source_health"] = {
             "healthy": snapshot["healthy"],
@@ -240,5 +270,6 @@ class PolymarketGammaClient:
             "event_count": snapshot["event_count"],
             "market_count": snapshot["market_count"],
             "token_count": snapshot["token_count"],
+            "discovery_window_hours": int(getattr(config, "POLYMARKET_QF_MAX_SETTLEMENT_HOURS", 168)),
         }
         return snapshot
