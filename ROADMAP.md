@@ -78,6 +78,38 @@ What happens after configuration:
 What is still needed from the operator:
 - a real Discord webhook URL
 
+## Remote Dashboard Access
+
+Goal:
+- be able to open the command-center dashboard while travelling, even though the runners stay on this machine
+
+Important constraint:
+- GitHub Pages by itself is not enough for the current dashboard
+- GitHub Pages only publishes static HTML/CSS/JavaScript
+- our dashboard depends on the live FastAPI app on this machine plus local runner state and process controls
+
+What GitHub Pages could still be useful for:
+- a static landing page
+- documentation / operator runbook
+- a read-only shell that calls a remotely exposed API
+
+Recommended backlog implementation:
+
+1. Keep this machine as the execution host.
+2. Add a secure remote access layer in front of `monitoring.command_center`.
+3. Start with private access first:
+   - Tailscale `serve` for tailnet-only dashboard access
+4. If public browser access is needed later:
+   - Tailscale Funnel or Cloudflare Tunnel in front of the local dashboard
+   - protect it with identity access, not an open public URL
+5. Optionally use GitHub Pages only as a static front door that links to or embeds a secured remote dashboard endpoint.
+
+Acceptance target for this backlog item:
+- you can reach the live dashboard remotely over HTTPS
+- the dashboard still controls the same local runners on this machine
+- access is authenticated
+- no exchange keys or local control endpoints are exposed publicly without an access layer
+
 ## Remote Work Architecture
 
 Goal:
