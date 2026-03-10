@@ -4,7 +4,7 @@
   "family_id": "betfair_prediction_value_league",
   "stage": "shadow",
   "source": "factory_runtime_plus_artifact",
-  "generated_at": "2026-03-10T18:52:02.474644+00:00",
+  "generated_at": "2026-03-10T19:18:54.561766+00:00",
   "windows": [
     {
       "label": "segment_12",
@@ -59,7 +59,7 @@
     "negative_slippage_stress"
   ],
   "notes": [
-    "package_path=/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_prediction_value_league/runs/betfair_prediction_value_league__challenger__5/20260310T185202112204Z/package.json",
+    "package_path=/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_prediction_value_league/runs/betfair_prediction_value_league__challenger__5/20260310T191854213970Z/package.json",
     "artifact_lineage=betfair_prediction_value_league:challenger:5"
   ],
   "pareto_rank": 1,

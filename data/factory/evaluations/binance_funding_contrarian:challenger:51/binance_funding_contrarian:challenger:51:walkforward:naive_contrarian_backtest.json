@@ -4,7 +4,7 @@
   "family_id": "binance_funding_contrarian",
   "stage": "walkforward",
   "source": "factory_funding_artifact",
-  "generated_at": "2026-03-10T18:52:03.742359+00:00",
+  "generated_at": "2026-03-10T18:53:03.200266+00:00",
   "windows": [
     {
       "label": "rolling_50",
@@ -13,7 +13,7 @@
       "baseline_roi_pct": 0.0,
       "brier_lift_abs": 0.110853,
       "drawdown_pct": 9.7782,
-      "slippage_headroom_pct": -2.6009,
+      "slippage_headroom_pct": -2.3509,
       "failure_rate": 0.75,
       "regime_robustness": 0.25
     },
@@ -24,7 +24,7 @@
       "baseline_roi_pct": 0.0,
       "brier_lift_abs": 0.110853,
       "drawdown_pct": 9.7782,
-      "slippage_headroom_pct": -2.6009,
+      "slippage_headroom_pct": -2.3509,
       "failure_rate": 0.75,
       "regime_robustness": 0.25
     },
@@ -35,14 +35,14 @@
       "baseline_roi_pct": 0.0,
       "brier_lift_abs": 0.110853,
       "drawdown_pct": 9.7782,
-      "slippage_headroom_pct": -2.6009,
+      "slippage_headroom_pct": -2.3509,
       "failure_rate": 0.75,
       "regime_robustness": 0.25
     }
   ],
   "monthly_roi_pct": -0.1009,
   "max_drawdown_pct": 9.7782,
-  "slippage_headroom_pct": -2.6009,
+  "slippage_headroom_pct": -2.3509,
   "calibration_lift_abs": 0.110853,
   "turnover": 0.0664,
   "capacity_score": 0.3832,
@@ -60,7 +60,7 @@
     "regime_robustness_below_minimum"
   ],
   "notes": [
-    "package_path=/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_funding_contrarian/runs/binance_funding_contrarian__challenger__51/20260310T185203739727Z/package.json",
+    "package_path=/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_funding_contrarian/runs/binance_funding_contrarian__challenger__51/20260310T185303198211Z/package.json",
     "resolved_model_engine=naive_contrarian_backtest",
     "source_mode=log_fallback"
   ],

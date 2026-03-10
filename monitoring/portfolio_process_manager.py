@@ -55,7 +55,10 @@ class PortfolioProcessManager:
         }
 
     def start(self, portfolio_id: str) -> Dict[str, object]:
-        spec = get_portfolio_spec(portfolio_id)
+        try:
+            spec = get_portfolio_spec(portfolio_id)
+        except KeyError:
+            return {"ok": False, "error": "unknown_portfolio", "portfolio_id": portfolio_id}
         if spec.control_mode == "disabled" or not spec.enabled:
             return {"ok": False, "error": "portfolio_disabled"}
         start_blocker = research_factory_start_blocker(portfolio_id)
@@ -79,6 +82,10 @@ class PortfolioProcessManager:
         return {"ok": True, "pid": proc.pid}
 
     def stop(self, portfolio_id: str, timeout: float = 20.0) -> Dict[str, object]:
+        try:
+            get_portfolio_spec(portfolio_id)
+        except KeyError:
+            return {"ok": False, "error": "unknown_portfolio", "portfolio_id": portfolio_id}
         store = PortfolioStateStore(portfolio_id)
         pid = store.read_pid()
         proc = self._processes.get(portfolio_id)
@@ -110,5 +117,7 @@ class PortfolioProcessManager:
         return {"ok": True}
 
     def restart(self, portfolio_id: str) -> Dict[str, object]:
-        self.stop(portfolio_id)
+        stop_result = self.stop(portfolio_id)
+        if not stop_result.get("ok") and stop_result.get("error") not in {"not_running"}:
+            return stop_result
         return self.start(portfolio_id)

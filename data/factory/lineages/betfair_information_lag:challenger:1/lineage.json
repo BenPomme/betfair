@@ -24,9 +24,9 @@
     "polymarket_core"
   ],
   "goldfish_workspace": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_information_lag",
-  "revision": 54,
+  "revision": 80,
   "created_at": "2026-03-10T17:21:01.381158+00:00",
-  "updated_at": "2026-03-10T18:51:58.420686+00:00",
+  "updated_at": "2026-03-10T19:18:53.971004+00:00",
   "last_decision": {
     "lineage_id": "betfair_information_lag:challenger:1",
     "current_stage": "paper",
@@ -47,7 +47,7 @@
       "target_stage=paper"
     ],
     "evidence_ids": [],
-    "decided_at": "2026-03-10T18:51:58.420569+00:00"
+    "decided_at": "2026-03-10T19:18:53.970899+00:00"
   },
   "last_evaluation_id": "betfair_information_lag:challenger:1:stress:information_lag_transformer",
   "last_manifest_id": null,

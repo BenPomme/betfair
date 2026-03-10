@@ -4,7 +4,7 @@
   "family_id": "binance_funding_contrarian",
   "stage": "walkforward",
   "source": "repo_funding_experiments",
-  "generated_at": "2026-03-10T18:52:03.713653+00:00",
+  "generated_at": "2026-03-10T18:53:03.179102+00:00",
   "windows": [
     {
       "label": "funding_rolling",

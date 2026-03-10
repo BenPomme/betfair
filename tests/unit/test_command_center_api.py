@@ -263,6 +263,19 @@ def test_command_center_betfair_strategy_endpoints(tmp_path, monkeypatch):
     assert poly["matched_events"] == 2
 
 
+def test_command_center_rejects_start_for_monitor_only_strategy_views(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "PORTFOLIO_STATE_ROOT", str(tmp_path))
+    monkeypatch.setattr(command_center, "_process_manager", _DummyManager())
+
+    client = TestClient(command_center.app)
+    response = client.post("/api/portfolios/betfair_execution_book/start")
+
+    assert response.status_code == 400
+    payload = response.json()["detail"]
+    assert payload["error"] == "monitor_only_portfolio"
+    assert payload["parent_runner"] == "betfair_core"
+
+
 def test_emit_snapshot_notifications_sends_closed_trade_alert(monkeypatch):
     sent = []
     monkeypatch.setattr(

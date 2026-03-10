@@ -4,18 +4,10 @@ from collections import defaultdict
 from typing import Any, Dict, Iterable, List
 
 import config
+from factory.execution_targets import resolve_target_portfolio
 from factory.runtime_mode import current_agentic_factory_runtime_mode
 from monitoring.portfolio_process_manager import PortfolioProcessManager
 from monitoring.portfolio_registry import get_portfolio_spec
-
-_RUNNER_TARGET_ALIASES = {
-    "betfair_execution_book": "betfair_core",
-    "betfair_prediction_league": "betfair_core",
-    "betfair_suspension_lag": "betfair_core",
-    "betfair_crossbook_consensus": "betfair_core",
-    "betfair_timezone_decay": "betfair_core",
-    "polymarket_binary_research": "polymarket_quantum_fold",
-}
 
 
 class FactoryExecutionBridge:
@@ -35,7 +27,7 @@ class FactoryExecutionBridge:
                 continue
             for portfolio_id in lineage.get("target_portfolios") or []:
                 requested_portfolio_id = str(portfolio_id)
-                resolved_portfolio_id = _RUNNER_TARGET_ALIASES.get(requested_portfolio_id, requested_portfolio_id)
+                resolved_portfolio_id = resolve_target_portfolio(requested_portfolio_id)
                 entry = desired.setdefault(
                     resolved_portfolio_id,
                     {

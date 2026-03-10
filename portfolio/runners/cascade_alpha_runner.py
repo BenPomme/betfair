@@ -6,6 +6,7 @@ import threading
 import time
 from typing import Dict, Optional
 
+import config
 from funding.portfolios.cascade_alpha.engine import CascadeAlphaEngine
 from portfolio.accounting import build_strategy_account
 from portfolio.runner_base import PortfolioRunnerBase
@@ -17,11 +18,48 @@ logger = logging.getLogger(__name__)
 class CascadeAlphaPortfolioRunner(PortfolioRunnerBase):
     def __init__(self, spec: PortfolioRunnerSpec):
         super().__init__(spec)
-        self._engine = CascadeAlphaEngine()
+        self._engine: Optional[CascadeAlphaEngine] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._thread: Optional[threading.Thread] = None
 
+    def _candidate_contexts(self, snapshot: Dict[str, object]) -> list[Dict[str, object]]:
+        return [
+            item for item in snapshot.get("factory_candidate_contexts", [])
+            if item.get("family_id") == "binance_cascade_regime"
+        ]
+
+    def _live_contexts(self, snapshot: Dict[str, object]) -> list[Dict[str, object]]:
+        return [
+            item for item in snapshot.get("factory_live_contexts", [])
+            if item.get("family_id") == "binance_cascade_regime"
+        ]
+
+    def _candidate_config_overrides(self, context: Dict[str, object] | None) -> Dict[str, object]:
+        if not context:
+            return {}
+        strategy_profile = dict(context.get("strategy_profile") or {})
+        selected_stake = float(strategy_profile.get("selected_stake_fraction") or 0.0)
+        selected_edge = float(
+            strategy_profile.get("artifact_min_edge")
+            or strategy_profile.get("selected_min_edge")
+            or 0.0
+        )
+        selected_horizon = int(strategy_profile.get("selected_horizon_seconds") or 0)
+        max_notional = max(100.0, round(self.spec.initial_balance * max(0.01, min(0.08, selected_stake or 0.03)), 2))
+        reduced_multiplier = max(0.25, min(1.0, max_notional / max(1.0, float(getattr(config, "CASCADE_ALPHA_MAX_NOTIONAL_PER_TRADE_USD", 1.0)))))
+        overrides: Dict[str, object] = {
+            "CASCADE_ALPHA_MAX_NOTIONAL_PER_TRADE_USD": max_notional,
+            "CASCADE_ALPHA_POLICY_REDUCED_NOTIONAL_MULTIPLIER": round(reduced_multiplier, 4),
+        }
+        if selected_horizon > 0:
+            overrides["CASCADE_ALPHA_MAX_HOLD_SECONDS"] = max(60, min(3600, selected_horizon))
+        if selected_edge > 0.0:
+            overrides["CASCADE_ALPHA_POLICY_STRONG_MIN_SIGNAL_SCORE"] = round(max(6.0, min(10.0, 6.0 + (selected_edge * 60.0))), 4)
+        return overrides
+
     def _start_engine(self) -> None:
+        self._engine = CascadeAlphaEngine()
+
         def _run() -> None:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -49,17 +87,18 @@ class CascadeAlphaPortfolioRunner(PortfolioRunnerBase):
 
     def build_config_snapshot(self) -> Dict[str, object]:
         snapshot = super().build_config_snapshot()
-        cascade_contexts = [
-            item for item in snapshot.get("factory_live_contexts", [])
-            if item.get("family_id") == "binance_cascade_regime"
-        ]
+        cascade_candidate_contexts = self._candidate_contexts(snapshot)
+        cascade_live_contexts = self._live_contexts(snapshot)
+        cascade_contexts = cascade_live_contexts + cascade_candidate_contexts
         snapshot.update(
             {
-                "max_open_positions": 3,
-                "max_notional_per_trade_usd": 5000,
-                "max_gross_exposure_usd": 30000,
-                "max_hold_seconds": 900,
-                "daily_loss_limit_pct": 0.03,
+                "max_open_positions": int(getattr(config, "CASCADE_ALPHA_MAX_OPEN_POSITIONS", 3)),
+                "max_notional_per_trade_usd": float(getattr(config, "CASCADE_ALPHA_MAX_NOTIONAL_PER_TRADE_USD", 5000)),
+                "max_gross_exposure_usd": float(getattr(config, "CASCADE_ALPHA_MAX_GROSS_EXPOSURE_USD", 30000)),
+                "max_hold_seconds": int(getattr(config, "CASCADE_ALPHA_MAX_HOLD_SECONDS", 900)),
+                "daily_loss_limit_pct": float(getattr(config, "CASCADE_ALPHA_DAILY_LOSS_LIMIT_PCT", 0.03)),
+                "factory_cascade_candidate_contexts": cascade_candidate_contexts,
+                "factory_cascade_live_contexts": cascade_live_contexts,
                 "factory_cascade_strategy_contexts": cascade_contexts,
             }
         )
@@ -67,6 +106,15 @@ class CascadeAlphaPortfolioRunner(PortfolioRunnerBase):
 
     def run(self) -> None:
         self.install_signal_handlers()
+        candidate_context = self.preferred_factory_context(
+            family_ids={"binance_cascade_regime"},
+            include_live=False,
+            include_candidates=True,
+        )
+        self.apply_factory_config_overrides(
+            self._candidate_config_overrides(candidate_context),
+            source_context=candidate_context,
+        )
         self.initialize_runtime()
         self._start_engine()
         try:
@@ -103,7 +151,7 @@ class CascadeAlphaPortfolioRunner(PortfolioRunnerBase):
                 ]
                 self.publish_snapshot(
                     account=account,
-                    raw_state=state,
+                    raw_state={**state, **self.factory_applied_runtime()},
                     readiness=state.get("readiness") or {},
                     models=models,
                     trades=list(state.get("closed_trades") or []) + list(state.get("open_positions") or []),
@@ -113,4 +161,5 @@ class CascadeAlphaPortfolioRunner(PortfolioRunnerBase):
                 time.sleep(self._heartbeat_seconds)
         finally:
             self._stop_engine()
+            self.restore_factory_config_overrides()
             self.finalize_runtime()

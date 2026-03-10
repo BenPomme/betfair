@@ -1,0 +1,13 @@
+{
+  "generated_at": "2026-03-10T18:54:04.729130+00:00",
+  "family_id": "betfair_prediction_value_league",
+  "lineage_id": "betfair_prediction_value_league:challenger:50",
+  "source": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/data/prediction",
+  "example_count": 2353,
+  "available_example_count": 2421,
+  "lookback_hours": 108.0,
+  "time_range": {
+    "start": "2026-03-03T07:07:03.491168+00:00",
+    "end": "2026-03-07T11:00:46.342208+00:00"
+  }
+}

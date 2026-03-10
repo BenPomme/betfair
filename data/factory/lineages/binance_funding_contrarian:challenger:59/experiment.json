@@ -1,0 +1,45 @@
+{
+  "experiment_id": "binance_funding_contrarian:challenger:59:experiment",
+  "lineage_id": "binance_funding_contrarian:challenger:59",
+  "family_id": "binance_funding_contrarian",
+  "hypothesis_id": "binance_funding_contrarian:challenger:59:hypothesis",
+  "genome_id": "binance_funding_contrarian:challenger:59:genome",
+  "goldfish_workspace": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_funding_contrarian",
+  "pipeline_stages": [
+    "dataset",
+    "features",
+    "train",
+    "walkforward",
+    "stress",
+    "package"
+  ],
+  "backend_mode": "goldfish_sidecar",
+  "resource_profile": "local-first-hybrid",
+  "inputs": {
+    "parent_lineage_id": "binance_funding_contrarian:challenger:1",
+    "mutation_index": 59,
+    "budget_bucket": "adjacent",
+    "proposal_id": "binance_funding_contrarian:proposal:59",
+    "lead_agent_role": "Bayesian/Causal Researcher",
+    "collaborating_agent_roles": [
+      "Information Theory Researcher",
+      "Control/RL Researcher"
+    ],
+    "tweak_count": 2,
+    "last_tweak_reason": "negative_slippage_stress"
+  },
+  "expected_outputs": {
+    "latest_run": {
+      "run_id": "20260310T190201511316Z",
+      "mode": "funding_contrarian",
+      "package_path": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_funding_contrarian/runs/binance_funding_contrarian__challenger__59/20260310T190201511316Z/package.json",
+      "run_root": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_funding_contrarian/runs/binance_funding_contrarian__challenger__59/20260310T190201511316Z",
+      "requested_model_class": "rules",
+      "resolved_model_engine": "rules_contrarian",
+      "source_mode": "log_fallback",
+      "dataset_rows": 301,
+      "symbol_count": 2
+    }
+  },
+  "created_at": "2026-03-10T18:59:49.696307+00:00"
+}

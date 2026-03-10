@@ -4,56 +4,56 @@
   "family_id": "betfair_prediction_value_league",
   "stage": "stress",
   "source": "factory_prediction_artifact",
-  "generated_at": "2026-03-10T18:52:03.494738+00:00",
+  "generated_at": "2026-03-10T18:54:04.882840+00:00",
   "windows": [
+    {
+      "label": "segment_27",
+      "settled_count": 70,
+      "monthly_roi_pct": 0.0,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": -0.006086,
+      "drawdown_pct": 47.0769,
+      "slippage_headroom_pct": -3.75,
+      "failure_rate": 1.0,
+      "regime_robustness": 0.0
+    },
     {
       "label": "segment_28",
       "settled_count": 70,
-      "monthly_roi_pct": 37.1429,
+      "monthly_roi_pct": 0.0,
       "baseline_roi_pct": 0.0,
-      "brier_lift_abs": 0.003055,
-      "drawdown_pct": 34.4911,
-      "slippage_headroom_pct": -26.6309,
-      "failure_rate": 0.8333,
-      "regime_robustness": 0.1667
+      "brier_lift_abs": -0.001005,
+      "drawdown_pct": 47.0769,
+      "slippage_headroom_pct": -3.75,
+      "failure_rate": 1.0,
+      "regime_robustness": 0.0
     },
     {
       "label": "segment_29",
       "settled_count": 70,
-      "monthly_roi_pct": -100.0,
+      "monthly_roi_pct": 0.0,
       "baseline_roi_pct": 0.0,
-      "brier_lift_abs": -8.1e-05,
-      "drawdown_pct": 34.4911,
-      "slippage_headroom_pct": -26.6309,
-      "failure_rate": 0.8333,
-      "regime_robustness": 0.1667
-    },
-    {
-      "label": "segment_30",
-      "settled_count": 70,
-      "monthly_roi_pct": -5.7857,
-      "baseline_roi_pct": 0.0,
-      "brier_lift_abs": -0.020241,
-      "drawdown_pct": 34.4911,
-      "slippage_headroom_pct": -26.6309,
-      "failure_rate": 0.8333,
-      "regime_robustness": 0.1667
+      "brier_lift_abs": -0.006518,
+      "drawdown_pct": 47.0769,
+      "slippage_headroom_pct": -3.75,
+      "failure_rate": 1.0,
+      "regime_robustness": 0.0
     }
   ],
-  "monthly_roi_pct": -22.8809,
-  "max_drawdown_pct": 34.4911,
-  "slippage_headroom_pct": -26.6309,
-  "calibration_lift_abs": -0.005756,
-  "turnover": 0.0805,
+  "monthly_roi_pct": 0.0,
+  "max_drawdown_pct": 47.0769,
+  "slippage_headroom_pct": -3.75,
+  "calibration_lift_abs": -0.004536,
+  "turnover": 0.0064,
   "capacity_score": 1.0,
-  "failure_rate": 0.8333,
-  "regime_robustness": 0.1667,
-  "baseline_beaten_windows": 2,
+  "failure_rate": 1.0,
+  "regime_robustness": 0.0,
+  "baseline_beaten_windows": 0,
   "stress_positive": false,
-  "trade_count": 169,
-  "settled_count": 169,
+  "trade_count": 13,
+  "settled_count": 13,
   "paper_days": 5,
-  "net_pnl": -55.0,
+  "net_pnl": -6.12,
   "hard_vetoes": [
     "failure_rate_above_15pct",
     "drawdown_above_12pct",
@@ -61,9 +61,9 @@
     "regime_robustness_below_minimum"
   ],
   "notes": [
-    "package_path=/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_prediction_value_league/runs/betfair_prediction_value_league__challenger__50/20260310T185202533831Z/package.json",
+    "package_path=/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_prediction_value_league/runs/betfair_prediction_value_league__challenger__50/20260310T185404728907Z/package.json",
     "resolved_model_engine=hybrid_logit"
   ],
-  "pareto_rank": 1,
-  "fitness_score": -275.69305
+  "pareto_rank": 2,
+  "fitness_score": -250.87255
 }

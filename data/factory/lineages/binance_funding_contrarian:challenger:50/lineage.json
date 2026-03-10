@@ -21,9 +21,9 @@
     "binance_core"
   ],
   "goldfish_workspace": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_funding_contrarian",
-  "revision": 2,
+  "revision": 3,
   "created_at": "2026-03-10T18:50:58.278555+00:00",
-  "updated_at": "2026-03-10T18:52:03.985085+00:00",
+  "updated_at": "2026-03-10T18:53:03.196687+00:00",
   "last_decision": {
     "lineage_id": "binance_funding_contrarian:challenger:50",
     "current_stage": "paper",
@@ -44,9 +44,9 @@
       "target_stage=paper"
     ],
     "evidence_ids": [],
-    "decided_at": "2026-03-10T18:52:03.738028+00:00"
+    "decided_at": "2026-03-10T18:53:03.196526+00:00"
   },
-  "last_evaluation_id": "binance_funding_contrarian:challenger:50:stress:naive_contrarian_backtest",
+  "last_evaluation_id": "binance_funding_contrarian:challenger:50:stress:rules_contrarian",
   "last_manifest_id": null,
   "blockers": [
     "walkforward_window_coverage_insufficient",
@@ -56,15 +56,16 @@
     "monthly_roi_below_5pct",
     "slippage_stress_non_positive",
     "insufficient_trade_count",
-    "negative_slippage_stress"
+    "negative_slippage_stress",
+    "max_tweaks_exhausted_underperforming"
   ],
-  "active": true,
-  "loss_streak": 2,
+  "active": false,
+  "loss_streak": 3,
   "tweak_count": 2,
   "max_tweaks": 2,
-  "iteration_status": "tweaked",
+  "iteration_status": "retired",
   "parent_lineage_id": "binance_funding_contrarian:challenger:1",
-  "retired_at": null,
-  "retirement_reason": null,
-  "last_memory_id": null
+  "retired_at": "2026-03-10T18:53:03.397622+00:00",
+  "retirement_reason": "max_tweaks_exhausted_underperforming",
+  "last_memory_id": "binance_funding_contrarian:challenger:50:memory:2"
 }

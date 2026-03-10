@@ -17,12 +17,10 @@
     "polymarket_core"
   ],
   "champion_lineage_id": "betfair_information_lag:challenger:1",
-  "shadow_challenger_ids": [
-    "betfair_information_lag:challenger:49"
-  ],
+  "shadow_challenger_ids": [],
   "paper_challenger_ids": [
-    "betfair_information_lag:challenger:47",
-    "betfair_information_lag:challenger:48"
+    "betfair_information_lag:challenger:74",
+    "betfair_information_lag:challenger:75"
   ],
   "budget_split": {
     "incumbent": 70.0,
@@ -31,7 +29,7 @@
   },
   "queue_stage": "paper",
   "explainer": "Tracks related-market lag and cross-book stale pricing patterns before they are trusted for execution.",
-  "last_cycle_at": "2026-03-10T18:52:03.918644+00:00",
+  "last_cycle_at": "2026-03-10T19:18:57.648761+00:00",
   "retired_lineage_ids": [
     "betfair_information_lag:challenger:10",
     "betfair_information_lag:challenger:11",
@@ -73,9 +71,36 @@
     "betfair_information_lag:challenger:44",
     "betfair_information_lag:challenger:45",
     "betfair_information_lag:challenger:46",
+    "betfair_information_lag:challenger:47",
+    "betfair_information_lag:challenger:48",
+    "betfair_information_lag:challenger:49",
     "betfair_information_lag:challenger:5",
+    "betfair_information_lag:challenger:50",
+    "betfair_information_lag:challenger:51",
+    "betfair_information_lag:challenger:52",
+    "betfair_information_lag:challenger:53",
+    "betfair_information_lag:challenger:54",
+    "betfair_information_lag:challenger:55",
+    "betfair_information_lag:challenger:56",
+    "betfair_information_lag:challenger:57",
+    "betfair_information_lag:challenger:58",
+    "betfair_information_lag:challenger:59",
     "betfair_information_lag:challenger:6",
+    "betfair_information_lag:challenger:60",
+    "betfair_information_lag:challenger:61",
+    "betfair_information_lag:challenger:62",
+    "betfair_information_lag:challenger:63",
+    "betfair_information_lag:challenger:64",
+    "betfair_information_lag:challenger:65",
+    "betfair_information_lag:challenger:66",
+    "betfair_information_lag:challenger:67",
+    "betfair_information_lag:challenger:68",
+    "betfair_information_lag:challenger:69",
     "betfair_information_lag:challenger:7",
+    "betfair_information_lag:challenger:70",
+    "betfair_information_lag:challenger:71",
+    "betfair_information_lag:challenger:72",
+    "betfair_information_lag:challenger:73",
     "betfair_information_lag:challenger:8",
     "betfair_information_lag:challenger:9",
     "betfair_information_lag:champion"

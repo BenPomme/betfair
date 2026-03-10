@@ -18,7 +18,9 @@
   "shadow_challenger_ids": [
     "polymarket_cross_venue:challenger:47",
     "polymarket_cross_venue:challenger:48",
-    "polymarket_cross_venue:challenger:49"
+    "polymarket_cross_venue:challenger:49",
+    "polymarket_cross_venue:challenger:50",
+    "polymarket_cross_venue:challenger:51"
   ],
   "paper_challenger_ids": [
     "polymarket_cross_venue:challenger:45",
@@ -31,7 +33,7 @@
   },
   "queue_stage": "paper",
   "explainer": "Runs signal leagues on Polymarket quotes and cross-venue confirmations to rank paper-only opportunities.",
-  "last_cycle_at": "2026-03-10T18:52:04.040122+00:00",
+  "last_cycle_at": "2026-03-10T19:18:57.739351+00:00",
   "retired_lineage_ids": [
     "polymarket_cross_venue:challenger:10",
     "polymarket_cross_venue:challenger:11",

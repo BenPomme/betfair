@@ -1,0 +1,31 @@
+{
+  "hypothesis_id": "betfair_prediction_value_league:challenger:58:hypothesis",
+  "family_id": "betfair_prediction_value_league",
+  "title": "Betfair Prediction/Value League Scientific Collaboration 58",
+  "thesis": "Evolve parallel probability models and policy gates until the best value-betting league earns execution rights. This variant fuses bayesian/causal researcher guidance with information theory researcher, econometrics researcher to test causal priors and uncertainty-aware edge filtering; entropy compression, surprise detection, and cross-feed information gain; stability-aware factor combinations and regime-conditioned edge persistence.",
+  "scientific_domains": [
+    "bayesian_causal",
+    "information_theory",
+    "econometrics"
+  ],
+  "lead_agent_role": "Bayesian/Causal Researcher",
+  "success_metric": "paper_monthly_roi_pct",
+  "guardrails": [
+    "Mutation remains inside declared bounds.",
+    "No live promotion without human approval.",
+    "No credentials or hard caps may be mutated."
+  ],
+  "collaborating_agent_roles": [
+    "Information Theory Researcher",
+    "Econometrics Researcher"
+  ],
+  "origin": "scientific_agent_collective",
+  "agent_notes": [
+    "lead_agent=Bayesian/Causal Researcher",
+    "collaborators=Information Theory Researcher,Econometrics Researcher",
+    "memory_hint=avoid veto pattern failure_rate_above_15pct",
+    "tweak_1: failure_rate_above_15pct",
+    "tweak_2: failure_rate_above_15pct"
+  ],
+  "created_at": "2026-03-10T18:59:49.690968+00:00"
+}

@@ -27,6 +27,7 @@ from factory.contracts import (
     StrategyGenome,
     utc_now_iso,
 )
+from factory.execution_targets import resolve_target_portfolio
 from factory.evaluation import assign_pareto_ranks, compute_hard_vetoes
 from factory.experiment_runner import FactoryExperimentRunner
 from factory.goldfish_bridge import GoldfishBridge
@@ -99,16 +100,6 @@ def _scientific_researchers() -> List[str]:
         "game_theory_behavioral",
         "signal_processing_neuroscience",
     ]
-
-
-_EXECUTION_TARGET_ALIASES = {
-    "betfair_execution_book": "betfair_core",
-    "betfair_prediction_league": "betfair_core",
-    "betfair_suspension_lag": "betfair_core",
-    "betfair_crossbook_consensus": "betfair_core",
-    "betfair_timezone_decay": "betfair_core",
-    "polymarket_binary_research": "polymarket_quantum_fold",
-}
 
 
 class FactoryOrchestrator:
@@ -1096,7 +1087,7 @@ class FactoryOrchestrator:
         recent_trade_count = 0
         recent_event_count = 0
         for requested_target in list(lineage.target_portfolios):
-            resolved_target = _EXECUTION_TARGET_ALIASES.get(str(requested_target), str(requested_target))
+            resolved_target = resolve_target_portfolio(str(requested_target))
             store = PortfolioStateStore(resolved_target)
             heartbeat = store.read_heartbeat()
             target_state = store.read_state()

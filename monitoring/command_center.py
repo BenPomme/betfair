@@ -193,6 +193,19 @@ def _get_spec(portfolio_id: str) -> PortfolioRunnerSpec:
         return synthetic
 
 
+def _monitor_only_error(portfolio_id: str) -> Dict[str, Any] | None:
+    synthetic = _SYNTHETIC_PORTFOLIO_SPECS.get(portfolio_id)
+    if synthetic is None:
+        return None
+    return {
+        "ok": False,
+        "error": "monitor_only_portfolio",
+        "portfolio_id": portfolio_id,
+        "detail": "This dashboard item is a monitor-only strategy view. Start the parent execution runner instead.",
+        "parent_runner": "betfair_core" if portfolio_id.startswith("betfair_") else "polymarket_quantum_fold",
+    }
+
+
 def _apply_research_factory_runtime_overlay(
     portfolio_id: str,
     *,
@@ -1383,6 +1396,9 @@ def api_notifications_discord_test() -> Dict[str, Any]:
 
 @app.post("/api/portfolios/{portfolio_id}/start")
 def api_portfolio_start(portfolio_id: str) -> Dict[str, Any]:
+    monitor_only_error = _monitor_only_error(portfolio_id)
+    if monitor_only_error is not None:
+        raise HTTPException(status_code=400, detail=monitor_only_error)
     result = _process_manager.start(portfolio_id)
     if not result.get("ok"):
         raise HTTPException(status_code=400, detail=result)
@@ -1391,6 +1407,9 @@ def api_portfolio_start(portfolio_id: str) -> Dict[str, Any]:
 
 @app.post("/api/portfolios/{portfolio_id}/stop")
 def api_portfolio_stop(portfolio_id: str) -> Dict[str, Any]:
+    monitor_only_error = _monitor_only_error(portfolio_id)
+    if monitor_only_error is not None:
+        raise HTTPException(status_code=400, detail=monitor_only_error)
     result = _process_manager.stop(portfolio_id)
     if not result.get("ok"):
         raise HTTPException(status_code=400, detail=result)
@@ -1399,6 +1418,9 @@ def api_portfolio_stop(portfolio_id: str) -> Dict[str, Any]:
 
 @app.post("/api/portfolios/{portfolio_id}/restart")
 def api_portfolio_restart(portfolio_id: str) -> Dict[str, Any]:
+    monitor_only_error = _monitor_only_error(portfolio_id)
+    if monitor_only_error is not None:
+        raise HTTPException(status_code=400, detail=monitor_only_error)
     result = _process_manager.restart(portfolio_id)
     if not result.get("ok"):
         raise HTTPException(status_code=400, detail=result)

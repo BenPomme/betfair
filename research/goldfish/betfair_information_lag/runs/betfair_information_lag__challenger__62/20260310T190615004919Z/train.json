@@ -1,0 +1,6 @@
+{
+  "generated_at": "2026-03-10T19:06:15.005250+00:00",
+  "requested_model_class": "gbdt",
+  "resolved_model_engine": "information_lag_gbdt",
+  "min_edge": 0.055
+}

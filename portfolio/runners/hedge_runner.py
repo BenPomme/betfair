@@ -26,6 +26,14 @@ class HedgeValidationPortfolioRunner(PortfolioRunnerBase):
 
     def build_config_snapshot(self) -> Dict[str, object]:
         snapshot = super().build_config_snapshot()
+        funding_candidate_contexts = [
+            item for item in snapshot.get("factory_candidate_contexts", [])
+            if item.get("family_id") == "binance_funding_contrarian"
+        ]
+        funding_live_contexts = [
+            item for item in snapshot.get("factory_live_contexts", [])
+            if item.get("family_id") == "binance_funding_contrarian"
+        ]
         snapshot.update(
             {
                 "funding_mode": config.FUNDING_MODE,
@@ -36,6 +44,9 @@ class HedgeValidationPortfolioRunner(PortfolioRunnerBase):
                 "max_open_hedges": int(config.FUNDING_MAX_OPEN_HEDGES),
                 "shared_learner_read_only": True,
                 "state_path": str(config.FUNDING_STATE_PATH),
+                "factory_funding_candidate_contexts": funding_candidate_contexts,
+                "factory_funding_live_contexts": funding_live_contexts,
+                "factory_funding_strategy_contexts": funding_live_contexts + funding_candidate_contexts,
             }
         )
         return snapshot
@@ -108,6 +119,12 @@ class HedgeValidationPortfolioRunner(PortfolioRunnerBase):
 
     def run(self) -> None:
         self.install_signal_handlers()
+        candidate_context = self.preferred_factory_context(
+            family_ids={"binance_funding_contrarian"},
+            include_live=False,
+            include_candidates=True,
+        )
+        self.apply_factory_config_overrides({}, source_context=candidate_context)
         self.initialize_runtime()
 
         started = self._start_engine()
@@ -171,6 +188,7 @@ class HedgeValidationPortfolioRunner(PortfolioRunnerBase):
                         "portfolio_id": self.spec.portfolio_id,
                         "status": "running" if state.get("running") else "idle",
                         "control_mode": self.spec.control_mode,
+                        **self.factory_applied_runtime(),
                     }
                 )
                 events = list((state.get("settlement_audit") or {}).get("recent", [])) + list(state.get("learning_events") or [])
@@ -186,4 +204,5 @@ class HedgeValidationPortfolioRunner(PortfolioRunnerBase):
                 time.sleep(self._heartbeat_seconds)
         finally:
             self._stop_engine()
+            self.restore_factory_config_overrides()
             self.finalize_runtime()

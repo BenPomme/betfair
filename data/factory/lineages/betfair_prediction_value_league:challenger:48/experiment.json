@@ -30,14 +30,14 @@
   },
   "expected_outputs": {
     "latest_run": {
-      "run_id": "20260310T185158920891Z",
+      "run_id": "20260310T185259895608Z",
       "mode": "prediction_walkforward",
-      "package_path": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_prediction_value_league/runs/betfair_prediction_value_league__challenger__48/20260310T185158920891Z/package.json",
-      "run_root": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_prediction_value_league/runs/betfair_prediction_value_league__challenger__48/20260310T185158920891Z",
+      "package_path": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_prediction_value_league/runs/betfair_prediction_value_league__challenger__48/20260310T185259895608Z/package.json",
+      "run_root": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_prediction_value_league/runs/betfair_prediction_value_league__challenger__48/20260310T185259895608Z",
       "requested_model_class": "gbdt",
       "resolved_model_engine": "hybrid_logit",
-      "feature_subset": "cross_science",
-      "example_count": 2411,
+      "feature_subset": "baseline",
+      "example_count": 2353,
       "train_window": 280,
       "test_window": 70
     }

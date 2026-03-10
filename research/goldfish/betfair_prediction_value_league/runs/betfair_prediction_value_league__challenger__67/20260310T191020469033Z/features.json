@@ -1,0 +1,17 @@
+{
+  "generated_at": "2026-03-10T19:10:20.470038+00:00",
+  "feature_subset": "cross_science",
+  "feature_names": [
+    "depth_total_eur",
+    "imbalance",
+    "lay_back_ratio",
+    "price_velocity",
+    "selection_count",
+    "short_volatility",
+    "spread_mean",
+    "time_to_start_sec",
+    "top_of_book_concentration",
+    "weighted_spread"
+  ],
+  "feature_count": 10
+}

@@ -14,6 +14,8 @@
   "champion_lineage_id": "binance_cascade_regime:challenger:4",
   "shadow_challenger_ids": [
     "binance_cascade_regime:challenger:49",
+    "binance_cascade_regime:challenger:50",
+    "binance_cascade_regime:challenger:51",
     "binance_cascade_regime:challenger:45",
     "binance_cascade_regime:challenger:46"
   ],
@@ -28,7 +30,7 @@
   },
   "queue_stage": "paper",
   "explainer": "Uses liquidation, depth collapse, and regime features for short-horizon cascade alpha.",
-  "last_cycle_at": "2026-03-10T18:52:03.978320+00:00",
+  "last_cycle_at": "2026-03-10T19:18:57.692213+00:00",
   "retired_lineage_ids": [
     "binance_cascade_regime:challenger:1",
     "binance_cascade_regime:challenger:10",

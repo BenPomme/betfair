@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import config
 from factory.contracts import AcceptedStrategyManifest
-from factory.manifests import live_manifest_refs_for_portfolio
+from factory.manifests import candidate_context_refs_for_portfolio, live_manifest_refs_for_portfolio
+from factory.orchestrator import FactoryOrchestrator
 from factory.registry import FactoryRegistry
 from factory.runtime_mode import AgenticFactoryRuntimeMode, normalize_agentic_factory_mode
 
@@ -51,3 +52,27 @@ def test_live_manifest_refs_are_hidden_when_factory_is_hard_stopped(tmp_path, mo
 
     monkeypatch.setattr(config, "AGENTIC_FACTORY_MODE", "hard_stop")
     assert live_manifest_refs_for_portfolio("betfair_core") == []
+
+
+def test_candidate_contexts_are_visible_in_cost_saver_and_hidden_in_hard_stop(tmp_path, monkeypatch):
+    project_root = tmp_path / "repo"
+    project_root.mkdir(parents=True, exist_ok=True)
+    portfolio_root = tmp_path / "portfolio_state"
+    factory_root = tmp_path / "factory"
+    goldfish_root = project_root / "research" / "goldfish"
+
+    monkeypatch.setattr(config, "PORTFOLIO_STATE_ROOT", str(portfolio_root))
+    monkeypatch.setattr(config, "FACTORY_ROOT", str(factory_root))
+    monkeypatch.setattr(config, "FACTORY_GOLDFISH_ROOT", str(goldfish_root))
+
+    from tests.unit.test_factory_orchestrator import _prepare_factory_inputs
+
+    _prepare_factory_inputs(project_root)
+    orchestrator = FactoryOrchestrator(project_root)
+    orchestrator.run_cycle()
+
+    monkeypatch.setattr(config, "AGENTIC_FACTORY_MODE", "cost_saver")
+    assert candidate_context_refs_for_portfolio("betfair_core")
+
+    monkeypatch.setattr(config, "AGENTIC_FACTORY_MODE", "hard_stop")
+    assert candidate_context_refs_for_portfolio("betfair_core") == []

@@ -1,0 +1,71 @@
+{
+  "lineage_id": "binance_cascade_regime:challenger:51",
+  "family_id": "binance_cascade_regime",
+  "label": "Binance Cascade/Regime Scientific Collaboration 51",
+  "role": "shadow_challenger",
+  "current_stage": "paper",
+  "target_portfolios": [
+    "cascade_alpha"
+  ],
+  "target_venues": [
+    "binance"
+  ],
+  "hypothesis_id": "binance_cascade_regime:challenger:51:hypothesis",
+  "genome_id": "binance_cascade_regime:challenger:51:genome",
+  "experiment_id": "binance_cascade_regime:challenger:51:experiment",
+  "budget_bucket": "adjacent",
+  "budget_weight_pct": 2.0,
+  "connector_ids": [
+    "binance_core"
+  ],
+  "goldfish_workspace": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_cascade_regime",
+  "revision": 25,
+  "created_at": "2026-03-10T18:54:04.094968+00:00",
+  "updated_at": "2026-03-10T19:18:57.360072+00:00",
+  "last_decision": {
+    "lineage_id": "binance_cascade_regime:challenger:51",
+    "current_stage": "paper",
+    "next_stage": "paper",
+    "allowed": false,
+    "requires_human_signoff": false,
+    "blockers": [
+      "walkforward_window_coverage_insufficient",
+      "stress_eval_negative",
+      "baseline_not_beaten_on_3_windows",
+      "insufficient_paper_days",
+      "monthly_roi_below_5pct",
+      "slippage_stress_non_positive",
+      "failure_rate_above_15pct",
+      "negative_slippage_stress",
+      "regime_robustness_below_minimum"
+    ],
+    "reasons": [
+      "target_stage=paper"
+    ],
+    "evidence_ids": [],
+    "decided_at": "2026-03-10T19:18:57.359974+00:00"
+  },
+  "last_evaluation_id": "binance_cascade_regime:challenger:51:stress:cascade_gbdt",
+  "last_manifest_id": null,
+  "blockers": [
+    "walkforward_window_coverage_insufficient",
+    "stress_eval_negative",
+    "baseline_not_beaten_on_3_windows",
+    "insufficient_paper_days",
+    "monthly_roi_below_5pct",
+    "slippage_stress_non_positive",
+    "failure_rate_above_15pct",
+    "negative_slippage_stress",
+    "regime_robustness_below_minimum",
+    "awaiting_execution_validation"
+  ],
+  "active": true,
+  "loss_streak": 0,
+  "tweak_count": 0,
+  "max_tweaks": 2,
+  "iteration_status": "awaiting_execution_validation",
+  "parent_lineage_id": "binance_cascade_regime:challenger:4",
+  "retired_at": null,
+  "retirement_reason": null,
+  "last_memory_id": null
+}

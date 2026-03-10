@@ -22,9 +22,9 @@
     "betfair_core"
   ],
   "goldfish_workspace": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/polymarket_cross_venue",
-  "revision": 5,
+  "revision": 31,
   "created_at": "2026-03-10T18:48:30.942297+00:00",
-  "updated_at": "2026-03-10T18:52:03.843904+00:00",
+  "updated_at": "2026-03-10T19:18:57.576865+00:00",
   "last_decision": {
     "lineage_id": "polymarket_cross_venue:challenger:45",
     "current_stage": "paper",
@@ -46,7 +46,7 @@
       "target_stage=paper"
     ],
     "evidence_ids": [],
-    "decided_at": "2026-03-10T18:52:03.843537+00:00"
+    "decided_at": "2026-03-10T19:18:57.576758+00:00"
   },
   "last_evaluation_id": "polymarket_cross_venue:challenger:45:stress:cross_venue_rules",
   "last_manifest_id": null,

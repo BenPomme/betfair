@@ -4,7 +4,7 @@
   "family_id": "binance_funding_contrarian",
   "stage": "stress",
   "source": "factory_funding_artifact",
-  "generated_at": "2026-03-10T18:52:03.606248+00:00",
+  "generated_at": "2026-03-10T19:18:57.365638+00:00",
   "windows": [
     {
       "label": "rolling_50_stress",
@@ -60,7 +60,7 @@
     "regime_robustness_below_minimum"
   ],
   "notes": [
-    "package_path=/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_funding_contrarian/runs/binance_funding_contrarian__challenger__1/20260310T185203603870Z/package.json",
+    "package_path=/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_funding_contrarian/runs/binance_funding_contrarian__challenger__1/20260310T191857363854Z/package.json",
     "resolved_model_engine=naive_contrarian_backtest",
     "source_mode=log_fallback"
   ],

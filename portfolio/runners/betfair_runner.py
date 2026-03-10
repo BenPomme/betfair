@@ -19,12 +19,58 @@ class BetfairPortfolioRunner(PortfolioRunnerBase):
         super().__init__(spec)
         self._engine = TradingEngine()
 
-    def build_config_snapshot(self) -> Dict[str, object]:
-        snapshot = super().build_config_snapshot()
-        betfair_contexts = [
+    def _candidate_contexts(self, snapshot: Dict[str, object]) -> List[Dict[str, object]]:
+        return [
+            item for item in snapshot.get("factory_candidate_contexts", [])
+            if item.get("family_id") in {"betfair_prediction_value_league", "betfair_information_lag"}
+        ]
+
+    def _live_contexts(self, snapshot: Dict[str, object]) -> List[Dict[str, object]]:
+        return [
             item for item in snapshot.get("factory_live_contexts", [])
             if item.get("family_id") in {"betfair_prediction_value_league", "betfair_information_lag"}
         ]
+
+    def _candidate_config_overrides(self, context: Dict[str, object] | None) -> Dict[str, object]:
+        if not context:
+            return {}
+        strategy_profile = dict(context.get("strategy_profile") or {})
+        artifact_payloads = dict(context.get("artifact_payloads") or {})
+        train_payload = dict(artifact_payloads.get("train") or {})
+        requested_model_class = str(
+            train_payload.get("requested_model_class")
+            or strategy_profile.get("requested_model_class")
+            or strategy_profile.get("selected_model_class")
+            or ""
+        ).strip().lower()
+        model_kind = None
+        if requested_model_class in {"hybrid_logit", "logit", "probit", "transformer", "lstm", "gru", "sequence"}:
+            model_kind = "hybrid_logit"
+        elif requested_model_class in {"market_calibrated", "calibrated", "xgboost", "gbdt", "tree", "forest"}:
+            model_kind = "market_calibrated"
+        min_edge = float(
+            train_payload.get("min_edge")
+            or strategy_profile.get("artifact_min_edge")
+            or strategy_profile.get("selected_min_edge")
+            or 0.0
+        )
+        stake_fraction = float(strategy_profile.get("selected_stake_fraction") or 0.0)
+        overrides: Dict[str, object] = {}
+        if min_edge > 0.0:
+            overrides["PREDICTION_MIN_EDGE"] = round(max(0.01, min(0.15, min_edge)), 6)
+        if stake_fraction > 0.0:
+            clipped_stake = round(max(0.01, min(0.25, stake_fraction)), 6)
+            overrides["PREDICTION_STAKE_FRACTION"] = clipped_stake
+            overrides["STAKE_FRACTION"] = round(max(0.01, min(0.20, clipped_stake)), 6)
+        if model_kind:
+            overrides["PREDICTION_MODEL_KINDS"] = model_kind
+        return overrides
+
+    def build_config_snapshot(self) -> Dict[str, object]:
+        snapshot = super().build_config_snapshot()
+        betfair_candidate_contexts = self._candidate_contexts(snapshot)
+        betfair_live_contexts = self._live_contexts(snapshot)
+        betfair_contexts = betfair_live_contexts + betfair_candidate_contexts
         snapshot.update(
             {
                 "paper_trading": bool(config.PAPER_TRADING),
@@ -33,6 +79,8 @@ class BetfairPortfolioRunner(PortfolioRunnerBase):
                 "prediction_enabled": bool(config.PREDICTION_ENABLED),
                 "paper_state_path": str(self.store.runtime_dir / "paper_executor_state.json"),
                 "paper_trades_log_path": str(self.store.runtime_dir / "paper_trades.jsonl"),
+                "factory_betfair_candidate_contexts": betfair_candidate_contexts,
+                "factory_betfair_live_contexts": betfair_live_contexts,
                 "factory_betfair_strategy_contexts": betfair_contexts,
                 "factory_prediction_policy_gate_path": next(
                     (
@@ -103,6 +151,15 @@ class BetfairPortfolioRunner(PortfolioRunnerBase):
 
     def run(self) -> None:
         self.install_signal_handlers()
+        candidate_context = self.preferred_factory_context(
+            family_ids={"betfair_prediction_value_league", "betfair_information_lag"},
+            include_live=False,
+            include_candidates=True,
+        )
+        self.apply_factory_config_overrides(
+            self._candidate_config_overrides(candidate_context),
+            source_context=candidate_context,
+        )
         self.initialize_runtime()
 
         config.PAPER_STATE_PATH = str(self.store.runtime_dir / "paper_executor_state.json")
@@ -153,6 +210,7 @@ class BetfairPortfolioRunner(PortfolioRunnerBase):
                         "status": "running" if state.get("running") else "idle",
                         "control_mode": self.spec.control_mode,
                         "prediction_league_summary": self._prediction_league_summary(state),
+                        **self.factory_applied_runtime(),
                     }
                 )
                 self.publish_snapshot(
@@ -170,4 +228,5 @@ class BetfairPortfolioRunner(PortfolioRunnerBase):
                 self._engine.stop()
             except Exception:
                 logger.exception("Failed to stop Betfair engine cleanly")
+            self.restore_factory_config_overrides()
             self.finalize_runtime()

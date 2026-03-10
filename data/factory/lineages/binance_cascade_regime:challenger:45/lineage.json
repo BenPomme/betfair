@@ -19,9 +19,9 @@
     "binance_core"
   ],
   "goldfish_workspace": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_cascade_regime",
-  "revision": 5,
+  "revision": 31,
   "created_at": "2026-03-10T18:48:30.933097+00:00",
-  "updated_at": "2026-03-10T18:52:03.563532+00:00",
+  "updated_at": "2026-03-10T19:18:57.320640+00:00",
   "last_decision": {
     "lineage_id": "binance_cascade_regime:challenger:45",
     "current_stage": "paper",
@@ -43,7 +43,7 @@
       "target_stage=paper"
     ],
     "evidence_ids": [],
-    "decided_at": "2026-03-10T18:52:03.562926+00:00"
+    "decided_at": "2026-03-10T19:18:57.320507+00:00"
   },
   "last_evaluation_id": "binance_cascade_regime:challenger:45:stress:cascade_gbdt",
   "last_manifest_id": null,

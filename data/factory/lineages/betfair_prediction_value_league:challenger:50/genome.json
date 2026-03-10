@@ -3,7 +3,7 @@
   "lineage_id": "betfair_prediction_value_league:challenger:50",
   "family_id": "betfair_prediction_value_league",
   "parent_genome_id": "betfair_prediction_value_league:challenger:5:genome",
-  "role": "shadow_challenger",
+  "role": "paper_challenger",
   "parameters": {
     "resource_profile": "local-first-hybrid",
     "budget_mix": {
@@ -16,14 +16,14 @@
     "mutation_index": 50,
     "mutation_source": "underperformance_tweak",
     "selected_horizon_seconds": 1800,
-    "selected_feature_subset": "cross_science",
+    "selected_feature_subset": "baseline",
     "selected_model_class": "gbdt",
     "selected_min_edge": 0.05,
     "selected_stake_fraction": 0.011667,
     "selected_learning_rate": 0.04,
-    "selected_lookback_hours": 114.0,
+    "selected_lookback_hours": 108.0,
     "last_tweak_reason": "failure_rate_above_15pct",
-    "last_tweak_cycle": 3
+    "last_tweak_cycle": 4
   },
   "mutation_bounds": {
     "horizons_seconds": [

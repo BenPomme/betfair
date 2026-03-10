@@ -22,10 +22,10 @@
   },
   "expected_outputs": {
     "latest_run": {
-      "run_id": "20260310T185158404334Z",
+      "run_id": "20260310T191853960039Z",
       "mode": "information_lag",
-      "package_path": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_information_lag/runs/betfair_information_lag__challenger__1/20260310T185158404334Z/package.json",
-      "run_root": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_information_lag/runs/betfair_information_lag__challenger__1/20260310T185158404334Z",
+      "package_path": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_information_lag/runs/betfair_information_lag__challenger__1/20260310T191853960039Z/package.json",
+      "run_root": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_information_lag/runs/betfair_information_lag__challenger__1/20260310T191853960039Z",
       "requested_model_class": "transformer",
       "resolved_model_engine": "information_lag_transformer",
       "source_mode": "candidate_logs_recent",

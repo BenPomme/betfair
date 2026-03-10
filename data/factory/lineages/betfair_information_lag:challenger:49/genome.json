@@ -3,7 +3,7 @@
   "lineage_id": "betfair_information_lag:challenger:49",
   "family_id": "betfair_information_lag",
   "parent_genome_id": "betfair_information_lag:challenger:1:genome",
-  "role": "shadow_challenger",
+  "role": "paper_challenger",
   "parameters": {
     "resource_profile": "local-first-hybrid",
     "budget_mix": {
@@ -16,14 +16,14 @@
     "mutation_index": 49,
     "mutation_source": "underperformance_tweak",
     "selected_horizon_seconds": 600,
-    "selected_feature_subset": "cross_science",
+    "selected_feature_subset": "baseline",
     "selected_model_class": "gbdt",
     "selected_min_edge": 0.055,
     "selected_stake_fraction": 0.012,
     "selected_learning_rate": 0.04,
-    "selected_lookback_hours": 90.0,
+    "selected_lookback_hours": 84.0,
     "last_tweak_reason": "failure_rate_above_15pct",
-    "last_tweak_cycle": 3
+    "last_tweak_cycle": 4
   },
   "mutation_bounds": {
     "horizons_seconds": [

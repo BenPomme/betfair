@@ -1,0 +1,71 @@
+{
+  "lineage_id": "binance_funding_contrarian:challenger:57",
+  "family_id": "binance_funding_contrarian",
+  "label": "Binance Funding Contrarian Scientific Collaboration 57",
+  "role": "paper_challenger",
+  "current_stage": "paper",
+  "target_portfolios": [
+    "hedge_validation",
+    "hedge_research",
+    "contrarian_legacy"
+  ],
+  "target_venues": [
+    "binance"
+  ],
+  "hypothesis_id": "binance_funding_contrarian:challenger:57:hypothesis",
+  "genome_id": "binance_funding_contrarian:challenger:57:genome",
+  "experiment_id": "binance_funding_contrarian:challenger:57:experiment",
+  "budget_bucket": "incumbent",
+  "budget_weight_pct": 2.0,
+  "connector_ids": [
+    "binance_core"
+  ],
+  "goldfish_workspace": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_funding_contrarian",
+  "revision": 3,
+  "created_at": "2026-03-10T18:57:42.863054+00:00",
+  "updated_at": "2026-03-10T18:59:53.077637+00:00",
+  "last_decision": {
+    "lineage_id": "binance_funding_contrarian:challenger:57",
+    "current_stage": "paper",
+    "next_stage": "paper",
+    "allowed": false,
+    "requires_human_signoff": false,
+    "blockers": [
+      "walkforward_window_coverage_insufficient",
+      "stress_eval_negative",
+      "baseline_not_beaten_on_3_windows",
+      "insufficient_paper_days",
+      "monthly_roi_below_5pct",
+      "slippage_stress_non_positive",
+      "insufficient_trade_count",
+      "negative_slippage_stress"
+    ],
+    "reasons": [
+      "target_stage=paper"
+    ],
+    "evidence_ids": [],
+    "decided_at": "2026-03-10T18:59:53.077550+00:00"
+  },
+  "last_evaluation_id": "binance_funding_contrarian:challenger:57:stress:rules_contrarian",
+  "last_manifest_id": null,
+  "blockers": [
+    "walkforward_window_coverage_insufficient",
+    "stress_eval_negative",
+    "baseline_not_beaten_on_3_windows",
+    "insufficient_paper_days",
+    "monthly_roi_below_5pct",
+    "slippage_stress_non_positive",
+    "insufficient_trade_count",
+    "negative_slippage_stress",
+    "max_tweaks_exhausted_underperforming"
+  ],
+  "active": false,
+  "loss_streak": 3,
+  "tweak_count": 2,
+  "max_tweaks": 2,
+  "iteration_status": "retired",
+  "parent_lineage_id": "binance_funding_contrarian:challenger:1",
+  "retired_at": "2026-03-10T18:59:53.287167+00:00",
+  "retirement_reason": "max_tweaks_exhausted_underperforming",
+  "last_memory_id": "binance_funding_contrarian:challenger:57:memory:2"
+}

@@ -4,7 +4,7 @@
   "family_id": "binance_cascade_regime",
   "stage": "paper",
   "source": "factory_cascade_artifact",
-  "generated_at": "2026-03-10T18:52:03.566912+00:00",
+  "generated_at": "2026-03-10T19:18:57.322535+00:00",
   "windows": [
     {
       "label": "segment_1",
@@ -60,7 +60,7 @@
     "regime_robustness_below_minimum"
   ],
   "notes": [
-    "package_path=/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_cascade_regime/runs/binance_cascade_regime__challenger__46/20260310T185203565623Z/package.json",
+    "package_path=/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_cascade_regime/runs/binance_cascade_regime__challenger__46/20260310T191857321578Z/package.json",
     "resolved_model_engine=cascade_gbdt",
     "source_mode=cascade_features"
   ],

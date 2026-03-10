@@ -28,10 +28,10 @@
   },
   "expected_outputs": {
     "latest_run": {
-      "run_id": "20260310T185203854928Z",
+      "run_id": "20260310T191857584910Z",
       "mode": "cross_venue",
-      "package_path": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/polymarket_cross_venue/runs/polymarket_cross_venue__challenger__47/20260310T185203854928Z/package.json",
-      "run_root": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/polymarket_cross_venue/runs/polymarket_cross_venue__challenger__47/20260310T185203854928Z",
+      "package_path": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/polymarket_cross_venue/runs/polymarket_cross_venue__challenger__47/20260310T191857584910Z/package.json",
+      "run_root": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/polymarket_cross_venue/runs/polymarket_cross_venue__challenger__47/20260310T191857584910Z",
       "requested_model_class": "gbdt",
       "resolved_model_engine": "cross_venue_gbdt",
       "source_mode": "candidate_logs_recent",

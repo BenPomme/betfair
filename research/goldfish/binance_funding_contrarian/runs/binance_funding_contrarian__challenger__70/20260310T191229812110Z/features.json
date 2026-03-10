@@ -1,0 +1,13 @@
+{
+  "generated_at": "2026-03-10T19:12:29.813088+00:00",
+  "feature_family": "funding_contrarian",
+  "source_mode": "log_fallback",
+  "feature_columns": [
+    "funding_rate",
+    "mark_price",
+    "direction_24h",
+    "price_return_24h_target",
+    "pred_prob"
+  ],
+  "feature_count": 5
+}

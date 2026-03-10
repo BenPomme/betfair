@@ -4,7 +4,7 @@
   "family_id": "betfair_information_lag",
   "stage": "shadow",
   "source": "factory_runtime_plus_artifact",
-  "generated_at": "2026-03-10T18:51:58.406326+00:00",
+  "generated_at": "2026-03-10T19:18:53.962097+00:00",
   "windows": [
     {
       "label": "2026-03-05",
@@ -59,7 +59,7 @@
     "negative_slippage_stress"
   ],
   "notes": [
-    "package_path=/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_information_lag/runs/betfair_information_lag__challenger__1/20260310T185158404334Z/package.json",
+    "package_path=/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_information_lag/runs/betfair_information_lag__challenger__1/20260310T191853960039Z/package.json",
     "artifact_lineage=betfair_information_lag:challenger:1"
   ],
   "pareto_rank": 1,

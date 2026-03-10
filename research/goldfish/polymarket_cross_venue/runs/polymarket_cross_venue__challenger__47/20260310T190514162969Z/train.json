@@ -1,0 +1,6 @@
+{
+  "generated_at": "2026-03-10T19:05:14.163275+00:00",
+  "requested_model_class": "gbdt",
+  "resolved_model_engine": "cross_venue_gbdt",
+  "min_edge": 0.055
+}

@@ -1,0 +1,69 @@
+{
+  "evaluation_id": "binance_cascade_regime:challenger:50:shadow:cascade_gbdt",
+  "lineage_id": "binance_cascade_regime:challenger:50",
+  "family_id": "binance_cascade_regime",
+  "stage": "shadow",
+  "source": "factory_cascade_artifact",
+  "generated_at": "2026-03-10T19:18:57.349161+00:00",
+  "windows": [
+    {
+      "label": "segment_1",
+      "settled_count": 2920,
+      "monthly_roi_pct": -8.0,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": -0.03016,
+      "drawdown_pct": 8.0,
+      "slippage_headroom_pct": -9.0,
+      "failure_rate": 1.0,
+      "regime_robustness": 0.0
+    },
+    {
+      "label": "segment_2",
+      "settled_count": 2920,
+      "monthly_roi_pct": -8.0,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": -0.027282,
+      "drawdown_pct": 8.0,
+      "slippage_headroom_pct": -9.0,
+      "failure_rate": 1.0,
+      "regime_robustness": 0.0
+    },
+    {
+      "label": "segment_3",
+      "settled_count": 2920,
+      "monthly_roi_pct": -8.0,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": -0.028584,
+      "drawdown_pct": 8.0,
+      "slippage_headroom_pct": -9.0,
+      "failure_rate": 1.0,
+      "regime_robustness": 0.0
+    }
+  ],
+  "monthly_roi_pct": -7.6,
+  "max_drawdown_pct": 8.0,
+  "slippage_headroom_pct": -9.4,
+  "calibration_lift_abs": -0.028675,
+  "turnover": 0.0281,
+  "capacity_score": 0.4626,
+  "failure_rate": 1.0,
+  "regime_robustness": 0.0,
+  "baseline_beaten_windows": 0,
+  "stress_positive": false,
+  "trade_count": 246,
+  "settled_count": 8760,
+  "paper_days": 12,
+  "net_pnl": -19.68,
+  "hard_vetoes": [
+    "failure_rate_above_15pct",
+    "negative_slippage_stress",
+    "regime_robustness_below_minimum"
+  ],
+  "notes": [
+    "package_path=/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_cascade_regime/runs/binance_cascade_regime__challenger__50/20260310T191857347887Z/package.json",
+    "resolved_model_engine=cascade_gbdt",
+    "source_mode=cascade_features"
+  ],
+  "pareto_rank": 1,
+  "fitness_score": -201.283
+}

@@ -28,10 +28,10 @@
   },
   "expected_outputs": {
     "latest_run": {
-      "run_id": "20260310T185203573741Z",
+      "run_id": "20260310T191857328056Z",
       "mode": "cascade_regime",
-      "package_path": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_cascade_regime/runs/binance_cascade_regime__challenger__47/20260310T185203573741Z/package.json",
-      "run_root": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_cascade_regime/runs/binance_cascade_regime__challenger__47/20260310T185203573741Z",
+      "package_path": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_cascade_regime/runs/binance_cascade_regime__challenger__47/20260310T191857328056Z/package.json",
+      "run_root": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_cascade_regime/runs/binance_cascade_regime__challenger__47/20260310T191857328056Z",
       "requested_model_class": "gbdt",
       "resolved_model_engine": "cascade_gbdt",
       "source_mode": "cascade_features",

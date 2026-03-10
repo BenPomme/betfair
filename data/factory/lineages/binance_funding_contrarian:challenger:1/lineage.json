@@ -21,9 +21,9 @@
     "binance_core"
   ],
   "goldfish_workspace": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_funding_contrarian",
-  "revision": 51,
+  "revision": 77,
   "created_at": "2026-03-10T17:21:01.390403+00:00",
-  "updated_at": "2026-03-10T18:52:03.615548+00:00",
+  "updated_at": "2026-03-10T19:18:57.374247+00:00",
   "last_decision": {
     "lineage_id": "binance_funding_contrarian:challenger:1",
     "current_stage": "paper",
@@ -44,7 +44,7 @@
       "target_stage=paper"
     ],
     "evidence_ids": [],
-    "decided_at": "2026-03-10T18:52:03.615430+00:00"
+    "decided_at": "2026-03-10T19:18:57.374103+00:00"
   },
   "last_evaluation_id": "binance_funding_contrarian:challenger:1:stress:naive_contrarian_backtest",
   "last_manifest_id": null,

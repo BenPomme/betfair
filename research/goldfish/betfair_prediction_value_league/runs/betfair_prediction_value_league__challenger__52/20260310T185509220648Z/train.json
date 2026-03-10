@@ -1,0 +1,10 @@
+{
+  "generated_at": "2026-03-10T18:55:10.608410+00:00",
+  "requested_model_class": "gbdt",
+  "resolved_model_engine": "hybrid_logit",
+  "train_window": 280,
+  "test_window": 70,
+  "epochs": 8,
+  "learning_rate": 0.04,
+  "edge_threshold": 0.05
+}

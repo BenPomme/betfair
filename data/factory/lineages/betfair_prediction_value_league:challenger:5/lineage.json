@@ -19,9 +19,9 @@
     "betfair_core"
   ],
   "goldfish_workspace": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_prediction_value_league",
-  "revision": 47,
+  "revision": 73,
   "created_at": "2026-03-10T17:58:07.524056+00:00",
-  "updated_at": "2026-03-10T18:52:02.481318+00:00",
+  "updated_at": "2026-03-10T19:18:54.565886+00:00",
   "last_decision": {
     "lineage_id": "betfair_prediction_value_league:challenger:5",
     "current_stage": "paper",
@@ -38,7 +38,7 @@
       "target_stage=paper"
     ],
     "evidence_ids": [],
-    "decided_at": "2026-03-10T18:52:02.481202+00:00"
+    "decided_at": "2026-03-10T19:18:54.565797+00:00"
   },
   "last_evaluation_id": "betfair_prediction_value_league:challenger:5:prediction:182:paper:artifact",
   "last_manifest_id": null,

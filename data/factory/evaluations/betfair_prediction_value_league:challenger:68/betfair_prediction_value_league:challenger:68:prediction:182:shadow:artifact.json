@@ -1,0 +1,68 @@
+{
+  "evaluation_id": "betfair_prediction_value_league:challenger:68:prediction:182:shadow:artifact",
+  "lineage_id": "betfair_prediction_value_league:challenger:68",
+  "family_id": "betfair_prediction_value_league",
+  "stage": "shadow",
+  "source": "factory_runtime_plus_artifact",
+  "generated_at": "2026-03-10T19:12:27.124475+00:00",
+  "windows": [
+    {
+      "label": "segment_27",
+      "settled_count": 70,
+      "monthly_roi_pct": 0.0,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": -0.0058,
+      "drawdown_pct": 10.3544,
+      "slippage_headroom_pct": -2.5,
+      "failure_rate": 0.9655,
+      "regime_robustness": 0.0345
+    },
+    {
+      "label": "segment_28",
+      "settled_count": 70,
+      "monthly_roi_pct": 0.0,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": -0.002322,
+      "drawdown_pct": 10.3544,
+      "slippage_headroom_pct": -2.5,
+      "failure_rate": 0.9655,
+      "regime_robustness": 0.0345
+    },
+    {
+      "label": "segment_29",
+      "settled_count": 70,
+      "monthly_roi_pct": 0.0,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": -0.005331,
+      "drawdown_pct": 10.3544,
+      "slippage_headroom_pct": -2.5,
+      "failure_rate": 0.9655,
+      "regime_robustness": 0.0345
+    }
+  ],
+  "monthly_roi_pct": -5.8321,
+  "max_drawdown_pct": 10.3544,
+  "slippage_headroom_pct": -5.0,
+  "calibration_lift_abs": -0.200518,
+  "turnover": 0.91,
+  "capacity_score": 0.725,
+  "failure_rate": 1.0,
+  "regime_robustness": 0.1922,
+  "baseline_beaten_windows": 0,
+  "stress_positive": false,
+  "trade_count": 182,
+  "settled_count": 182,
+  "paper_days": 30,
+  "net_pnl": -11.0175,
+  "hard_vetoes": [
+    "failure_rate_above_15pct",
+    "negative_slippage_stress",
+    "regime_robustness_below_minimum"
+  ],
+  "notes": [
+    "package_path=/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_prediction_value_league/runs/betfair_prediction_value_league__challenger__68/20260310T191226966841Z/package.json",
+    "artifact_lineage=betfair_prediction_value_league:challenger:68"
+  ],
+  "pareto_rank": 1,
+  "fitness_score": -223.8265
+}

@@ -14,12 +14,10 @@
     "binance_core"
   ],
   "champion_lineage_id": "binance_funding_contrarian:challenger:1",
-  "shadow_challenger_ids": [
-    "binance_funding_contrarian:challenger:51"
-  ],
+  "shadow_challenger_ids": [],
   "paper_challenger_ids": [
-    "binance_funding_contrarian:challenger:49",
-    "binance_funding_contrarian:challenger:50"
+    "binance_funding_contrarian:challenger:76",
+    "binance_funding_contrarian:challenger:77"
   ],
   "budget_split": {
     "incumbent": 70.0,
@@ -28,7 +26,7 @@
   },
   "queue_stage": "paper",
   "explainer": "Uses funding, basis, open interest, and regime features to rank contrarian directional setups.",
-  "last_cycle_at": "2026-03-10T18:52:04.011046+00:00",
+  "last_cycle_at": "2026-03-10T19:18:57.717646+00:00",
   "retired_lineage_ids": [
     "binance_funding_contrarian:challenger:10",
     "binance_funding_contrarian:challenger:11",
@@ -72,9 +70,36 @@
     "binance_funding_contrarian:challenger:46",
     "binance_funding_contrarian:challenger:47",
     "binance_funding_contrarian:challenger:48",
+    "binance_funding_contrarian:challenger:49",
     "binance_funding_contrarian:challenger:5",
+    "binance_funding_contrarian:challenger:50",
+    "binance_funding_contrarian:challenger:51",
+    "binance_funding_contrarian:challenger:52",
+    "binance_funding_contrarian:challenger:53",
+    "binance_funding_contrarian:challenger:54",
+    "binance_funding_contrarian:challenger:55",
+    "binance_funding_contrarian:challenger:56",
+    "binance_funding_contrarian:challenger:57",
+    "binance_funding_contrarian:challenger:58",
+    "binance_funding_contrarian:challenger:59",
     "binance_funding_contrarian:challenger:6",
+    "binance_funding_contrarian:challenger:60",
+    "binance_funding_contrarian:challenger:61",
+    "binance_funding_contrarian:challenger:62",
+    "binance_funding_contrarian:challenger:63",
+    "binance_funding_contrarian:challenger:64",
+    "binance_funding_contrarian:challenger:65",
+    "binance_funding_contrarian:challenger:66",
+    "binance_funding_contrarian:challenger:67",
+    "binance_funding_contrarian:challenger:68",
+    "binance_funding_contrarian:challenger:69",
     "binance_funding_contrarian:challenger:7",
+    "binance_funding_contrarian:challenger:70",
+    "binance_funding_contrarian:challenger:71",
+    "binance_funding_contrarian:challenger:72",
+    "binance_funding_contrarian:challenger:73",
+    "binance_funding_contrarian:challenger:74",
+    "binance_funding_contrarian:challenger:75",
     "binance_funding_contrarian:challenger:8",
     "binance_funding_contrarian:challenger:9",
     "binance_funding_contrarian:champion"

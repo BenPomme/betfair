@@ -4,7 +4,7 @@
   "family_id": "polymarket_cross_venue",
   "stage": "stress",
   "source": "factory_candidate_signal_artifact",
-  "generated_at": "2026-03-10T18:52:03.874425+00:00",
+  "generated_at": "2026-03-10T19:18:57.598617+00:00",
   "windows": [
     {
       "label": "2026-03-05_stress",
@@ -60,7 +60,7 @@
     "regime_robustness_below_minimum"
   ],
   "notes": [
-    "package_path=/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/polymarket_cross_venue/runs/polymarket_cross_venue__challenger__49/20260310T185203873009Z/package.json",
+    "package_path=/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/polymarket_cross_venue/runs/polymarket_cross_venue__challenger__49/20260310T191857597604Z/package.json",
     "resolved_model_engine=cross_venue_gbdt",
     "source_mode=candidate_logs_recent"
   ],

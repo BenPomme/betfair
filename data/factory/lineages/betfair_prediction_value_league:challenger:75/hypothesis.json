@@ -1,0 +1,31 @@
+{
+  "hypothesis_id": "betfair_prediction_value_league:challenger:75:hypothesis",
+  "family_id": "betfair_prediction_value_league",
+  "title": "Betfair Prediction/Value League Scientific Collaboration 75",
+  "thesis": "Evolve parallel probability models and policy gates until the best value-betting league earns execution rights. This variant fuses microstructure researcher guidance with signal processing/neuroscience researcher, control/rl researcher to test order-book stress, queue pressure, and execution-quality asymmetry; multi-timescale filtering, burst detection, and low-latency state transitions; feedback-aware thresholding and action policies that stay robust under execution drift.",
+  "scientific_domains": [
+    "microstructure",
+    "signal_processing_neuroscience",
+    "control_rl"
+  ],
+  "lead_agent_role": "Microstructure Researcher",
+  "success_metric": "paper_monthly_roi_pct",
+  "guardrails": [
+    "Mutation remains inside declared bounds.",
+    "No live promotion without human approval.",
+    "No credentials or hard caps may be mutated."
+  ],
+  "collaborating_agent_roles": [
+    "Signal Processing/Neuroscience Researcher",
+    "Control/RL Researcher"
+  ],
+  "origin": "scientific_agent_collective",
+  "agent_notes": [
+    "lead_agent=Microstructure Researcher",
+    "collaborators=Signal Processing/Neuroscience Researcher,Control/RL Researcher",
+    "memory_hint=avoid veto pattern failure_rate_above_15pct",
+    "tweak_1: failure_rate_above_15pct",
+    "tweak_2: failure_rate_above_15pct"
+  ],
+  "created_at": "2026-03-10T19:17:49.480853+00:00"
+}

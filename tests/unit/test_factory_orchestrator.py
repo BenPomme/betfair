@@ -7,6 +7,12 @@ import config
 from factory.orchestrator import FactoryOrchestrator
 from portfolio.accounting import build_strategy_account
 from portfolio.runner_base import PortfolioRunnerBase
+from portfolio.runners.betfair_runner import BetfairPortfolioRunner
+from portfolio.runners.cascade_alpha_runner import CascadeAlphaPortfolioRunner
+from portfolio.runners.contrarian_runner import ContrarianLegacyPortfolioRunner
+from portfolio.runners.hedge_research_runner import HedgeResearchPortfolioRunner
+from portfolio.runners.hedge_runner import HedgeValidationPortfolioRunner
+from portfolio.runners.polymarket_quantum_fold_runner import PolymarketQuantumFoldPortfolioRunner
 from portfolio.state_store import PortfolioStateStore
 from portfolio.types import PortfolioRunnerSpec
 
@@ -298,6 +304,121 @@ def test_factory_orchestrator_cost_saver_preserves_learning_but_freezes_manifest
     assert any(lineage["latest_artifact_package"] for lineage in state["lineages"] if lineage["family_id"] == "betfair_prediction_value_league")
     assert any(lineage["latest_artifact_package"] for lineage in state["lineages"] if lineage["family_id"] == "binance_funding_contrarian")
     assert state["research_summary"]["agent_generated_lineage_count"] == 0
+
+
+def test_runner_snapshots_expose_candidate_contexts_and_restore_factory_overrides(tmp_path, monkeypatch):
+    project_root = tmp_path / "repo"
+    project_root.mkdir(parents=True, exist_ok=True)
+    portfolio_root = tmp_path / "portfolio_state"
+    factory_root = tmp_path / "factory"
+    goldfish_root = project_root / "research" / "goldfish"
+
+    monkeypatch.setattr(config, "PORTFOLIO_STATE_ROOT", str(portfolio_root))
+    monkeypatch.setattr(config, "FACTORY_ROOT", str(factory_root))
+    monkeypatch.setattr(config, "FACTORY_GOLDFISH_ROOT", str(goldfish_root))
+    _prepare_factory_inputs(project_root)
+
+    orchestrator = FactoryOrchestrator(project_root)
+    orchestrator.run_cycle()
+
+    betfair_runner = BetfairPortfolioRunner(
+        PortfolioRunnerSpec(
+            portfolio_id="betfair_core",
+            label="Betfair Core",
+            category="betfair",
+            control_mode="local_managed",
+            currency="EUR",
+            initial_balance=1000.0,
+        )
+    )
+    contrarian_runner = ContrarianLegacyPortfolioRunner(
+        PortfolioRunnerSpec(
+            portfolio_id="contrarian_legacy",
+            label="Contrarian Legacy",
+            category="crypto_contrarian",
+            control_mode="local_managed",
+            currency="USD",
+            initial_balance=5000.0,
+        )
+    )
+    cascade_runner = CascadeAlphaPortfolioRunner(
+        PortfolioRunnerSpec(
+            portfolio_id="cascade_alpha",
+            label="Cascade Alpha",
+            category="crypto_alpha",
+            control_mode="local_managed",
+            currency="USD",
+            initial_balance=15000.0,
+        )
+    )
+    polymarket_runner = PolymarketQuantumFoldPortfolioRunner(
+        PortfolioRunnerSpec(
+            portfolio_id="polymarket_quantum_fold",
+            label="Polymarket Quantum-Fold",
+            category="polymarket_paper",
+            control_mode="local_managed",
+            currency="USD",
+            initial_balance=7500.0,
+        )
+    )
+    hedge_validation_runner = HedgeValidationPortfolioRunner(
+        PortfolioRunnerSpec(
+            portfolio_id="hedge_validation",
+            label="Hedge Validation",
+            category="crypto_hedge",
+            control_mode="local_managed",
+            currency="USD",
+            initial_balance=1000.0,
+        )
+    )
+    hedge_research_runner = HedgeResearchPortfolioRunner(
+        PortfolioRunnerSpec(
+            portfolio_id="hedge_research",
+            label="Hedge Research",
+            category="crypto_hedge",
+            control_mode="local_managed",
+            currency="USD",
+            initial_balance=25000.0,
+        )
+    )
+
+    betfair_snapshot = betfair_runner.build_config_snapshot()
+    contrarian_snapshot = contrarian_runner.build_config_snapshot()
+    cascade_snapshot = cascade_runner.build_config_snapshot()
+    polymarket_snapshot = polymarket_runner.build_config_snapshot()
+    hedge_validation_snapshot = hedge_validation_runner.build_config_snapshot()
+    hedge_research_snapshot = hedge_research_runner.build_config_snapshot()
+
+    assert betfair_snapshot["factory_candidate_context_count"] >= 1
+    assert betfair_snapshot["factory_betfair_candidate_contexts"]
+    assert contrarian_snapshot["factory_funding_candidate_contexts"]
+    assert cascade_snapshot["factory_cascade_candidate_contexts"]
+    assert polymarket_snapshot["factory_polymarket_candidate_contexts"]
+    assert hedge_validation_snapshot["factory_funding_candidate_contexts"]
+    assert hedge_research_snapshot["factory_funding_candidate_contexts"]
+
+    context = betfair_runner.preferred_factory_context(
+        family_ids={"betfair_prediction_value_league", "betfair_information_lag"},
+        include_live=False,
+        include_candidates=True,
+    )
+    before_edge = config.PREDICTION_MIN_EDGE
+    applied = betfair_runner.apply_factory_config_overrides(
+        betfair_runner._candidate_config_overrides(context),
+        source_context=context,
+    )
+
+    assert context is not None
+    assert context["context_source"] == "candidate_lineage"
+    assert context["strategy_profile"]["selected_min_edge"] is not None
+    assert applied
+    assert betfair_runner.factory_applied_runtime()["factory_applied_context"]["lineage_id"] == context["lineage_id"]
+    assert config.PREDICTION_MIN_EDGE != before_edge
+
+    betfair_runner.restore_factory_config_overrides()
+
+    assert config.PREDICTION_MIN_EDGE == before_edge
+    assert betfair_runner.factory_applied_runtime()["factory_applied_override_count"] == 0
 
 
 def test_factory_orchestrator_hard_stop_returns_paused_state_without_new_activity(tmp_path, monkeypatch):

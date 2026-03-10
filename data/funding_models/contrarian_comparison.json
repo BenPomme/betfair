@@ -1,12 +1,48 @@
 {
   "xgboost": {
-    "trained": false,
-    "direction_accuracy": 0.0,
-    "auc": 0.0,
-    "sharpe_simulated": -999.0,
-    "profit_factor": 0.0,
-    "metrics": {},
-    "error": "[17:19:48] /Users/runner/work/xgboost/xgboost/src/data/data.cc:514: Check failed: valid: Label contains NaN, infinity or a value too large.\nStack trace:\n  [bt] (0) 1   libxgboost.dylib                    0x0000000126a68428 dmlc::LogMessageFatal::~LogMessageFatal() + 124\n  [bt] (1) 2   libxgboost.dylib                    0x0000000126bc6450 xgboost::MetaInfo::SetInfoFromHost(xgboost::Context const&, xgboost::StringView, xgboost::Json) + 2776\n  [bt] (2) 3   libxgboost.dylib                    0x0000000126bc57ec xgboost::MetaInfo::SetInfo(xgboost::Context const&, xgboost::StringView, xgboost::StringView) + 464\n  [bt] (3) 4   libxgboost.dylib                    0x0000000126a7fa60 XGDMatrixSetInfoFromInterface + 228\n  [bt] (4) 5   libffi.dylib                        0x000000019e04a050 ffi_call_SYSV + 80\n  [bt] (5) 6   libffi.dylib                        0x000000019e053604 ffi_call_int + 1220\n  [bt] (6) 7   _ctypes.cpython-39-darwin.so        0x00000001072632e4 PyInit__ctypes + 25736\n  [bt] (7) 8   _ctypes.cpython-39-darwin.so        0x000000010725bbe0 _ctypes.cpython-39-darwin.so + 15328\n  [bt] (8) 9   Python3                             0x0000000100b7136c _PyObject_MakeTpCall + 356\n\n"
+    "trained": true,
+    "direction_accuracy": 0.5407222643964863,
+    "auc": 0.5310290376778353,
+    "sharpe_simulated": 0.6839421676845641,
+    "profit_factor": 1.080744286910371,
+    "metrics": {
+      "accuracy": 0.5407222643964863,
+      "auc": 0.5310290376778353,
+      "precision": 0.5449569976544175,
+      "recall": 0.16022988505747127,
+      "f1": 0.24764611831586428,
+      "sharpe_simulated": 0.6839421676845641,
+      "threshold": 0.5664824120603015,
+      "n_trades_per_week": 2.91,
+      "test_size": 18442.0,
+      "feature_count": 29.0,
+      "positive_rate_test": 0.47174926797527383,
+      "top_features_classifier": {
+        "taker_buy_ratio": 0.12362761795520782,
+        "hour_of_day": 0.0911184772849083,
+        "day_of_week": 0.08889883756637573,
+        "funding_dispersion": 0.08875750005245209,
+        "taker_imbalance_3": 0.07905744016170502,
+        "price_return_72h": 0.056542959064245224,
+        "price_return_24h": 0.05078335106372833,
+        "price_return_8h": 0.04647963121533394,
+        "consecutive_extreme_negative": 0.04297574609518051,
+        "funding_zscore_30": 0.0417170450091362
+      },
+      "top_features_regressor": {
+        "taker_buy_ratio": 0.5882819294929504,
+        "price_return_72h": 0.41171807050704956,
+        "funding_zscore_30": 0.0,
+        "funding_percentile_30": 0.0,
+        "consecutive_extreme_positive": 0.0,
+        "consecutive_extreme_negative": 0.0,
+        "funding_rate_abs": 0.0,
+        "rate_lag_1": 0.0,
+        "rate_lag_2": 0.0,
+        "rate_lag_3": 0.0
+      }
+    },
+    "error": null
   },
   "tft": {
     "trained": false,
@@ -24,7 +60,7 @@
     "sharpe_simulated": -999.0,
     "profit_factor": 0.0,
     "metrics": {},
-    "error": "Length of values (10658868) does not match length of index (407162)"
+    "error": "Length of values (6265880) does not match length of index (296828)"
   },
-  "selected": "fallback"
+  "selected": "xgboost"
 }

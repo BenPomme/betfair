@@ -1,0 +1,31 @@
+{
+  "hypothesis_id": "binance_funding_contrarian:challenger:52:hypothesis",
+  "family_id": "binance_funding_contrarian",
+  "title": "Binance Funding Contrarian Scientific Collaboration 52",
+  "thesis": "Exploit funding extremes, regime shifts, and cross-science features to improve directional funding trades. This variant fuses bayesian/causal researcher guidance with information theory researcher, control/rl researcher to test causal priors and uncertainty-aware edge filtering; entropy compression, surprise detection, and cross-feed information gain; feedback-aware thresholding and action policies that stay robust under execution drift.",
+  "scientific_domains": [
+    "bayesian_causal",
+    "information_theory",
+    "control_rl"
+  ],
+  "lead_agent_role": "Bayesian/Causal Researcher",
+  "success_metric": "paper_monthly_roi_pct",
+  "guardrails": [
+    "Mutation remains inside declared bounds.",
+    "No live promotion without human approval.",
+    "No credentials or hard caps may be mutated."
+  ],
+  "collaborating_agent_roles": [
+    "Information Theory Researcher",
+    "Control/RL Researcher"
+  ],
+  "origin": "scientific_agent_collective",
+  "agent_notes": [
+    "lead_agent=Bayesian/Causal Researcher",
+    "collaborators=Information Theory Researcher,Control/RL Researcher",
+    "memory_hint=avoid veto pattern negative_slippage_stress",
+    "tweak_1: negative_slippage_stress",
+    "tweak_2: negative_slippage_stress"
+  ],
+  "created_at": "2026-03-10T18:52:59.659728+00:00"
+}

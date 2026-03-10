@@ -3,7 +3,7 @@
   "lineage_id": "binance_funding_contrarian:challenger:51",
   "family_id": "binance_funding_contrarian",
   "parent_genome_id": "binance_funding_contrarian:challenger:1:genome",
-  "role": "shadow_challenger",
+  "role": "paper_challenger",
   "parameters": {
     "resource_profile": "local-first-hybrid",
     "budget_mix": {
@@ -17,13 +17,13 @@
     "mutation_source": "underperformance_tweak",
     "selected_horizon_seconds": 600,
     "selected_feature_subset": "regime",
-    "selected_model_class": "tft",
-    "selected_min_edge": 0.045,
+    "selected_model_class": "rules",
+    "selected_min_edge": 0.04,
     "selected_stake_fraction": 0.013333,
     "selected_learning_rate": 0.04,
-    "selected_lookback_hours": 108.0,
+    "selected_lookback_hours": 120.0,
     "last_tweak_reason": "negative_slippage_stress",
-    "last_tweak_cycle": 3
+    "last_tweak_cycle": 4
   },
   "mutation_bounds": {
     "horizons_seconds": [

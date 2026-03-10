@@ -22,10 +22,10 @@
   },
   "expected_outputs": {
     "latest_run": {
-      "run_id": "20260310T185203603870Z",
+      "run_id": "20260310T191857363854Z",
       "mode": "funding_contrarian",
-      "package_path": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_funding_contrarian/runs/binance_funding_contrarian__challenger__1/20260310T185203603870Z/package.json",
-      "run_root": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_funding_contrarian/runs/binance_funding_contrarian__challenger__1/20260310T185203603870Z",
+      "package_path": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_funding_contrarian/runs/binance_funding_contrarian__challenger__1/20260310T191857363854Z/package.json",
+      "run_root": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_funding_contrarian/runs/binance_funding_contrarian__challenger__1/20260310T191857363854Z",
       "requested_model_class": "transformer",
       "resolved_model_engine": "naive_contrarian_backtest",
       "source_mode": "log_fallback",

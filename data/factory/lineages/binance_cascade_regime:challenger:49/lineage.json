@@ -19,14 +19,14 @@
     "binance_core"
   ],
   "goldfish_workspace": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_cascade_regime",
-  "revision": 1,
+  "revision": 27,
   "created_at": "2026-03-10T18:51:58.365300+00:00",
-  "updated_at": "2026-03-10T18:52:03.597977+00:00",
+  "updated_at": "2026-03-10T19:18:57.346471+00:00",
   "last_decision": {
     "lineage_id": "binance_cascade_regime:challenger:49",
-    "current_stage": "idea",
+    "current_stage": "paper",
     "next_stage": "paper",
-    "allowed": true,
+    "allowed": false,
     "requires_human_signoff": false,
     "blockers": [
       "walkforward_window_coverage_insufficient",
@@ -43,7 +43,7 @@
       "target_stage=paper"
     ],
     "evidence_ids": [],
-    "decided_at": "2026-03-10T18:52:03.597871+00:00"
+    "decided_at": "2026-03-10T19:18:57.346385+00:00"
   },
   "last_evaluation_id": "binance_cascade_regime:challenger:49:stress:cascade_gbdt",
   "last_manifest_id": null,

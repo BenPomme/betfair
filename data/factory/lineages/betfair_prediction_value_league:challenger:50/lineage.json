@@ -2,7 +2,7 @@
   "lineage_id": "betfair_prediction_value_league:challenger:50",
   "family_id": "betfair_prediction_value_league",
   "label": "Betfair Prediction/Value League Scientific Collaboration 50",
-  "role": "shadow_challenger",
+  "role": "paper_challenger",
   "current_stage": "paper",
   "target_portfolios": [
     "betfair_core"
@@ -19,48 +19,53 @@
     "betfair_core"
   ],
   "goldfish_workspace": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_prediction_value_league",
-  "revision": 1,
+  "revision": 3,
   "created_at": "2026-03-10T18:51:58.360665+00:00",
-  "updated_at": "2026-03-10T18:52:03.928386+00:00",
+  "updated_at": "2026-03-10T18:54:04.889110+00:00",
   "last_decision": {
     "lineage_id": "betfair_prediction_value_league:challenger:50",
-    "current_stage": "idea",
+    "current_stage": "paper",
     "next_stage": "paper",
-    "allowed": true,
+    "allowed": false,
     "requires_human_signoff": false,
     "blockers": [
+      "walkforward_window_coverage_insufficient",
       "stress_eval_negative",
+      "baseline_not_beaten_on_3_windows",
       "monthly_roi_below_5pct",
       "drawdown_above_8pct",
       "slippage_stress_non_positive",
       "failure_rate_above_15pct",
-      "drawdown_above_12pct",
-      "negative_slippage_stress"
+      "negative_slippage_stress",
+      "regime_robustness_below_minimum"
     ],
     "reasons": [
       "target_stage=paper"
     ],
     "evidence_ids": [],
-    "decided_at": "2026-03-10T18:52:03.503431+00:00"
+    "decided_at": "2026-03-10T18:54:04.888955+00:00"
   },
   "last_evaluation_id": "betfair_prediction_value_league:challenger:50:stress:hybrid_logit",
   "last_manifest_id": null,
   "blockers": [
+    "walkforward_window_coverage_insufficient",
     "stress_eval_negative",
+    "baseline_not_beaten_on_3_windows",
     "monthly_roi_below_5pct",
     "drawdown_above_8pct",
     "slippage_stress_non_positive",
     "failure_rate_above_15pct",
-    "drawdown_above_12pct",
-    "negative_slippage_stress"
+    "negative_slippage_stress",
+    "regime_robustness_below_minimum",
+    "max_tweaks_exhausted_underperforming"
   ],
-  "active": true,
-  "loss_streak": 1,
-  "tweak_count": 1,
+  "active": false,
+  "loss_streak": 3,
+  "tweak_count": 2,
   "max_tweaks": 2,
-  "iteration_status": "tweaked",
+  "iteration_status": "retired",
   "parent_lineage_id": "betfair_prediction_value_league:challenger:5",
-  "retired_at": null,
-  "retirement_reason": null,
-  "last_memory_id": null
+  "retired_at": "2026-03-10T18:54:07.669177+00:00",
+  "retirement_reason": "max_tweaks_exhausted_underperforming",
+  "last_memory_id": "betfair_prediction_value_league:challenger:50:memory:2"
 }
