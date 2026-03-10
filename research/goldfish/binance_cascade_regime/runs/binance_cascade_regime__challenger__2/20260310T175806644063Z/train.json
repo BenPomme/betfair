@@ -1,0 +1,7 @@
+{
+  "generated_at": "2026-03-10T17:58:07.339526+00:00",
+  "requested_model_class": "logit",
+  "resolved_model_engine": "cascade_logit",
+  "horizon_seconds": 600,
+  "min_edge": 0.035
+}

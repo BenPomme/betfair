@@ -1,0 +1,45 @@
+{
+  "experiment_id": "polymarket_cross_venue:challenger:40:experiment",
+  "lineage_id": "polymarket_cross_venue:challenger:40",
+  "family_id": "polymarket_cross_venue",
+  "hypothesis_id": "polymarket_cross_venue:challenger:40:hypothesis",
+  "genome_id": "polymarket_cross_venue:challenger:40:genome",
+  "goldfish_workspace": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/polymarket_cross_venue",
+  "pipeline_stages": [
+    "dataset",
+    "features",
+    "train",
+    "walkforward",
+    "stress",
+    "package"
+  ],
+  "backend_mode": "goldfish_sidecar",
+  "resource_profile": "local-first-hybrid",
+  "inputs": {
+    "parent_lineage_id": "polymarket_cross_venue:challenger:1",
+    "mutation_index": 40,
+    "budget_bucket": "moonshot",
+    "proposal_id": "polymarket_cross_venue:proposal:40",
+    "lead_agent_role": "Microstructure Researcher",
+    "collaborating_agent_roles": [
+      "Game Theory/Behavioral Researcher",
+      "Control/RL Researcher"
+    ],
+    "tweak_count": 2,
+    "last_tweak_reason": "failure_rate_above_15pct"
+  },
+  "expected_outputs": {
+    "latest_run": {
+      "run_id": "20260310T184522854564Z",
+      "mode": "cross_venue",
+      "package_path": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/polymarket_cross_venue/runs/polymarket_cross_venue__challenger__40/20260310T184522854564Z/package.json",
+      "run_root": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/polymarket_cross_venue/runs/polymarket_cross_venue__challenger__40/20260310T184522854564Z",
+      "requested_model_class": "rules",
+      "resolved_model_engine": "cross_venue_rules",
+      "source_mode": "candidate_logs_recent",
+      "dataset_rows": 60000,
+      "market_count": 3
+    }
+  },
+  "created_at": "2026-03-10T18:43:11.779623+00:00"
+}

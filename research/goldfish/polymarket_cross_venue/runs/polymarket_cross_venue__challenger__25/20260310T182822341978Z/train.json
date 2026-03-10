@@ -1,0 +1,6 @@
+{
+  "generated_at": "2026-03-10T18:28:22.342298+00:00",
+  "requested_model_class": "tft",
+  "resolved_model_engine": "cross_venue_tft",
+  "min_edge": 0.05
+}

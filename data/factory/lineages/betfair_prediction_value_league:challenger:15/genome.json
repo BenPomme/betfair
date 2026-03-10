@@ -1,0 +1,78 @@
+{
+  "genome_id": "betfair_prediction_value_league:challenger:15:genome",
+  "lineage_id": "betfair_prediction_value_league:challenger:15",
+  "family_id": "betfair_prediction_value_league",
+  "parent_genome_id": "betfair_prediction_value_league:challenger:5:genome",
+  "role": "paper_challenger",
+  "parameters": {
+    "resource_profile": "local-first-hybrid",
+    "budget_mix": {
+      "incumbent": 70.0,
+      "adjacent": 20.0,
+      "moonshot": 10.0
+    },
+    "max_shadow_challengers": 5,
+    "max_paper_challengers": 2,
+    "mutation_index": 15,
+    "mutation_source": "underperformance_tweak",
+    "selected_horizon_seconds": 1800,
+    "selected_feature_subset": "baseline",
+    "selected_model_class": "gbdt",
+    "selected_min_edge": 0.05,
+    "selected_stake_fraction": 0.015,
+    "selected_learning_rate": 0.04,
+    "selected_lookback_hours": 108.0,
+    "last_tweak_reason": "failure_rate_above_15pct",
+    "last_tweak_cycle": 5
+  },
+  "mutation_bounds": {
+    "horizons_seconds": [
+      120,
+      600,
+      1800,
+      14400
+    ],
+    "feature_subsets": [
+      "baseline",
+      "microstructure",
+      "cross_science",
+      "regime"
+    ],
+    "model_classes": [
+      "logit",
+      "gbdt",
+      "tft",
+      "transformer",
+      "rules"
+    ],
+    "execution_thresholds": {
+      "min_edge": [
+        0.01,
+        0.1
+      ],
+      "stake_fraction": [
+        0.01,
+        0.1
+      ]
+    },
+    "hyperparameter_ranges": {
+      "learning_rate": [
+        0.001,
+        0.1
+      ],
+      "lookback_hours": [
+        6,
+        168
+      ]
+    }
+  },
+  "scientific_domains": [
+    "bayesian_causal",
+    "information_theory",
+    "econometrics"
+  ],
+  "budget_bucket": "adjacent",
+  "resource_profile": "local-first-hybrid",
+  "budget_weight_pct": 2.0,
+  "created_at": "2026-03-10T18:15:18.650852+00:00"
+}

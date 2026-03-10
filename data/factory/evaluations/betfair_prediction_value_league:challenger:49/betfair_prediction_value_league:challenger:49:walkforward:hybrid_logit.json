@@ -1,0 +1,68 @@
+{
+  "evaluation_id": "betfair_prediction_value_league:challenger:49:walkforward:hybrid_logit",
+  "lineage_id": "betfair_prediction_value_league:challenger:49",
+  "family_id": "betfair_prediction_value_league",
+  "stage": "walkforward",
+  "source": "factory_prediction_artifact",
+  "generated_at": "2026-03-10T18:52:02.055978+00:00",
+  "windows": [
+    {
+      "label": "segment_28",
+      "settled_count": 70,
+      "monthly_roi_pct": 6.6667,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": 0.004527,
+      "drawdown_pct": 15.0769,
+      "slippage_headroom_pct": -38.1844,
+      "failure_rate": 0.6333,
+      "regime_robustness": 0.3667
+    },
+    {
+      "label": "segment_29",
+      "settled_count": 70,
+      "monthly_roi_pct": -100.0,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": -0.011869,
+      "drawdown_pct": 15.0769,
+      "slippage_headroom_pct": -38.1844,
+      "failure_rate": 0.6333,
+      "regime_robustness": 0.3667
+    },
+    {
+      "label": "segment_30",
+      "settled_count": 70,
+      "monthly_roi_pct": -13.72,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": -0.033012,
+      "drawdown_pct": 15.0769,
+      "slippage_headroom_pct": -38.1844,
+      "failure_rate": 0.6333,
+      "regime_robustness": 0.3667
+    }
+  ],
+  "monthly_roi_pct": -35.6844,
+  "max_drawdown_pct": 15.0769,
+  "slippage_headroom_pct": -38.1844,
+  "calibration_lift_abs": -0.013451,
+  "turnover": 0.13,
+  "capacity_score": 1.0,
+  "failure_rate": 0.6333,
+  "regime_robustness": 0.3667,
+  "baseline_beaten_windows": 4,
+  "stress_positive": false,
+  "trade_count": 273,
+  "settled_count": 273,
+  "paper_days": 5,
+  "net_pnl": -26.09,
+  "hard_vetoes": [
+    "failure_rate_above_15pct",
+    "drawdown_above_12pct",
+    "negative_slippage_stress"
+  ],
+  "notes": [
+    "package_path=/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_prediction_value_league/runs/betfair_prediction_value_league__challenger__49/20260310T185200523906Z/package.json",
+    "resolved_model_engine=hybrid_logit"
+  ],
+  "pareto_rank": 1,
+  "fitness_score": -236.52125
+}

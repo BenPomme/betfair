@@ -1,0 +1,7 @@
+{
+  "generated_at": "2026-03-10T18:10:26.443667+00:00",
+  "requested_model_class": "transformer",
+  "resolved_model_engine": "cascade_transformer",
+  "horizon_seconds": 600,
+  "min_edge": 0.035
+}

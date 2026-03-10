@@ -1,0 +1,64 @@
+{
+  "lineage_id": "betfair_prediction_value_league:challenger:2",
+  "family_id": "betfair_prediction_value_league",
+  "label": "Betfair Prediction/Value League Challenger 2",
+  "role": "champion",
+  "current_stage": "paper",
+  "target_portfolios": [
+    "betfair_core"
+  ],
+  "target_venues": [
+    "betfair"
+  ],
+  "hypothesis_id": "betfair_prediction_value_league:challenger:2:hypothesis",
+  "genome_id": "betfair_prediction_value_league:challenger:2:genome",
+  "experiment_id": "betfair_prediction_value_league:challenger:2:experiment",
+  "budget_bucket": "adjacent",
+  "budget_weight_pct": 5.33,
+  "connector_ids": [
+    "betfair_core"
+  ],
+  "goldfish_workspace": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_prediction_value_league",
+  "revision": 5,
+  "created_at": "2026-03-10T17:21:58.732152+00:00",
+  "updated_at": "2026-03-10T17:35:15.799213+00:00",
+  "last_decision": {
+    "lineage_id": "betfair_prediction_value_league:challenger:2",
+    "current_stage": "paper",
+    "next_stage": "paper",
+    "allowed": false,
+    "requires_human_signoff": false,
+    "blockers": [
+      "walkforward_window_coverage_insufficient",
+      "stress_eval_negative",
+      "baseline_not_beaten_on_3_windows",
+      "monthly_roi_below_5pct",
+      "slippage_stress_non_positive",
+      "failure_rate_above_15pct",
+      "negative_slippage_stress",
+      "regime_robustness_below_minimum"
+    ],
+    "reasons": [
+      "target_stage=paper"
+    ],
+    "evidence_ids": [],
+    "decided_at": "2026-03-10T17:35:15.799125+00:00"
+  },
+  "last_evaluation_id": "betfair_prediction_value_league:challenger:2:stress:rules",
+  "last_manifest_id": null,
+  "blockers": [
+    "walkforward_window_coverage_insufficient",
+    "stress_eval_negative",
+    "baseline_not_beaten_on_3_windows",
+    "monthly_roi_below_5pct",
+    "slippage_stress_non_positive",
+    "failure_rate_above_15pct",
+    "negative_slippage_stress",
+    "regime_robustness_below_minimum"
+  ],
+  "active": false,
+  "loss_streak": 1,
+  "parent_lineage_id": "betfair_prediction_value_league:champion",
+  "retired_at": "2026-03-10T17:35:17.536362+00:00",
+  "retirement_reason": "failure_rate_above_15pct"
+}

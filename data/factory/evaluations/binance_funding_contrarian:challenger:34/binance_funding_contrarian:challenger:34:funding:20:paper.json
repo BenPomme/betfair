@@ -1,0 +1,41 @@
+{
+  "evaluation_id": "binance_funding_contrarian:challenger:34:funding:20:paper",
+  "lineage_id": "binance_funding_contrarian:challenger:34",
+  "family_id": "binance_funding_contrarian",
+  "stage": "paper",
+  "source": "repo_funding_experiments",
+  "generated_at": "2026-03-10T18:36:51.112782+00:00",
+  "windows": [
+    {
+      "label": "funding_rolling",
+      "settled_count": 20,
+      "monthly_roi_pct": -0.1009,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": 0.110853,
+      "drawdown_pct": 6.1009,
+      "slippage_headroom_pct": -0.6009,
+      "failure_rate": 0.01,
+      "regime_robustness": 0.6
+    }
+  ],
+  "monthly_roi_pct": -0.1009,
+  "max_drawdown_pct": 6.1009,
+  "slippage_headroom_pct": -0.6009,
+  "calibration_lift_abs": 0.110853,
+  "turnover": 0.13333333333333333,
+  "capacity_score": 0.65,
+  "failure_rate": 0.01,
+  "regime_robustness": 0.6,
+  "baseline_beaten_windows": 1,
+  "stress_positive": false,
+  "trade_count": 20,
+  "settled_count": 20,
+  "paper_days": 5,
+  "net_pnl": -0.1009,
+  "hard_vetoes": [
+    "negative_slippage_stress"
+  ],
+  "notes": [],
+  "pareto_rank": 1,
+  "fitness_score": 15.71655
+}

@@ -1,0 +1,31 @@
+{
+  "hypothesis_id": "polymarket_cross_venue:challenger:36:hypothesis",
+  "family_id": "polymarket_cross_venue",
+  "title": "Polymarket Cross-Venue Signals Scientific Collaboration 36",
+  "thesis": "Use Polymarket microstructure and cross-venue event matching to produce robust paper-only signal layers. This variant fuses bayesian/causal researcher guidance with information theory researcher, econometrics researcher to test causal priors and uncertainty-aware edge filtering; entropy compression, surprise detection, and cross-feed information gain; stability-aware factor combinations and regime-conditioned edge persistence.",
+  "scientific_domains": [
+    "bayesian_causal",
+    "information_theory",
+    "econometrics"
+  ],
+  "lead_agent_role": "Bayesian/Causal Researcher",
+  "success_metric": "paper_monthly_roi_pct",
+  "guardrails": [
+    "Mutation remains inside declared bounds.",
+    "No live promotion without human approval.",
+    "No credentials or hard caps may be mutated."
+  ],
+  "collaborating_agent_roles": [
+    "Information Theory Researcher",
+    "Econometrics Researcher"
+  ],
+  "origin": "scientific_agent_collective",
+  "agent_notes": [
+    "lead_agent=Bayesian/Causal Researcher",
+    "collaborators=Information Theory Researcher,Econometrics Researcher",
+    "memory_hint=avoid veto pattern failure_rate_above_15pct",
+    "tweak_1: failure_rate_above_15pct",
+    "tweak_2: failure_rate_above_15pct"
+  ],
+  "created_at": "2026-03-10T18:38:55.794553+00:00"
+}

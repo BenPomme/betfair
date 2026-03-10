@@ -1,0 +1,28 @@
+{
+  "model_type": "residual_logit_v1",
+  "feature_names": [
+    "depth_total_eur",
+    "imbalance",
+    "lay_back_ratio",
+    "price_velocity",
+    "selection_count",
+    "short_volatility",
+    "spread_mean",
+    "time_to_start_sec",
+    "top_of_book_concentration",
+    "weighted_spread"
+  ],
+  "bias": 0.08439712230210433,
+  "weights": {
+    "depth_total_eur": -0.017810854774589407,
+    "imbalance": -0.7729615327743218,
+    "lay_back_ratio": 0.5489078910431443,
+    "price_velocity": -0.05745008297382651,
+    "selection_count": 0.18715276618604354,
+    "short_volatility": -0.06430391900676564,
+    "spread_mean": 0.4036229028441275,
+    "time_to_start_sec": -0.08572888522378863,
+    "top_of_book_concentration": -0.08606194161764608,
+    "weighted_spread": 0.03668514308618034
+  }
+}

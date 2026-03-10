@@ -1,0 +1,74 @@
+{
+  "genome_id": "binance_funding_contrarian:genome:champion",
+  "lineage_id": "binance_funding_contrarian:champion",
+  "family_id": "binance_funding_contrarian",
+  "parent_genome_id": null,
+  "role": "champion",
+  "parameters": {
+    "resource_profile": "local-first-hybrid",
+    "budget_mix": {
+      "incumbent": 70.0,
+      "adjacent": 20.0,
+      "moonshot": 10.0
+    },
+    "max_shadow_challengers": 5,
+    "max_paper_challengers": 2
+  },
+  "mutation_bounds": {
+    "horizons_seconds": [
+      120,
+      600,
+      1800,
+      14400
+    ],
+    "feature_subsets": [
+      "baseline",
+      "microstructure",
+      "cross_science",
+      "regime"
+    ],
+    "model_classes": [
+      "logit",
+      "gbdt",
+      "tft",
+      "transformer",
+      "rules"
+    ],
+    "execution_thresholds": {
+      "min_edge": [
+        0.01,
+        0.1
+      ],
+      "stake_fraction": [
+        0.01,
+        0.1
+      ]
+    },
+    "hyperparameter_ranges": {
+      "learning_rate": [
+        0.001,
+        0.1
+      ],
+      "lookback_hours": [
+        6,
+        168
+      ]
+    }
+  },
+  "scientific_domains": [
+    "econometrics",
+    "microstructure",
+    "bayesian_causal",
+    "statistical_physics",
+    "network_epidemiology",
+    "ecology_evolution",
+    "information_theory",
+    "control_rl",
+    "game_theory_behavioral",
+    "signal_processing_neuroscience"
+  ],
+  "budget_bucket": "incumbent",
+  "resource_profile": "local-first-hybrid",
+  "budget_weight_pct": 14.0,
+  "created_at": "2026-03-10T17:21:01.365550+00:00"
+}

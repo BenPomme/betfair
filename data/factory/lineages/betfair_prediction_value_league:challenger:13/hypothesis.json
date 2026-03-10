@@ -1,0 +1,31 @@
+{
+  "hypothesis_id": "betfair_prediction_value_league:challenger:13:hypothesis",
+  "family_id": "betfair_prediction_value_league",
+  "title": "Betfair Prediction/Value League Scientific Collaboration 13",
+  "thesis": "Evolve parallel probability models and policy gates until the best value-betting league earns execution rights. This variant fuses game theory/behavioral researcher guidance with bayesian/causal researcher, ecology/evolution researcher to test opponent adaptation, crowd reflexivity, and exploitability of consensus breakdowns; causal priors and uncertainty-aware edge filtering; survival pressure, niche competition, and adaptive response to decaying edges.",
+  "scientific_domains": [
+    "game_theory_behavioral",
+    "bayesian_causal",
+    "ecology_evolution"
+  ],
+  "lead_agent_role": "Game Theory/Behavioral Researcher",
+  "success_metric": "paper_monthly_roi_pct",
+  "guardrails": [
+    "Mutation remains inside declared bounds.",
+    "No live promotion without human approval.",
+    "No credentials or hard caps may be mutated."
+  ],
+  "collaborating_agent_roles": [
+    "Bayesian/Causal Researcher",
+    "Ecology/Evolution Researcher"
+  ],
+  "origin": "scientific_agent_collective",
+  "agent_notes": [
+    "lead_agent=Game Theory/Behavioral Researcher",
+    "collaborators=Bayesian/Causal Researcher,Ecology/Evolution Researcher",
+    "memory_hint=avoid veto pattern failure_rate_above_15pct",
+    "tweak_1: failure_rate_above_15pct",
+    "tweak_2: failure_rate_above_15pct"
+  ],
+  "created_at": "2026-03-10T18:13:12.034586+00:00"
+}

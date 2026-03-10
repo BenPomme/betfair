@@ -1,0 +1,16 @@
+{
+  "generated_at": "2026-03-10T18:16:22.147639+00:00",
+  "family_id": "betfair_information_lag",
+  "lineage_id": "betfair_information_lag:challenger:13",
+  "source_mode": "candidate_logs_recent",
+  "source_paths": [
+    "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/data/candidates/2026-03-05.jsonl",
+    "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/data/candidates/2026-03-06.jsonl",
+    "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/data/candidates/2026-03-07.jsonl",
+    "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/data/clv/2026-03-03.jsonl",
+    "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/data/clv/2026-03-04.jsonl",
+    "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/data/clv/2026-03-05.jsonl"
+  ],
+  "dataset_rows": 60000,
+  "market_count": 3
+}

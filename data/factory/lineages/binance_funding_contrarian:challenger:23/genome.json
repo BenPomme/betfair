@@ -1,0 +1,78 @@
+{
+  "genome_id": "binance_funding_contrarian:challenger:23:genome",
+  "lineage_id": "binance_funding_contrarian:challenger:23",
+  "family_id": "binance_funding_contrarian",
+  "parent_genome_id": "binance_funding_contrarian:challenger:1:genome",
+  "role": "paper_challenger",
+  "parameters": {
+    "resource_profile": "local-first-hybrid",
+    "budget_mix": {
+      "incumbent": 70.0,
+      "adjacent": 20.0,
+      "moonshot": 10.0
+    },
+    "max_shadow_challengers": 5,
+    "max_paper_challengers": 2,
+    "mutation_index": 23,
+    "mutation_source": "underperformance_tweak",
+    "selected_horizon_seconds": 600,
+    "selected_feature_subset": "regime",
+    "selected_model_class": "rules",
+    "selected_min_edge": 0.04,
+    "selected_stake_fraction": 0.015,
+    "selected_learning_rate": 0.04,
+    "selected_lookback_hours": 120.0,
+    "last_tweak_reason": "negative_slippage_stress",
+    "last_tweak_cycle": 12
+  },
+  "mutation_bounds": {
+    "horizons_seconds": [
+      120,
+      600,
+      1800,
+      14400
+    ],
+    "feature_subsets": [
+      "baseline",
+      "microstructure",
+      "cross_science",
+      "regime"
+    ],
+    "model_classes": [
+      "logit",
+      "gbdt",
+      "tft",
+      "transformer",
+      "rules"
+    ],
+    "execution_thresholds": {
+      "min_edge": [
+        0.01,
+        0.1
+      ],
+      "stake_fraction": [
+        0.01,
+        0.1
+      ]
+    },
+    "hyperparameter_ranges": {
+      "learning_rate": [
+        0.001,
+        0.1
+      ],
+      "lookback_hours": [
+        6,
+        168
+      ]
+    }
+  },
+  "scientific_domains": [
+    "econometrics",
+    "microstructure",
+    "ecology_evolution"
+  ],
+  "budget_bucket": "incumbent",
+  "resource_profile": "local-first-hybrid",
+  "budget_weight_pct": 2.0,
+  "created_at": "2026-03-10T18:22:42.846355+00:00"
+}

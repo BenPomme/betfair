@@ -1,0 +1,20 @@
+{
+  "model_type": "residual_logit_v1",
+  "feature_names": [
+    "depth_total_eur",
+    "imbalance",
+    "lay_back_ratio",
+    "spread_mean",
+    "top_of_book_concentration",
+    "weighted_spread"
+  ],
+  "bias": -0.012269910711630638,
+  "weights": {
+    "depth_total_eur": 0.15530163724854346,
+    "imbalance": -0.7743470804407885,
+    "lay_back_ratio": 0.40052256761716504,
+    "spread_mean": 0.362203112655977,
+    "top_of_book_concentration": -0.2995399952210511,
+    "weighted_spread": -0.027429266773780343
+  }
+}

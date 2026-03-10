@@ -1,0 +1,14 @@
+{
+  "generated_at": "2026-03-10T18:43:14.852584+00:00",
+  "family_id": "binance_funding_contrarian",
+  "lineage_id": "binance_funding_contrarian:challenger:1",
+  "source_mode": "log_fallback",
+  "source_paths": [
+    "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/data/funding/experiments.jsonl",
+    "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/data/funding_models/contrarian_trade_log.jsonl",
+    "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/data/funding/state/contrarian_online_learner_quality.json"
+  ],
+  "symbol_count": 2,
+  "dataset_rows": 301,
+  "lookback_hours": 114.0
+}

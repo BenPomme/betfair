@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 import signal
 import threading
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 import config
+from factory.manifests import live_manifest_refs_for_portfolio
+from factory.runtime_mode import current_agentic_factory_runtime_mode
 from portfolio.accounting import utc_now_iso
 from portfolio.ledger import PortfolioLedger
 from portfolio.state_store import PortfolioStateStore
@@ -82,14 +86,73 @@ class PortfolioRunnerBase(ABC):
         )
         self.touch_heartbeat(status="running")
 
-    def build_config_snapshot(self) -> Dict[str, Any]:
+    def _read_factory_package_payload(self, package_path: str | None) -> Dict[str, Any]:
+        if not package_path:
+            return {}
+        path = Path(package_path)
+        if not path.is_absolute():
+            path = Path.cwd() / path
+        if not path.exists():
+            return {}
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+
+    def factory_runtime_context(self) -> Dict[str, Any]:
+        factory_mode = current_agentic_factory_runtime_mode()
+        manifest_refs = live_manifest_refs_for_portfolio(self.spec.portfolio_id)
+        contexts: List[Dict[str, Any]] = []
+        package_refs: List[Dict[str, Any]] = []
+        runtime_overrides: Dict[str, Dict[str, Any]] = {}
+        strategy_families: List[str] = []
+        package_payloads: List[Dict[str, Any]] = []
+        for item in manifest_refs:
+            package_summary = dict(item.get("package") or {})
+            package_payload = self._read_factory_package_payload(package_summary.get("package_path"))
+            context = {
+                "manifest_id": item.get("manifest_id"),
+                "family_id": item.get("family_id"),
+                "lineage_id": item.get("lineage_id"),
+                "approved_at": item.get("approved_at"),
+                "artifact_refs": dict(item.get("artifact_refs") or {}),
+                "runtime_overrides": dict(item.get("runtime_overrides") or {}),
+                "package": package_summary,
+                "package_payload": package_payload,
+            }
+            contexts.append(context)
+            if package_summary:
+                package_refs.append(package_summary)
+            if package_payload:
+                package_payloads.append(package_payload)
+            family_id = str(item.get("family_id") or "")
+            if family_id:
+                strategy_families.append(family_id)
+                merged_overrides = runtime_overrides.setdefault(family_id, {})
+                merged_overrides.update(dict(item.get("runtime_overrides") or {}))
         return {
+            "agentic_factory_mode": factory_mode.value,
+            "agentic_tokens_allowed": factory_mode.agentic_tokens_allowed,
+            "factory_influence_allowed": factory_mode.factory_influence_allowed,
+            "factory_live_manifest_count": len(manifest_refs),
+            "factory_live_manifests": manifest_refs,
+            "factory_live_contexts": contexts,
+            "factory_live_artifact_packages": package_refs,
+            "factory_live_artifact_payloads": package_payloads,
+            "factory_live_strategy_families": sorted(set(strategy_families)),
+            "factory_live_runtime_overrides": runtime_overrides,
+        }
+
+    def build_config_snapshot(self) -> Dict[str, Any]:
+        snapshot = {
             "portfolio_id": self.spec.portfolio_id,
             "label": self.spec.label,
             "category": self.spec.category,
             "currency": self.spec.currency,
             "initial_balance": self.spec.initial_balance,
         }
+        snapshot.update(self.factory_runtime_context())
+        return snapshot
 
     @abstractmethod
     def run(self) -> None:

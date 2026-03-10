@@ -1,0 +1,81 @@
+{
+  "family_id": "polymarket_cross_venue",
+  "label": "Polymarket Cross-Venue Signals",
+  "thesis": "Use Polymarket microstructure and cross-venue event matching to produce robust paper-only signal layers.",
+  "target_portfolios": [
+    "polymarket_quantum_fold",
+    "polymarket_binary_research"
+  ],
+  "target_venues": [
+    "polymarket",
+    "betfair"
+  ],
+  "primary_connector_ids": [
+    "polymarket_core",
+    "betfair_core"
+  ],
+  "champion_lineage_id": "polymarket_cross_venue:challenger:1",
+  "shadow_challenger_ids": [
+    "polymarket_cross_venue:challenger:47",
+    "polymarket_cross_venue:challenger:48",
+    "polymarket_cross_venue:challenger:49"
+  ],
+  "paper_challenger_ids": [
+    "polymarket_cross_venue:challenger:45",
+    "polymarket_cross_venue:challenger:46"
+  ],
+  "budget_split": {
+    "incumbent": 70.0,
+    "adjacent": 20.0,
+    "moonshot": 10.0
+  },
+  "queue_stage": "paper",
+  "explainer": "Runs signal leagues on Polymarket quotes and cross-venue confirmations to rank paper-only opportunities.",
+  "last_cycle_at": "2026-03-10T18:52:04.040122+00:00",
+  "retired_lineage_ids": [
+    "polymarket_cross_venue:challenger:10",
+    "polymarket_cross_venue:challenger:11",
+    "polymarket_cross_venue:challenger:12",
+    "polymarket_cross_venue:challenger:13",
+    "polymarket_cross_venue:challenger:14",
+    "polymarket_cross_venue:challenger:15",
+    "polymarket_cross_venue:challenger:16",
+    "polymarket_cross_venue:challenger:17",
+    "polymarket_cross_venue:challenger:18",
+    "polymarket_cross_venue:challenger:19",
+    "polymarket_cross_venue:challenger:2",
+    "polymarket_cross_venue:challenger:20",
+    "polymarket_cross_venue:challenger:21",
+    "polymarket_cross_venue:challenger:22",
+    "polymarket_cross_venue:challenger:23",
+    "polymarket_cross_venue:challenger:24",
+    "polymarket_cross_venue:challenger:25",
+    "polymarket_cross_venue:challenger:26",
+    "polymarket_cross_venue:challenger:27",
+    "polymarket_cross_venue:challenger:28",
+    "polymarket_cross_venue:challenger:29",
+    "polymarket_cross_venue:challenger:3",
+    "polymarket_cross_venue:challenger:30",
+    "polymarket_cross_venue:challenger:31",
+    "polymarket_cross_venue:challenger:32",
+    "polymarket_cross_venue:challenger:33",
+    "polymarket_cross_venue:challenger:34",
+    "polymarket_cross_venue:challenger:35",
+    "polymarket_cross_venue:challenger:36",
+    "polymarket_cross_venue:challenger:37",
+    "polymarket_cross_venue:challenger:38",
+    "polymarket_cross_venue:challenger:39",
+    "polymarket_cross_venue:challenger:4",
+    "polymarket_cross_venue:challenger:40",
+    "polymarket_cross_venue:challenger:41",
+    "polymarket_cross_venue:challenger:42",
+    "polymarket_cross_venue:challenger:43",
+    "polymarket_cross_venue:challenger:44",
+    "polymarket_cross_venue:challenger:5",
+    "polymarket_cross_venue:challenger:6",
+    "polymarket_cross_venue:challenger:7",
+    "polymarket_cross_venue:challenger:8",
+    "polymarket_cross_venue:challenger:9",
+    "polymarket_cross_venue:champion"
+  ]
+}

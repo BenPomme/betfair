@@ -1,0 +1,68 @@
+{
+  "source_mode": "candidate_logs",
+  "resolved_model_engine": "information_lag_transformer",
+  "segments": [
+    {
+      "label": "2026-03-05",
+      "settled_count": 3,
+      "trade_count": 20,
+      "monthly_roi_pct": -6.4326,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": -0.084932,
+      "drawdown_pct": 7.0759,
+      "slippage_headroom_pct": -7.7326,
+      "failure_rate": 0.4781,
+      "regime_robustness": 0.3733,
+      "total_pnl": -1.28652
+    },
+    {
+      "label": "2026-03-06",
+      "settled_count": 4,
+      "trade_count": 20,
+      "monthly_roi_pct": -6.4403,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": -0.08484,
+      "drawdown_pct": 7.0843,
+      "slippage_headroom_pct": -7.7403,
+      "failure_rate": 0.4804,
+      "regime_robustness": 0.3803,
+      "total_pnl": -1.28806
+    },
+    {
+      "label": "2026-03-07",
+      "settled_count": 5,
+      "trade_count": 20,
+      "monthly_roi_pct": -6.7404,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": -0.091854,
+      "drawdown_pct": 7.4144,
+      "slippage_headroom_pct": -8.0404,
+      "failure_rate": 0.5031,
+      "regime_robustness": 0.3563,
+      "total_pnl": -1.34808
+    }
+  ],
+  "summary": {
+    "resolved_model_engine": "information_lag_transformer",
+    "source_mode": "candidate_logs",
+    "windows": [
+      "EvaluationWindow(label='2026-03-05', settled_count=3, monthly_roi_pct=-6.4326, baseline_roi_pct=0.0, brier_lift_abs=-0.084932, drawdown_pct=7.0759, slippage_headroom_pct=-7.7326, failure_rate=0.4781, regime_robustness=0.3733)",
+      "EvaluationWindow(label='2026-03-06', settled_count=4, monthly_roi_pct=-6.4403, baseline_roi_pct=0.0, brier_lift_abs=-0.08484, drawdown_pct=7.0843, slippage_headroom_pct=-7.7403, failure_rate=0.4804, regime_robustness=0.3803)",
+      "EvaluationWindow(label='2026-03-07', settled_count=5, monthly_roi_pct=-6.7404, baseline_roi_pct=0.0, brier_lift_abs=-0.091854, drawdown_pct=7.4144, slippage_headroom_pct=-8.0404, failure_rate=0.5031, regime_robustness=0.3563)"
+    ],
+    "monthly_roi_pct": -6.5378,
+    "max_drawdown_pct": 7.4144,
+    "slippage_headroom_pct": -8.0404,
+    "calibration_lift_abs": -0.087209,
+    "turnover": 0.0,
+    "capacity_score": 0.35,
+    "failure_rate": 0.4872,
+    "regime_robustness": 0.37,
+    "baseline_beaten_windows": 0,
+    "trade_count": 60,
+    "settled_count": 12,
+    "paper_days": 3,
+    "net_pnl": -3.92266,
+    "stress_positive": false
+  }
+}

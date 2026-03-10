@@ -1,0 +1,30 @@
+{
+  "hypothesis_id": "binance_cascade_regime:challenger:2:hypothesis",
+  "family_id": "binance_cascade_regime",
+  "title": "Binance Cascade/Regime Scientific Collaboration 2",
+  "thesis": "Detect fragile market states and liquidation cascades early enough to survive and exploit dislocations. This variant fuses econometrics researcher guidance with statistical physics researcher, control/rl researcher to test stability-aware factor combinations and regime-conditioned edge persistence; phase-transition detection and cascade susceptibility before dislocations accelerate; feedback-aware thresholding and action policies that stay robust under execution drift.",
+  "scientific_domains": [
+    "econometrics",
+    "statistical_physics",
+    "control_rl"
+  ],
+  "lead_agent_role": "Econometrics Researcher",
+  "success_metric": "paper_monthly_roi_pct",
+  "guardrails": [
+    "Mutation remains inside declared bounds.",
+    "No live promotion without human approval.",
+    "No credentials or hard caps may be mutated."
+  ],
+  "collaborating_agent_roles": [
+    "Statistical Physics Researcher",
+    "Control/RL Researcher"
+  ],
+  "origin": "scientific_agent_collective",
+  "agent_notes": [
+    "lead_agent=Econometrics Researcher",
+    "collaborators=Statistical Physics Researcher,Control/RL Researcher",
+    "tweak_1: failure_rate_above_15pct",
+    "tweak_2: failure_rate_above_15pct"
+  ],
+  "created_at": "2026-03-10T17:58:05.024548+00:00"
+}

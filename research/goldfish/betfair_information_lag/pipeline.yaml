@@ -1,0 +1,19 @@
+stages:
+  - name: dataset
+    inputs: {}
+    outputs: {primary: {type: file}}
+  - name: features
+    inputs: {upstream: {from_stage: dataset, signal: primary}}
+    outputs: {primary: {type: file}}
+  - name: train
+    inputs: {upstream: {from_stage: features, signal: primary}}
+    outputs: {primary: {type: file}}
+  - name: walkforward
+    inputs: {upstream: {from_stage: train, signal: primary}}
+    outputs: {primary: {type: file}}
+  - name: stress
+    inputs: {upstream: {from_stage: walkforward, signal: primary}}
+    outputs: {primary: {type: file}}
+  - name: package
+    inputs: {upstream: {from_stage: stress, signal: primary}}
+    outputs: {primary: {type: file}}

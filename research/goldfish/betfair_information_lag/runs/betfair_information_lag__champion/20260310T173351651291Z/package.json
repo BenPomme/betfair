@@ -1,0 +1,23 @@
+{
+  "generated_at": "2026-03-10T17:34:01.275516+00:00",
+  "lineage_id": "betfair_information_lag:champion",
+  "family_id": "betfair_information_lag",
+  "artifact_summary": {
+    "run_id": "20260310T173351651291Z",
+    "mode": "information_lag",
+    "package_path": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_information_lag/runs/betfair_information_lag__champion/20260310T173351651291Z/package.json",
+    "run_root": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_information_lag/runs/betfair_information_lag__champion/20260310T173351651291Z",
+    "requested_model_class": "rules",
+    "resolved_model_engine": "information_lag_rules",
+    "source_mode": "candidate_logs",
+    "dataset_rows": 9663133,
+    "market_count": 3
+  },
+  "files": {
+    "dataset": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_information_lag/runs/betfair_information_lag__champion/20260310T173351651291Z/dataset.json",
+    "features": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_information_lag/runs/betfair_information_lag__champion/20260310T173351651291Z/features.json",
+    "train": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_information_lag/runs/betfair_information_lag__champion/20260310T173351651291Z/train.json",
+    "walkforward": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_information_lag/runs/betfair_information_lag__champion/20260310T173351651291Z/walkforward.json",
+    "stress": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_information_lag/runs/betfair_information_lag__champion/20260310T173351651291Z/stress.json"
+  }
+}

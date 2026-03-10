@@ -1,0 +1,19 @@
+{
+  "generated_at": "2026-03-10T17:58:09.482771+00:00",
+  "feature_family": "cascade_regime",
+  "feature_subset": "regime",
+  "feature_columns": [
+    "oi_concentration_hhi",
+    "liq_count_1h",
+    "liq_volume_usd_1h",
+    "depth_bid_change_1h",
+    "depth_ask_change_1h",
+    "depth_imbalance_mean",
+    "funding_extremity_max_abs",
+    "cross_asset_pc1_loading",
+    "volume_surge_zscore",
+    "price_acceleration",
+    "leverage_proxy_oi_vol"
+  ],
+  "feature_count": 11
+}

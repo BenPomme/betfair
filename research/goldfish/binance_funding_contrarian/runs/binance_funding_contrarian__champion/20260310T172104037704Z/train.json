@@ -1,0 +1,8 @@
+{
+  "generated_at": "2026-03-10T17:21:04.041357+00:00",
+  "requested_model_class": "logit",
+  "resolved_model_engine": "naive_contrarian_backtest",
+  "stake_fraction": 0.03,
+  "horizon_seconds": 1800,
+  "min_edge": 0.03
+}

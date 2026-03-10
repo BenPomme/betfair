@@ -1,0 +1,82 @@
+{
+  "family_id": "binance_funding_contrarian",
+  "label": "Binance Funding Contrarian",
+  "thesis": "Exploit funding extremes, regime shifts, and cross-science features to improve directional funding trades.",
+  "target_portfolios": [
+    "hedge_validation",
+    "hedge_research",
+    "contrarian_legacy"
+  ],
+  "target_venues": [
+    "binance"
+  ],
+  "primary_connector_ids": [
+    "binance_core"
+  ],
+  "champion_lineage_id": "binance_funding_contrarian:challenger:1",
+  "shadow_challenger_ids": [
+    "binance_funding_contrarian:challenger:51"
+  ],
+  "paper_challenger_ids": [
+    "binance_funding_contrarian:challenger:49",
+    "binance_funding_contrarian:challenger:50"
+  ],
+  "budget_split": {
+    "incumbent": 70.0,
+    "adjacent": 20.0,
+    "moonshot": 10.0
+  },
+  "queue_stage": "paper",
+  "explainer": "Uses funding, basis, open interest, and regime features to rank contrarian directional setups.",
+  "last_cycle_at": "2026-03-10T18:52:04.011046+00:00",
+  "retired_lineage_ids": [
+    "binance_funding_contrarian:challenger:10",
+    "binance_funding_contrarian:challenger:11",
+    "binance_funding_contrarian:challenger:12",
+    "binance_funding_contrarian:challenger:13",
+    "binance_funding_contrarian:challenger:14",
+    "binance_funding_contrarian:challenger:15",
+    "binance_funding_contrarian:challenger:16",
+    "binance_funding_contrarian:challenger:17",
+    "binance_funding_contrarian:challenger:18",
+    "binance_funding_contrarian:challenger:19",
+    "binance_funding_contrarian:challenger:2",
+    "binance_funding_contrarian:challenger:20",
+    "binance_funding_contrarian:challenger:21",
+    "binance_funding_contrarian:challenger:22",
+    "binance_funding_contrarian:challenger:23",
+    "binance_funding_contrarian:challenger:24",
+    "binance_funding_contrarian:challenger:25",
+    "binance_funding_contrarian:challenger:26",
+    "binance_funding_contrarian:challenger:27",
+    "binance_funding_contrarian:challenger:28",
+    "binance_funding_contrarian:challenger:29",
+    "binance_funding_contrarian:challenger:3",
+    "binance_funding_contrarian:challenger:30",
+    "binance_funding_contrarian:challenger:31",
+    "binance_funding_contrarian:challenger:32",
+    "binance_funding_contrarian:challenger:33",
+    "binance_funding_contrarian:challenger:34",
+    "binance_funding_contrarian:challenger:35",
+    "binance_funding_contrarian:challenger:36",
+    "binance_funding_contrarian:challenger:37",
+    "binance_funding_contrarian:challenger:38",
+    "binance_funding_contrarian:challenger:39",
+    "binance_funding_contrarian:challenger:4",
+    "binance_funding_contrarian:challenger:40",
+    "binance_funding_contrarian:challenger:41",
+    "binance_funding_contrarian:challenger:42",
+    "binance_funding_contrarian:challenger:43",
+    "binance_funding_contrarian:challenger:44",
+    "binance_funding_contrarian:challenger:45",
+    "binance_funding_contrarian:challenger:46",
+    "binance_funding_contrarian:challenger:47",
+    "binance_funding_contrarian:challenger:48",
+    "binance_funding_contrarian:challenger:5",
+    "binance_funding_contrarian:challenger:6",
+    "binance_funding_contrarian:challenger:7",
+    "binance_funding_contrarian:challenger:8",
+    "binance_funding_contrarian:challenger:9",
+    "binance_funding_contrarian:champion"
+  ]
+}

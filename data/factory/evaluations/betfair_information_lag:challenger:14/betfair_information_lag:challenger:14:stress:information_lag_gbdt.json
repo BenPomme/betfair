@@ -1,0 +1,69 @@
+{
+  "evaluation_id": "betfair_information_lag:challenger:14:stress:information_lag_gbdt",
+  "lineage_id": "betfair_information_lag:challenger:14",
+  "family_id": "betfair_information_lag",
+  "stage": "stress",
+  "source": "factory_candidate_signal_artifact",
+  "generated_at": "2026-03-10T18:17:25.534591+00:00",
+  "windows": [
+    {
+      "label": "2026-03-05_stress",
+      "settled_count": 3,
+      "monthly_roi_pct": -7.8981,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": -0.087613,
+      "drawdown_pct": 8.3467,
+      "slippage_headroom_pct": -10.0981,
+      "failure_rate": 0.58,
+      "regime_robustness": 0.17
+    },
+    {
+      "label": "2026-03-06_stress",
+      "settled_count": 4,
+      "monthly_roi_pct": -8.235,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": -0.093276,
+      "drawdown_pct": 8.7544,
+      "slippage_headroom_pct": -10.435,
+      "failure_rate": 0.6066,
+      "regime_robustness": 0.1577
+    },
+    {
+      "label": "2026-03-07_stress",
+      "settled_count": 5,
+      "monthly_roi_pct": -7.8946,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": -0.087613,
+      "drawdown_pct": 8.3425,
+      "slippage_headroom_pct": -10.0946,
+      "failure_rate": 0.58,
+      "regime_robustness": 0.17
+    }
+  ],
+  "monthly_roi_pct": -8.0092,
+  "max_drawdown_pct": 8.7544,
+  "slippage_headroom_pct": -10.435,
+  "calibration_lift_abs": -0.089501,
+  "turnover": 0.001,
+  "capacity_score": 0.3505,
+  "failure_rate": 0.5889,
+  "regime_robustness": 0.1659,
+  "baseline_beaten_windows": 0,
+  "stress_positive": false,
+  "trade_count": 60,
+  "settled_count": 12,
+  "paper_days": 3,
+  "net_pnl": -4.20554,
+  "hard_vetoes": [
+    "failure_rate_above_15pct",
+    "negative_slippage_stress",
+    "regime_robustness_below_minimum"
+  ],
+  "notes": [
+    "package_path=/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_information_lag/runs/betfair_information_lag__challenger__14/20260310T181725533240Z/package.json",
+    "resolved_model_engine=information_lag_gbdt",
+    "source_mode=candidate_logs_recent"
+  ],
+  "pareto_rank": 1,
+  "fitness_score": -174.7919
+}

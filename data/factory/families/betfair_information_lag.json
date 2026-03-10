@@ -1,0 +1,83 @@
+{
+  "family_id": "betfair_information_lag",
+  "label": "Betfair Information-Lag Books",
+  "thesis": "Cross external event signals, time-zone maintenance patterns, and book synchronization delays to find stale pricing.",
+  "target_portfolios": [
+    "betfair_execution_book",
+    "betfair_suspension_lag",
+    "betfair_crossbook_consensus",
+    "betfair_timezone_decay"
+  ],
+  "target_venues": [
+    "betfair",
+    "polymarket"
+  ],
+  "primary_connector_ids": [
+    "betfair_core",
+    "polymarket_core"
+  ],
+  "champion_lineage_id": "betfair_information_lag:challenger:1",
+  "shadow_challenger_ids": [
+    "betfair_information_lag:challenger:49"
+  ],
+  "paper_challenger_ids": [
+    "betfair_information_lag:challenger:47",
+    "betfair_information_lag:challenger:48"
+  ],
+  "budget_split": {
+    "incumbent": 70.0,
+    "adjacent": 20.0,
+    "moonshot": 10.0
+  },
+  "queue_stage": "paper",
+  "explainer": "Tracks related-market lag and cross-book stale pricing patterns before they are trusted for execution.",
+  "last_cycle_at": "2026-03-10T18:52:03.918644+00:00",
+  "retired_lineage_ids": [
+    "betfair_information_lag:challenger:10",
+    "betfair_information_lag:challenger:11",
+    "betfair_information_lag:challenger:12",
+    "betfair_information_lag:challenger:13",
+    "betfair_information_lag:challenger:14",
+    "betfair_information_lag:challenger:15",
+    "betfair_information_lag:challenger:16",
+    "betfair_information_lag:challenger:17",
+    "betfair_information_lag:challenger:18",
+    "betfair_information_lag:challenger:19",
+    "betfair_information_lag:challenger:2",
+    "betfair_information_lag:challenger:20",
+    "betfair_information_lag:challenger:21",
+    "betfair_information_lag:challenger:22",
+    "betfair_information_lag:challenger:23",
+    "betfair_information_lag:challenger:24",
+    "betfair_information_lag:challenger:25",
+    "betfair_information_lag:challenger:26",
+    "betfair_information_lag:challenger:27",
+    "betfair_information_lag:challenger:28",
+    "betfair_information_lag:challenger:29",
+    "betfair_information_lag:challenger:3",
+    "betfair_information_lag:challenger:30",
+    "betfair_information_lag:challenger:31",
+    "betfair_information_lag:challenger:32",
+    "betfair_information_lag:challenger:33",
+    "betfair_information_lag:challenger:34",
+    "betfair_information_lag:challenger:35",
+    "betfair_information_lag:challenger:36",
+    "betfair_information_lag:challenger:37",
+    "betfair_information_lag:challenger:38",
+    "betfair_information_lag:challenger:39",
+    "betfair_information_lag:challenger:4",
+    "betfair_information_lag:challenger:40",
+    "betfair_information_lag:challenger:41",
+    "betfair_information_lag:challenger:42",
+    "betfair_information_lag:challenger:43",
+    "betfair_information_lag:challenger:44",
+    "betfair_information_lag:challenger:45",
+    "betfair_information_lag:challenger:46",
+    "betfair_information_lag:challenger:5",
+    "betfair_information_lag:challenger:6",
+    "betfair_information_lag:challenger:7",
+    "betfair_information_lag:challenger:8",
+    "betfair_information_lag:challenger:9",
+    "betfair_information_lag:champion"
+  ]
+}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from typing import Any, Dict, List, Set
 
@@ -25,6 +26,44 @@ def _parse_id_set(raw: str) -> Set[int]:
     return parsed
 
 
+def _compact_json(value: Any) -> str:
+    try:
+        return json.dumps(value, separators=(",", ":"), sort_keys=True)
+    except Exception:
+        return str(value)
+
+
+def _format_detail(detail: Any) -> str:
+    if isinstance(detail, dict):
+        primary = str(
+            detail.get("error")
+            or detail.get("reason")
+            or detail.get("message")
+            or detail.get("status")
+            or ""
+        ).strip()
+        extras: List[str] = []
+        for key in ("pid", "portfolio_id", "action"):
+            value = detail.get(key)
+            if value not in (None, ""):
+                extras.append(f"{key}={value}")
+        if primary and extras:
+            return f"{primary} ({', '.join(extras)})"
+        if primary:
+            return primary
+        if extras:
+            return ", ".join(extras)
+        return _compact_json(detail)
+    if isinstance(detail, list):
+        return ", ".join(str(item) for item in detail[:5]) or "unknown_error"
+    text = str(detail or "").strip()
+    return text or "unknown_error"
+
+
+class CommandCenterError(RuntimeError):
+    pass
+
+
 class CommandCenterClient:
     def __init__(self, base_url: str) -> None:
         self.base_url = base_url.rstrip("/")
@@ -33,14 +72,38 @@ class CommandCenterClient:
     async def close(self) -> None:
         await self.http.aclose()
 
+    def _raise_for_status(self, response: httpx.Response) -> None:
+        if response.is_success:
+            return
+        detail = None
+        try:
+            payload = response.json()
+        except ValueError:
+            payload = None
+        if isinstance(payload, dict):
+            detail = payload.get("detail", payload)
+        elif payload is not None:
+            detail = payload
+        if detail is None:
+            detail = response.text.strip() or response.reason_phrase or "request_failed"
+        raise CommandCenterError(
+            f"command center http {response.status_code}: {_format_detail(detail)}"
+        )
+
     async def get_json(self, path: str) -> Dict[str, Any]:
-        response = await self.http.get(f"{self.base_url}{path}")
-        response.raise_for_status()
+        try:
+            response = await self.http.get(f"{self.base_url}{path}")
+        except httpx.RequestError as exc:
+            raise CommandCenterError(f"command center unavailable: {exc}") from exc
+        self._raise_for_status(response)
         return response.json()
 
     async def post_json(self, path: str) -> Dict[str, Any]:
-        response = await self.http.post(f"{self.base_url}{path}")
-        response.raise_for_status()
+        try:
+            response = await self.http.post(f"{self.base_url}{path}")
+        except httpx.RequestError as exc:
+            raise CommandCenterError(f"command center unavailable: {exc}") from exc
+        self._raise_for_status(response)
         return response.json()
 
 
@@ -103,9 +166,16 @@ class OperatorBot(discord.Client):
             reply = await self.handle_command(command)
         except Exception as exc:  # pragma: no cover - runtime guard
             logger.exception("Discord command failed")
-            reply = f"error: {exc}"
+            reply = self._format_exception(exc)
         if reply:
             await message.reply(reply[:1900], mention_author=False)
+
+    @staticmethod
+    def _format_exception(exc: Exception) -> str:
+        text = str(exc).strip()
+        if text:
+            return f"error: {text}"
+        return f"error: {type(exc).__name__}"
 
     async def handle_command(self, command: str) -> str:
         parts = command.split()
@@ -114,6 +184,8 @@ class OperatorBot(discord.Client):
         verb = parts[0].lower()
         if verb in {"help", "commands"}:
             return self._help_text()
+        if verb == "health":
+            return await self._health_text()
         if verb == "status":
             return await self._status_text()
         if verb in {"portfolio", "pnl", "blockers"}:
@@ -129,6 +201,7 @@ class OperatorBot(discord.Client):
     def _help_text(self) -> str:
         return (
             "allowed commands:\n"
+            f"- `{self.prefix}health`\n"
             f"- `{self.prefix}status`\n"
             f"- `{self.prefix}portfolio <portfolio_id>`\n"
             f"- `{self.prefix}pnl <portfolio_id>`\n"
@@ -136,6 +209,18 @@ class OperatorBot(discord.Client):
             f"- `{self.prefix}start <portfolio_id>`\n"
             f"- `{self.prefix}stop <portfolio_id>`\n"
             f"- `{self.prefix}restart <portfolio_id>`"
+        )
+
+    async def _health_text(self) -> str:
+        try:
+            payload = await self.command_center.get_json("/api/portfolios")
+        except Exception as exc:
+            return self._format_exception(exc)
+        portfolios = payload.get("portfolios") or []
+        running = sum(1 for item in portfolios if bool(item.get("running")))
+        return (
+            f"health: command center reachable | portfolios={len(portfolios)} "
+            f"| running={running} | host=127.0.0.1:{int(config.COMMAND_CENTER_PORT)}"
         )
 
     async def _status_text(self) -> str:

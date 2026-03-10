@@ -1,0 +1,31 @@
+{
+  "hypothesis_id": "betfair_information_lag:challenger:37:hypothesis",
+  "family_id": "betfair_information_lag",
+  "title": "Betfair Information-Lag Books Scientific Collaboration 37",
+  "thesis": "Cross external event signals, time-zone maintenance patterns, and book synchronization delays to find stale pricing. This variant fuses signal processing/neuroscience researcher guidance with microstructure researcher, bayesian/causal researcher to test multi-timescale filtering, burst detection, and low-latency state transitions; order-book stress, queue pressure, and execution-quality asymmetry; causal priors and uncertainty-aware edge filtering.",
+  "scientific_domains": [
+    "signal_processing_neuroscience",
+    "microstructure",
+    "bayesian_causal"
+  ],
+  "lead_agent_role": "Signal Processing/Neuroscience Researcher",
+  "success_metric": "paper_monthly_roi_pct",
+  "guardrails": [
+    "Mutation remains inside declared bounds.",
+    "No live promotion without human approval.",
+    "No credentials or hard caps may be mutated."
+  ],
+  "collaborating_agent_roles": [
+    "Microstructure Researcher",
+    "Bayesian/Causal Researcher"
+  ],
+  "origin": "scientific_agent_collective",
+  "agent_notes": [
+    "lead_agent=Signal Processing/Neuroscience Researcher",
+    "collaborators=Microstructure Researcher,Bayesian/Causal Researcher",
+    "memory_hint=avoid veto pattern failure_rate_above_15pct",
+    "tweak_1: failure_rate_above_15pct",
+    "tweak_2: failure_rate_above_15pct"
+  ],
+  "created_at": "2026-03-10T18:39:59.671706+00:00"
+}

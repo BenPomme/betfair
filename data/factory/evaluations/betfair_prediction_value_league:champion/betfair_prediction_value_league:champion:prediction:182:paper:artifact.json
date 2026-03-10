@@ -1,0 +1,69 @@
+{
+  "evaluation_id": "betfair_prediction_value_league:champion:prediction:182:paper:artifact",
+  "lineage_id": "betfair_prediction_value_league:champion",
+  "family_id": "betfair_prediction_value_league",
+  "stage": "paper",
+  "source": "factory_runtime_plus_artifact",
+  "generated_at": "2026-03-10T17:21:59.934152+00:00",
+  "windows": [
+    {
+      "label": "segment_28",
+      "settled_count": 70,
+      "monthly_roi_pct": 66.4,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": 0.007119,
+      "drawdown_pct": 14.2418,
+      "slippage_headroom_pct": -12.0929,
+      "failure_rate": 0.7667,
+      "regime_robustness": 0.2333
+    },
+    {
+      "label": "segment_29",
+      "settled_count": 70,
+      "monthly_roi_pct": -100.0,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": 0.003345,
+      "drawdown_pct": 14.2418,
+      "slippage_headroom_pct": -12.0929,
+      "failure_rate": 0.7667,
+      "regime_robustness": 0.2333
+    },
+    {
+      "label": "segment_30",
+      "settled_count": 70,
+      "monthly_roi_pct": 1.8214,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": -0.025522,
+      "drawdown_pct": 14.2418,
+      "slippage_headroom_pct": -12.0929,
+      "failure_rate": 0.7667,
+      "regime_robustness": 0.2333
+    }
+  ],
+  "monthly_roi_pct": -9.5396,
+  "max_drawdown_pct": 14.2418,
+  "slippage_headroom_pct": -18.3526,
+  "calibration_lift_abs": -0.200786,
+  "turnover": 0.91,
+  "capacity_score": 0.725,
+  "failure_rate": 0.8,
+  "regime_robustness": 0.2916,
+  "baseline_beaten_windows": 4,
+  "stress_positive": false,
+  "trade_count": 306,
+  "settled_count": 306,
+  "paper_days": 30,
+  "net_pnl": -17.3375,
+  "hard_vetoes": [
+    "failure_rate_above_15pct",
+    "drawdown_above_12pct",
+    "negative_slippage_stress",
+    "regime_robustness_below_minimum"
+  ],
+  "notes": [
+    "package_path=/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_prediction_value_league/runs/betfair_prediction_value_league__champion/20260310T172158869431Z/package.json",
+    "artifact_lineage=betfair_prediction_value_league:champion"
+  ],
+  "pareto_rank": 1,
+  "fitness_score": -243.3487
+}

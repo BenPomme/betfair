@@ -1,0 +1,178 @@
+{
+  "requested_model_class": "rules",
+  "resolved_model_engine": "rules",
+  "edge_threshold": 0.035,
+  "epochs": 7,
+  "learning_rate": 0.015,
+  "segments": [
+    {
+      "label": "segment_1",
+      "settled_count": 70,
+      "bets": 3,
+      "model_roi_pct": -35.3333,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.247318,
+      "baseline_brier": 0.249824,
+      "calibration_lift_abs": 0.002505,
+      "pnl_units": -1.06
+    },
+    {
+      "label": "segment_2",
+      "settled_count": 70,
+      "bets": 6,
+      "model_roi_pct": -8.6667,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.216328,
+      "baseline_brier": 0.215066,
+      "calibration_lift_abs": -0.001262,
+      "pnl_units": -0.52
+    },
+    {
+      "label": "segment_3",
+      "settled_count": 70,
+      "bets": 4,
+      "model_roi_pct": 48.25,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.243603,
+      "baseline_brier": 0.242498,
+      "calibration_lift_abs": -0.001105,
+      "pnl_units": 1.93
+    },
+    {
+      "label": "segment_4",
+      "settled_count": 70,
+      "bets": 15,
+      "model_roi_pct": -26.4,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.170505,
+      "baseline_brier": 0.175587,
+      "calibration_lift_abs": 0.005082,
+      "pnl_units": -3.96
+    },
+    {
+      "label": "segment_5",
+      "settled_count": 70,
+      "bets": 13,
+      "model_roi_pct": 11.8462,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.219771,
+      "baseline_brier": 0.222579,
+      "calibration_lift_abs": 0.002807,
+      "pnl_units": 1.54
+    },
+    {
+      "label": "segment_6",
+      "settled_count": 70,
+      "bets": 7,
+      "model_roi_pct": -4.2857,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.197221,
+      "baseline_brier": 0.19787,
+      "calibration_lift_abs": 0.000648,
+      "pnl_units": -0.3
+    },
+    {
+      "label": "segment_7",
+      "settled_count": 70,
+      "bets": 16,
+      "model_roi_pct": -26.5625,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.217757,
+      "baseline_brier": 0.221338,
+      "calibration_lift_abs": 0.003581,
+      "pnl_units": -4.25
+    },
+    {
+      "label": "segment_8",
+      "settled_count": 70,
+      "bets": 13,
+      "model_roi_pct": 2.8462,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.221187,
+      "baseline_brier": 0.220345,
+      "calibration_lift_abs": -0.000843,
+      "pnl_units": 0.37
+    },
+    {
+      "label": "segment_9",
+      "settled_count": 70,
+      "bets": 15,
+      "model_roi_pct": -14.0667,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.178676,
+      "baseline_brier": 0.178381,
+      "calibration_lift_abs": -0.000295,
+      "pnl_units": -2.11
+    },
+    {
+      "label": "segment_10",
+      "settled_count": 70,
+      "bets": 9,
+      "model_roi_pct": -13.3333,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.252935,
+      "baseline_brier": 0.249133,
+      "calibration_lift_abs": -0.003802,
+      "pnl_units": -1.2
+    },
+    {
+      "label": "segment_11",
+      "settled_count": 70,
+      "bets": 11,
+      "model_roi_pct": -26.5455,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.235842,
+      "baseline_brier": 0.223792,
+      "calibration_lift_abs": -0.012051,
+      "pnl_units": -2.92
+    },
+    {
+      "label": "segment_12",
+      "settled_count": 70,
+      "bets": 13,
+      "model_roi_pct": -65.8462,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.246331,
+      "baseline_brier": 0.235057,
+      "calibration_lift_abs": -0.011274,
+      "pnl_units": -8.56
+    },
+    {
+      "label": "segment_13",
+      "settled_count": 70,
+      "bets": 11,
+      "model_roi_pct": 26.5455,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.165657,
+      "baseline_brier": 0.168008,
+      "calibration_lift_abs": 0.00235,
+      "pnl_units": 2.92
+    },
+    {
+      "label": "segment_14",
+      "settled_count": 70,
+      "bets": 12,
+      "model_roi_pct": 18.0,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.184042,
+      "baseline_brier": 0.185128,
+      "calibration_lift_abs": 0.001086,
+      "pnl_units": 2.16
+    }
+  ],
+  "summary": {
+    "monthly_roi_pct": -7.1002,
+    "max_drawdown_pct": 14.4527,
+    "slippage_headroom_pct": -8.8502,
+    "calibration_lift_abs": -0.002613,
+    "turnover": 0.151,
+    "capacity_score": 1.0,
+    "failure_rate": 0.6429,
+    "regime_robustness": 0.3571,
+    "baseline_beaten_windows": 3,
+    "trade_count": 148,
+    "settled_count": 148,
+    "paper_days": 3,
+    "net_pnl": -15.96
+  }
+}

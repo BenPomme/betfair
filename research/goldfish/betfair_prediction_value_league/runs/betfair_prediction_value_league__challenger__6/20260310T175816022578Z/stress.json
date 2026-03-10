@@ -1,0 +1,189 @@
+{
+  "requested_model_class": "rules",
+  "resolved_model_engine": "rules",
+  "edge_threshold": 0.052500000000000005,
+  "epochs": 6,
+  "learning_rate": 0.01125,
+  "segments": [
+    {
+      "label": "segment_1",
+      "settled_count": 70,
+      "bets": 0,
+      "model_roi_pct": 0.0,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.177874,
+      "baseline_brier": 0.181041,
+      "calibration_lift_abs": 0.003167,
+      "pnl_units": 0.0
+    },
+    {
+      "label": "segment_2",
+      "settled_count": 70,
+      "bets": 0,
+      "model_roi_pct": 0.0,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.251241,
+      "baseline_brier": 0.253714,
+      "calibration_lift_abs": 0.002472,
+      "pnl_units": 0.0
+    },
+    {
+      "label": "segment_3",
+      "settled_count": 70,
+      "bets": 0,
+      "model_roi_pct": 0.0,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.200629,
+      "baseline_brier": 0.201416,
+      "calibration_lift_abs": 0.000786,
+      "pnl_units": 0.0
+    },
+    {
+      "label": "segment_4",
+      "settled_count": 70,
+      "bets": 0,
+      "model_roi_pct": 0.0,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.256118,
+      "baseline_brier": 0.257335,
+      "calibration_lift_abs": 0.001217,
+      "pnl_units": 0.0
+    },
+    {
+      "label": "segment_5",
+      "settled_count": 70,
+      "bets": 0,
+      "model_roi_pct": 0.0,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.175484,
+      "baseline_brier": 0.169673,
+      "calibration_lift_abs": -0.005812,
+      "pnl_units": 0.0
+    },
+    {
+      "label": "segment_6",
+      "settled_count": 70,
+      "bets": 0,
+      "model_roi_pct": 0.0,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.211623,
+      "baseline_brier": 0.21114,
+      "calibration_lift_abs": -0.000484,
+      "pnl_units": 0.0
+    },
+    {
+      "label": "segment_7",
+      "settled_count": 70,
+      "bets": 0,
+      "model_roi_pct": 0.0,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.21727,
+      "baseline_brier": 0.216454,
+      "calibration_lift_abs": -0.000816,
+      "pnl_units": 0.0
+    },
+    {
+      "label": "segment_8",
+      "settled_count": 70,
+      "bets": 0,
+      "model_roi_pct": 0.0,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.214638,
+      "baseline_brier": 0.217728,
+      "calibration_lift_abs": 0.003089,
+      "pnl_units": 0.0
+    },
+    {
+      "label": "segment_9",
+      "settled_count": 70,
+      "bets": 0,
+      "model_roi_pct": 0.0,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.205043,
+      "baseline_brier": 0.20683,
+      "calibration_lift_abs": 0.001787,
+      "pnl_units": 0.0
+    },
+    {
+      "label": "segment_10",
+      "settled_count": 70,
+      "bets": 0,
+      "model_roi_pct": 0.0,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.202763,
+      "baseline_brier": 0.203834,
+      "calibration_lift_abs": 0.001071,
+      "pnl_units": 0.0
+    },
+    {
+      "label": "segment_11",
+      "settled_count": 70,
+      "bets": 0,
+      "model_roi_pct": 0.0,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.21507,
+      "baseline_brier": 0.220797,
+      "calibration_lift_abs": 0.005727,
+      "pnl_units": 0.0
+    },
+    {
+      "label": "segment_12",
+      "settled_count": 70,
+      "bets": 0,
+      "model_roi_pct": 0.0,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.248378,
+      "baseline_brier": 0.246644,
+      "calibration_lift_abs": -0.001734,
+      "pnl_units": 0.0
+    },
+    {
+      "label": "segment_13",
+      "settled_count": 70,
+      "bets": 0,
+      "model_roi_pct": 0.0,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.237746,
+      "baseline_brier": 0.240393,
+      "calibration_lift_abs": 0.002647,
+      "pnl_units": 0.0
+    },
+    {
+      "label": "segment_14",
+      "settled_count": 70,
+      "bets": 0,
+      "model_roi_pct": 0.0,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.167635,
+      "baseline_brier": 0.165699,
+      "calibration_lift_abs": -0.001937,
+      "pnl_units": 0.0
+    },
+    {
+      "label": "segment_15",
+      "settled_count": 70,
+      "bets": 0,
+      "model_roi_pct": 0.0,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.162385,
+      "baseline_brier": 0.156365,
+      "calibration_lift_abs": -0.00602,
+      "pnl_units": 0.0
+    }
+  ],
+  "summary": {
+    "monthly_roi_pct": 0.0,
+    "max_drawdown_pct": 0.0,
+    "slippage_headroom_pct": -2.625,
+    "calibration_lift_abs": -0.00177,
+    "turnover": 0.0,
+    "capacity_score": 1.0,
+    "failure_rate": 1.0,
+    "regime_robustness": 0.0,
+    "baseline_beaten_windows": 0,
+    "trade_count": 0,
+    "settled_count": 0,
+    "paper_days": 3,
+    "net_pnl": 0.0
+  }
+}

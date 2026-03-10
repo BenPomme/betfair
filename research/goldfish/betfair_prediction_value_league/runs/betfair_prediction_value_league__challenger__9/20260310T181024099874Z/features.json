@@ -1,0 +1,12 @@
+{
+  "generated_at": "2026-03-10T18:10:24.100594+00:00",
+  "feature_subset": "regime",
+  "feature_names": [
+    "in_play",
+    "price_velocity",
+    "selection_count",
+    "short_volatility",
+    "time_to_start_sec"
+  ],
+  "feature_count": 5
+}

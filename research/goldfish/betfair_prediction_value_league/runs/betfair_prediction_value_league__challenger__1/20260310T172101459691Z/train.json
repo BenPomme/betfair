@@ -1,0 +1,10 @@
+{
+  "generated_at": "2026-03-10T17:21:02.811361+00:00",
+  "requested_model_class": "transformer",
+  "resolved_model_engine": "hybrid_logit",
+  "train_window": 220,
+  "test_window": 55,
+  "epochs": 8,
+  "learning_rate": 0.07525,
+  "edge_threshold": 0.0325
+}

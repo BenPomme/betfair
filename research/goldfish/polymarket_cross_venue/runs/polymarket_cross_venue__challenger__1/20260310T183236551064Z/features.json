@@ -1,0 +1,15 @@
+{
+  "generated_at": "2026-03-10T18:32:36.551280+00:00",
+  "feature_family": "cross_venue",
+  "feature_subset": "cross_science",
+  "feature_columns": [
+    "candidate_count",
+    "unique_markets",
+    "stale_rate",
+    "no_arb_rate",
+    "retired_rate",
+    "fresh_snapshot_rate",
+    "clv_density"
+  ],
+  "feature_count": 7
+}

@@ -1,0 +1,68 @@
+{
+  "evaluation_id": "betfair_prediction_value_league:challenger:6:stress:rules",
+  "lineage_id": "betfair_prediction_value_league:challenger:6",
+  "family_id": "betfair_prediction_value_league",
+  "stage": "stress",
+  "source": "factory_prediction_artifact",
+  "generated_at": "2026-03-10T18:07:22.206891+00:00",
+  "windows": [
+    {
+      "label": "segment_12",
+      "settled_count": 70,
+      "monthly_roi_pct": -50.6667,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": -0.011274,
+      "drawdown_pct": 12.0323,
+      "slippage_headroom_pct": -7.1806,
+      "failure_rate": 0.6429,
+      "regime_robustness": 0.3571
+    },
+    {
+      "label": "segment_13",
+      "settled_count": 70,
+      "monthly_roi_pct": 0.0,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": 0.00235,
+      "drawdown_pct": 12.0323,
+      "slippage_headroom_pct": -7.1806,
+      "failure_rate": 0.6429,
+      "regime_robustness": 0.3571
+    },
+    {
+      "label": "segment_14",
+      "settled_count": 70,
+      "monthly_roi_pct": 37.0,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": 0.001086,
+      "drawdown_pct": 12.0323,
+      "slippage_headroom_pct": -7.1806,
+      "failure_rate": 0.6429,
+      "regime_robustness": 0.3571
+    }
+  ],
+  "monthly_roi_pct": -4.5556,
+  "max_drawdown_pct": 12.0323,
+  "slippage_headroom_pct": -7.1806,
+  "calibration_lift_abs": -0.002613,
+  "turnover": 0.0633,
+  "capacity_score": 1.0,
+  "failure_rate": 0.6429,
+  "regime_robustness": 0.3571,
+  "baseline_beaten_windows": 2,
+  "stress_positive": false,
+  "trade_count": 62,
+  "settled_count": 62,
+  "paper_days": 3,
+  "net_pnl": -3.4,
+  "hard_vetoes": [
+    "failure_rate_above_15pct",
+    "drawdown_above_12pct",
+    "negative_slippage_stress"
+  ],
+  "notes": [
+    "package_path=/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_prediction_value_league/runs/betfair_prediction_value_league__challenger__6/20260310T180722197630Z/package.json",
+    "resolved_model_engine=rules"
+  ],
+  "pareto_rank": 1,
+  "fitness_score": -139.50035
+}

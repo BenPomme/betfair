@@ -1,0 +1,19 @@
+# Paste this block into your `.env` and replace only the placeholder values.
+# Do not commit real API secrets.
+
+# Keep paper mode on until we explicitly validate connectivity and execution.
+FUNDING_MODE=paper
+
+# Read-only/live-account credentials.
+# If you created a read-only key, fill these in now.
+BINANCE_FUTURES_API_KEY=PASTE_YOUR_BINANCE_FUTURES_API_KEY_HERE
+BINANCE_FUTURES_API_SECRET=PASTE_YOUR_BINANCE_FUTURES_API_SECRET_HERE
+BINANCE_SPOT_API_KEY=PASTE_YOUR_BINANCE_SPOT_API_KEY_HERE
+BINANCE_SPOT_API_SECRET=PASTE_YOUR_BINANCE_SPOT_API_SECRET_HERE
+
+# Testnet credentials.
+# If you do not have testnet keys yet, leave these empty for now.
+BINANCE_FUTURES_TESTNET_API_KEY=
+BINANCE_FUTURES_TESTNET_API_SECRET=
+BINANCE_SPOT_TESTNET_API_KEY=
+BINANCE_SPOT_TESTNET_API_SECRET=

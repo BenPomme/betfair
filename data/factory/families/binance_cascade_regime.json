@@ -1,0 +1,78 @@
+{
+  "family_id": "binance_cascade_regime",
+  "label": "Binance Cascade/Regime",
+  "thesis": "Detect fragile market states and liquidation cascades early enough to survive and exploit dislocations.",
+  "target_portfolios": [
+    "cascade_alpha"
+  ],
+  "target_venues": [
+    "binance"
+  ],
+  "primary_connector_ids": [
+    "binance_core"
+  ],
+  "champion_lineage_id": "binance_cascade_regime:challenger:4",
+  "shadow_challenger_ids": [
+    "binance_cascade_regime:challenger:49",
+    "binance_cascade_regime:challenger:45",
+    "binance_cascade_regime:challenger:46"
+  ],
+  "paper_challenger_ids": [
+    "binance_cascade_regime:challenger:47",
+    "binance_cascade_regime:challenger:48"
+  ],
+  "budget_split": {
+    "incumbent": 70.0,
+    "adjacent": 20.0,
+    "moonshot": 10.0
+  },
+  "queue_stage": "paper",
+  "explainer": "Uses liquidation, depth collapse, and regime features for short-horizon cascade alpha.",
+  "last_cycle_at": "2026-03-10T18:52:03.978320+00:00",
+  "retired_lineage_ids": [
+    "binance_cascade_regime:challenger:1",
+    "binance_cascade_regime:challenger:10",
+    "binance_cascade_regime:challenger:11",
+    "binance_cascade_regime:challenger:12",
+    "binance_cascade_regime:challenger:13",
+    "binance_cascade_regime:challenger:14",
+    "binance_cascade_regime:challenger:15",
+    "binance_cascade_regime:challenger:16",
+    "binance_cascade_regime:challenger:17",
+    "binance_cascade_regime:challenger:18",
+    "binance_cascade_regime:challenger:19",
+    "binance_cascade_regime:challenger:2",
+    "binance_cascade_regime:challenger:20",
+    "binance_cascade_regime:challenger:21",
+    "binance_cascade_regime:challenger:22",
+    "binance_cascade_regime:challenger:23",
+    "binance_cascade_regime:challenger:24",
+    "binance_cascade_regime:challenger:25",
+    "binance_cascade_regime:challenger:26",
+    "binance_cascade_regime:challenger:27",
+    "binance_cascade_regime:challenger:28",
+    "binance_cascade_regime:challenger:29",
+    "binance_cascade_regime:challenger:3",
+    "binance_cascade_regime:challenger:30",
+    "binance_cascade_regime:challenger:31",
+    "binance_cascade_regime:challenger:32",
+    "binance_cascade_regime:challenger:33",
+    "binance_cascade_regime:challenger:34",
+    "binance_cascade_regime:challenger:35",
+    "binance_cascade_regime:challenger:36",
+    "binance_cascade_regime:challenger:37",
+    "binance_cascade_regime:challenger:38",
+    "binance_cascade_regime:challenger:39",
+    "binance_cascade_regime:challenger:40",
+    "binance_cascade_regime:challenger:41",
+    "binance_cascade_regime:challenger:42",
+    "binance_cascade_regime:challenger:43",
+    "binance_cascade_regime:challenger:44",
+    "binance_cascade_regime:challenger:5",
+    "binance_cascade_regime:challenger:6",
+    "binance_cascade_regime:challenger:7",
+    "binance_cascade_regime:challenger:8",
+    "binance_cascade_regime:challenger:9",
+    "binance_cascade_regime:champion"
+  ]
+}

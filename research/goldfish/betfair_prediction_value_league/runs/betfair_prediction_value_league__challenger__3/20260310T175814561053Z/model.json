@@ -1,0 +1,18 @@
+{
+  "model_type": "residual_logit_v1",
+  "feature_names": [
+    "in_play",
+    "price_velocity",
+    "selection_count",
+    "short_volatility",
+    "time_to_start_sec"
+  ],
+  "bias": -0.036905268147624334,
+  "weights": {
+    "in_play": -0.011600005156475732,
+    "price_velocity": -0.0029814922275716855,
+    "selection_count": 0.006644222672439205,
+    "short_volatility": -0.011718257308968544,
+    "time_to_start_sec": -0.08329381699580891
+  }
+}

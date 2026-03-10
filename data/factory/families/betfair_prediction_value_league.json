@@ -1,0 +1,79 @@
+{
+  "family_id": "betfair_prediction_value_league",
+  "label": "Betfair Prediction/Value League",
+  "thesis": "Evolve parallel probability models and policy gates until the best value-betting league earns execution rights.",
+  "target_portfolios": [
+    "betfair_core"
+  ],
+  "target_venues": [
+    "betfair"
+  ],
+  "primary_connector_ids": [
+    "betfair_core"
+  ],
+  "champion_lineage_id": "betfair_prediction_value_league:challenger:5",
+  "shadow_challenger_ids": [
+    "betfair_prediction_value_league:challenger:50"
+  ],
+  "paper_challenger_ids": [
+    "betfair_prediction_value_league:challenger:48",
+    "betfair_prediction_value_league:challenger:49"
+  ],
+  "budget_split": {
+    "incumbent": 70.0,
+    "adjacent": 20.0,
+    "moonshot": 10.0
+  },
+  "queue_stage": "paper",
+  "explainer": "Compares prediction, calibration, and policy-gated value-betting lineages on the same snapshots.",
+  "last_cycle_at": "2026-03-10T18:52:03.949593+00:00",
+  "retired_lineage_ids": [
+    "betfair_prediction_value_league:challenger:1",
+    "betfair_prediction_value_league:challenger:10",
+    "betfair_prediction_value_league:challenger:11",
+    "betfair_prediction_value_league:challenger:12",
+    "betfair_prediction_value_league:challenger:13",
+    "betfair_prediction_value_league:challenger:14",
+    "betfair_prediction_value_league:challenger:15",
+    "betfair_prediction_value_league:challenger:16",
+    "betfair_prediction_value_league:challenger:17",
+    "betfair_prediction_value_league:challenger:18",
+    "betfair_prediction_value_league:challenger:19",
+    "betfair_prediction_value_league:challenger:2",
+    "betfair_prediction_value_league:challenger:20",
+    "betfair_prediction_value_league:challenger:21",
+    "betfair_prediction_value_league:challenger:22",
+    "betfair_prediction_value_league:challenger:23",
+    "betfair_prediction_value_league:challenger:24",
+    "betfair_prediction_value_league:challenger:25",
+    "betfair_prediction_value_league:challenger:26",
+    "betfair_prediction_value_league:challenger:27",
+    "betfair_prediction_value_league:challenger:28",
+    "betfair_prediction_value_league:challenger:29",
+    "betfair_prediction_value_league:challenger:3",
+    "betfair_prediction_value_league:challenger:30",
+    "betfair_prediction_value_league:challenger:31",
+    "betfair_prediction_value_league:challenger:32",
+    "betfair_prediction_value_league:challenger:33",
+    "betfair_prediction_value_league:challenger:34",
+    "betfair_prediction_value_league:challenger:35",
+    "betfair_prediction_value_league:challenger:36",
+    "betfair_prediction_value_league:challenger:37",
+    "betfair_prediction_value_league:challenger:38",
+    "betfair_prediction_value_league:challenger:39",
+    "betfair_prediction_value_league:challenger:4",
+    "betfair_prediction_value_league:challenger:40",
+    "betfair_prediction_value_league:challenger:41",
+    "betfair_prediction_value_league:challenger:42",
+    "betfair_prediction_value_league:challenger:43",
+    "betfair_prediction_value_league:challenger:44",
+    "betfair_prediction_value_league:challenger:45",
+    "betfair_prediction_value_league:challenger:46",
+    "betfair_prediction_value_league:challenger:47",
+    "betfair_prediction_value_league:challenger:6",
+    "betfair_prediction_value_league:challenger:7",
+    "betfair_prediction_value_league:challenger:8",
+    "betfair_prediction_value_league:challenger:9",
+    "betfair_prediction_value_league:champion"
+  ]
+}

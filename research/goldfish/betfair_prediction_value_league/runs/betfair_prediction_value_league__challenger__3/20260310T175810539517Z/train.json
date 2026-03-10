@@ -1,0 +1,10 @@
+{
+  "generated_at": "2026-03-10T17:58:11.437269+00:00",
+  "requested_model_class": "logit",
+  "resolved_model_engine": "residual_logit",
+  "train_window": 360,
+  "test_window": 90,
+  "epochs": 9,
+  "learning_rate": 0.001,
+  "edge_threshold": 0.0775
+}

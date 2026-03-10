@@ -624,12 +624,33 @@ DEPLOY_WATCHER_AUTO_RESTART_DASHBOARD: bool = (
 DEPLOY_WATCHER_AUTOSTART: bool = os.getenv("DEPLOY_WATCHER_AUTOSTART", "true").lower() == "true"
 DEPLOY_WATCHER_AUTO_RESTART_PORTFOLIOS: str = os.getenv(
     "DEPLOY_WATCHER_AUTO_RESTART_PORTFOLIOS",
-    "betfair_core,hedge_validation,hedge_research,cascade_alpha,contrarian_legacy",
+    "betfair_core,hedge_validation,hedge_research,cascade_alpha,contrarian_legacy,research_factory",
 )
 BETFAIR_PORTFOLIO_ID: str = os.getenv("BETFAIR_PORTFOLIO_ID", "betfair_core")
 HEDGE_PORTFOLIO_ID: str = os.getenv("HEDGE_PORTFOLIO_ID", "hedge_validation")
 HEDGE_PORTFOLIO_INITIAL_BALANCE_USD: Decimal = Decimal(
     os.getenv("HEDGE_PORTFOLIO_INITIAL_BALANCE_USD", "50000")
+)
+FACTORY_ROOT: str = os.getenv("FACTORY_ROOT", "data/factory")
+FACTORY_GOLDFISH_ROOT: str = os.getenv("FACTORY_GOLDFISH_ROOT", "research/goldfish")
+FACTORY_CYCLE_INTERVAL_SECONDS: int = int(os.getenv("FACTORY_CYCLE_INTERVAL_SECONDS", "60"))
+FACTORY_PAPER_GATE_MONTHLY_ROI_PCT: Decimal = Decimal(
+    os.getenv("FACTORY_PAPER_GATE_MONTHLY_ROI_PCT", "5.0")
+)
+FACTORY_PAPER_GATE_MAX_DRAWDOWN_PCT: Decimal = Decimal(
+    os.getenv("FACTORY_PAPER_GATE_MAX_DRAWDOWN_PCT", "8.0")
+)
+FACTORY_PAPER_GATE_MIN_DAYS: int = int(os.getenv("FACTORY_PAPER_GATE_MIN_DAYS", "30"))
+FACTORY_PAPER_GATE_MIN_FAST_TRADES: int = int(os.getenv("FACTORY_PAPER_GATE_MIN_FAST_TRADES", "50"))
+FACTORY_PAPER_GATE_MIN_SLOW_SETTLED: int = int(os.getenv("FACTORY_PAPER_GATE_MIN_SLOW_SETTLED", "10"))
+FACTORY_EXECUTION_AUTOSTART_ENABLED: bool = os.getenv(
+    "FACTORY_EXECUTION_AUTOSTART_ENABLED", "true"
+).lower() == "true"
+AGENTIC_FACTORY_MODE: str = os.getenv("AGENTIC_FACTORY_MODE", "full").strip().lower()
+RESEARCH_FACTORY_PORTFOLIO_ID: str = os.getenv("RESEARCH_FACTORY_PORTFOLIO_ID", "research_factory")
+RESEARCH_FACTORY_ENABLED: bool = os.getenv("RESEARCH_FACTORY_ENABLED", "true").lower() == "true"
+RESEARCH_FACTORY_INITIAL_BALANCE_USD: Decimal = Decimal(
+    os.getenv("RESEARCH_FACTORY_INITIAL_BALANCE_USD", "100000")
 )
 HEDGE_RESEARCH_PORTFOLIO_ID: str = os.getenv("HEDGE_RESEARCH_PORTFOLIO_ID", "hedge_research")
 HEDGE_RESEARCH_ENABLED: bool = os.getenv("HEDGE_RESEARCH_ENABLED", "true").lower() == "true"

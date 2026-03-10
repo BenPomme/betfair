@@ -1,0 +1,8 @@
+{
+  "generated_at": "2026-03-10T17:21:59.957699+00:00",
+  "requested_model_class": "rules",
+  "resolved_model_engine": "rules_contrarian",
+  "stake_fraction": 0.0775,
+  "horizon_seconds": 1800,
+  "min_edge": 0.055
+}

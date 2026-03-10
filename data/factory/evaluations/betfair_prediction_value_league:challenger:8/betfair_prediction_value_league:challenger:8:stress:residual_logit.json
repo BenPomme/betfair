@@ -1,0 +1,67 @@
+{
+  "evaluation_id": "betfair_prediction_value_league:challenger:8:stress:residual_logit",
+  "lineage_id": "betfair_prediction_value_league:challenger:8",
+  "family_id": "betfair_prediction_value_league",
+  "stage": "stress",
+  "source": "factory_prediction_artifact",
+  "generated_at": "2026-03-10T18:10:24.023493+00:00",
+  "windows": [
+    {
+      "label": "segment_12",
+      "settled_count": 70,
+      "monthly_roi_pct": 37.1429,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": 0.011449,
+      "drawdown_pct": 7.8947,
+      "slippage_headroom_pct": 8.806,
+      "failure_rate": 0.7143,
+      "regime_robustness": 0.2857
+    },
+    {
+      "label": "segment_13",
+      "settled_count": 70,
+      "monthly_roi_pct": 0.0,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": -0.005052,
+      "drawdown_pct": 7.8947,
+      "slippage_headroom_pct": 8.806,
+      "failure_rate": 0.7143,
+      "regime_robustness": 0.2857
+    },
+    {
+      "label": "segment_14",
+      "settled_count": 70,
+      "monthly_roi_pct": -3.6,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": -0.015775,
+      "drawdown_pct": 7.8947,
+      "slippage_headroom_pct": 8.806,
+      "failure_rate": 0.7143,
+      "regime_robustness": 0.2857
+    }
+  ],
+  "monthly_roi_pct": 11.181,
+  "max_drawdown_pct": 7.8947,
+  "slippage_headroom_pct": 8.806,
+  "calibration_lift_abs": -0.003126,
+  "turnover": 0.0388,
+  "capacity_score": 1.0,
+  "failure_rate": 0.7143,
+  "regime_robustness": 0.2857,
+  "baseline_beaten_windows": 3,
+  "stress_positive": true,
+  "trade_count": 38,
+  "settled_count": 38,
+  "paper_days": 3,
+  "net_pnl": -0.42,
+  "hard_vetoes": [
+    "failure_rate_above_15pct",
+    "regime_robustness_below_minimum"
+  ],
+  "notes": [
+    "package_path=/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_prediction_value_league/runs/betfair_prediction_value_league__challenger__8/20260310T181023692290Z/package.json",
+    "resolved_model_engine=residual_logit"
+  ],
+  "pareto_rank": 1,
+  "fitness_score": -53.69975
+}

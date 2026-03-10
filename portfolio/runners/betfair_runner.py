@@ -21,6 +21,10 @@ class BetfairPortfolioRunner(PortfolioRunnerBase):
 
     def build_config_snapshot(self) -> Dict[str, object]:
         snapshot = super().build_config_snapshot()
+        betfair_contexts = [
+            item for item in snapshot.get("factory_live_contexts", [])
+            if item.get("family_id") in {"betfair_prediction_value_league", "betfair_information_lag"}
+        ]
         snapshot.update(
             {
                 "paper_trading": bool(config.PAPER_TRADING),
@@ -29,6 +33,15 @@ class BetfairPortfolioRunner(PortfolioRunnerBase):
                 "prediction_enabled": bool(config.PREDICTION_ENABLED),
                 "paper_state_path": str(self.store.runtime_dir / "paper_executor_state.json"),
                 "paper_trades_log_path": str(self.store.runtime_dir / "paper_trades.jsonl"),
+                "factory_betfair_strategy_contexts": betfair_contexts,
+                "factory_prediction_policy_gate_path": next(
+                    (
+                        str((item.get("artifact_refs") or {}).get("policy_gate"))
+                        for item in betfair_contexts
+                        if (item.get("artifact_refs") or {}).get("policy_gate")
+                    ),
+                    None,
+                ),
             }
         )
         return snapshot

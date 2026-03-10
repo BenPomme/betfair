@@ -1,0 +1,60 @@
+{
+  "lineage_id": "betfair_prediction_value_league:challenger:5",
+  "family_id": "betfair_prediction_value_league",
+  "label": "Betfair Prediction/Value League Scientific Collaboration 5",
+  "role": "champion",
+  "current_stage": "paper",
+  "target_portfolios": [
+    "betfair_core"
+  ],
+  "target_venues": [
+    "betfair"
+  ],
+  "hypothesis_id": "betfair_prediction_value_league:challenger:5:hypothesis",
+  "genome_id": "betfair_prediction_value_league:challenger:5:genome",
+  "experiment_id": "betfair_prediction_value_league:challenger:5:experiment",
+  "budget_bucket": "adjacent",
+  "budget_weight_pct": 2.0,
+  "connector_ids": [
+    "betfair_core"
+  ],
+  "goldfish_workspace": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_prediction_value_league",
+  "revision": 47,
+  "created_at": "2026-03-10T17:58:07.524056+00:00",
+  "updated_at": "2026-03-10T18:52:02.481318+00:00",
+  "last_decision": {
+    "lineage_id": "betfair_prediction_value_league:challenger:5",
+    "current_stage": "paper",
+    "next_stage": "paper",
+    "allowed": false,
+    "requires_human_signoff": false,
+    "blockers": [
+      "monthly_roi_below_5pct",
+      "slippage_stress_non_positive",
+      "failure_rate_above_15pct",
+      "negative_slippage_stress"
+    ],
+    "reasons": [
+      "target_stage=paper"
+    ],
+    "evidence_ids": [],
+    "decided_at": "2026-03-10T18:52:02.481202+00:00"
+  },
+  "last_evaluation_id": "betfair_prediction_value_league:challenger:5:prediction:182:paper:artifact",
+  "last_manifest_id": null,
+  "blockers": [
+    "monthly_roi_below_5pct",
+    "slippage_stress_non_positive",
+    "failure_rate_above_15pct",
+    "negative_slippage_stress"
+  ],
+  "active": true,
+  "loss_streak": 0,
+  "tweak_count": 2,
+  "max_tweaks": 2,
+  "iteration_status": "champion",
+  "parent_lineage_id": "betfair_prediction_value_league:challenger:3",
+  "retired_at": null,
+  "retirement_reason": null,
+  "last_memory_id": null
+}

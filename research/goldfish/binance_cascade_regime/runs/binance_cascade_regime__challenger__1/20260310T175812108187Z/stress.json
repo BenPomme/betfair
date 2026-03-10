@@ -1,0 +1,68 @@
+{
+  "source_mode": "cascade_features",
+  "resolved_model_engine": "cascade_transformer",
+  "segments": [
+    {
+      "label": "segment_1",
+      "settled_count": 2920,
+      "trade_count": 101,
+      "monthly_roi_pct": -8.0,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": -0.033263,
+      "drawdown_pct": 8.0,
+      "slippage_headroom_pct": -9.0,
+      "failure_rate": 1.0,
+      "regime_robustness": 0.0,
+      "total_pnl": -80.8
+    },
+    {
+      "label": "segment_2",
+      "settled_count": 2920,
+      "trade_count": 84,
+      "monthly_roi_pct": -8.0,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": -0.031074,
+      "drawdown_pct": 8.0,
+      "slippage_headroom_pct": -9.0,
+      "failure_rate": 1.0,
+      "regime_robustness": 0.0,
+      "total_pnl": -67.2
+    },
+    {
+      "label": "segment_3",
+      "settled_count": 2920,
+      "trade_count": 100,
+      "monthly_roi_pct": -8.0,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": -0.033454,
+      "drawdown_pct": 8.0,
+      "slippage_headroom_pct": -9.0,
+      "failure_rate": 1.0,
+      "regime_robustness": 0.0,
+      "total_pnl": -80.0
+    }
+  ],
+  "summary": {
+    "resolved_model_engine": "cascade_transformer",
+    "source_mode": "cascade_features",
+    "windows": [
+      "EvaluationWindow(label='segment_1_stress', settled_count=2920, monthly_roi_pct=-8.4, baseline_roi_pct=0.0, brier_lift_abs=-0.028274, drawdown_pct=8.8, slippage_headroom_pct=-9.4, failure_rate=1.0, regime_robustness=0.0)",
+      "EvaluationWindow(label='segment_2_stress', settled_count=2920, monthly_roi_pct=-8.4, baseline_roi_pct=0.0, brier_lift_abs=-0.026413, drawdown_pct=8.8, slippage_headroom_pct=-9.4, failure_rate=1.0, regime_robustness=0.0)",
+      "EvaluationWindow(label='segment_3_stress', settled_count=2920, monthly_roi_pct=-8.4, baseline_roi_pct=0.0, brier_lift_abs=-0.028436, drawdown_pct=8.8, slippage_headroom_pct=-9.4, failure_rate=1.0, regime_robustness=0.0)"
+    ],
+    "monthly_roi_pct": -8.4,
+    "max_drawdown_pct": 8.8,
+    "slippage_headroom_pct": -9.4,
+    "calibration_lift_abs": -0.027707,
+    "turnover": 0.0325,
+    "capacity_score": 0.4646,
+    "failure_rate": 1.0,
+    "regime_robustness": 0.0,
+    "baseline_beaten_windows": 0,
+    "trade_count": 285,
+    "settled_count": 8760,
+    "paper_days": 12,
+    "net_pnl": -22.8,
+    "stress_positive": false
+  }
+}

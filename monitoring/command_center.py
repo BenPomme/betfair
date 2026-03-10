@@ -16,6 +16,7 @@ import config
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 
+from factory.runtime_mode import current_agentic_factory_runtime_mode
 from monitoring.live_readiness import evaluate_live_trading_readiness
 from monitoring.notifier import NotificationManager
 from monitoring.portfolio_process_manager import PortfolioProcessManager
@@ -112,6 +113,40 @@ def _git_sha() -> str:
         return "unknown"
 
 
+def _git_branch() -> str:
+    try:
+        out = subprocess.check_output(["git", "branch", "--show-current"], stderr=subprocess.DEVNULL)
+        return out.decode("utf-8").strip() or "detached"
+    except Exception:
+        return "unknown"
+
+
+def _git_main_divergence() -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "branch": _git_branch(),
+        "ahead_of_origin_main": None,
+        "behind_origin_main": None,
+        "origin_main_sha": None,
+    }
+    try:
+        out = subprocess.check_output(["git", "rev-parse", "--short", "origin/main"], stderr=subprocess.DEVNULL)
+        payload["origin_main_sha"] = out.decode("utf-8").strip() or None
+    except Exception:
+        payload["origin_main_sha"] = None
+    try:
+        out = subprocess.check_output(
+            ["git", "rev-list", "--left-right", "--count", "origin/main...HEAD"],
+            stderr=subprocess.DEVNULL,
+        )
+        behind, ahead = out.decode("utf-8").strip().split()
+        payload["behind_origin_main"] = int(behind)
+        payload["ahead_of_origin_main"] = int(ahead)
+    except Exception:
+        payload["behind_origin_main"] = None
+        payload["ahead_of_origin_main"] = None
+    return payload
+
+
 def _html() -> str:
     return _template_path.read_text(encoding="utf-8")
 
@@ -156,6 +191,70 @@ def _get_spec(portfolio_id: str) -> PortfolioRunnerSpec:
         if synthetic is None:
             raise
         return synthetic
+
+
+def _apply_research_factory_runtime_overlay(
+    portfolio_id: str,
+    *,
+    raw_state: Dict[str, Any],
+    readiness: Dict[str, Any],
+    config_snapshot: Dict[str, Any],
+) -> tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+    research_factory_id = str(getattr(config, "RESEARCH_FACTORY_PORTFOLIO_ID", "research_factory"))
+    if portfolio_id != research_factory_id:
+        return raw_state, readiness, config_snapshot
+
+    runtime_mode = current_agentic_factory_runtime_mode()
+    mode_payload = runtime_mode.to_dict()
+    raw_state = dict(raw_state)
+    readiness = dict(readiness)
+    config_snapshot = dict(config_snapshot)
+    raw_state.update(mode_payload)
+    config_snapshot.update(mode_payload)
+    raw_state.setdefault("portfolio_id", portfolio_id)
+    raw_state.setdefault("mode", "research")
+    raw_state.setdefault(
+        "explainer",
+        "Research-only control plane for multi-family strategy discovery, evaluation, and approval-gated promotion.",
+    )
+
+    checks = list(readiness.get("checks") or [])
+    if runtime_mode.is_hard_stop:
+        raw_state["status"] = "paused"
+        raw_state["running"] = False
+        raw_state["pause_reason"] = "agentic_factory_hard_stopped"
+        if not any(item.get("name") == "agentic_factory_runtime_mode" for item in checks):
+            checks.append(
+                {
+                    "name": "agentic_factory_runtime_mode",
+                    "ok": False,
+                    "reason": "Runtime mode is hard_stop, so factory orchestration and runner influence are paused intentionally.",
+                }
+            )
+        readiness["status"] = "research_only"
+        readiness["eta_to_readiness"] = "hard_stop"
+        readiness["blockers"] = list(
+            dict.fromkeys(list(readiness.get("blockers") or []) + ["agentic_factory_hard_stopped"])
+        )
+    elif runtime_mode.is_cost_saver:
+        if not any(item.get("name") == "agentic_factory_runtime_mode" for item in checks):
+            checks.append(
+                {
+                    "name": "agentic_factory_runtime_mode",
+                    "ok": True,
+                    "reason": "Runtime mode is cost_saver, so deterministic research continues while token-consuming agentic work stays paused.",
+                }
+            )
+        warnings = list(dict.fromkeys(list(readiness.get("warnings") or []) + ["agentic_factory_cost_saver"]))
+        readiness["warnings"] = warnings
+        readiness.setdefault("eta_to_readiness", "agentic_tokens_paused")
+    if checks:
+        readiness["checks"] = checks
+        readiness["score_pct"] = round(
+            (sum(1 for item in checks if item.get("ok")) / len(checks)) * 100.0,
+            2,
+        )
+    return raw_state, readiness, config_snapshot
 
 
 def _history_path(portfolio_id: str) -> Path:
@@ -1074,6 +1173,13 @@ def _build_base_snapshot(portfolio_id: str) -> Dict[str, Any]:
     raw_state = store.read_state() or {}
     account = (store.read_account().to_dict() if store.read_account() is not None else _default_account(spec))
     readiness = store.read_readiness() or {}
+    config_snapshot = store.read_config_snapshot() or {}
+    raw_state, readiness, config_snapshot = _apply_research_factory_runtime_overlay(
+        portfolio_id,
+        raw_state=raw_state,
+        readiness=readiness,
+        config_snapshot=config_snapshot,
+    )
     heartbeat = store.read_heartbeat() or {}
     raw_models = store.read_models()
     trades = store.read_trades(limit=200)
@@ -1136,7 +1242,7 @@ def _build_base_snapshot(portfolio_id: str) -> Dict[str, Any]:
         read_only=False,
         status=summary.status,
         account=account,
-        config=store.read_config_snapshot() or {},
+        config=config_snapshot,
         metrics={
             key: raw_state.get(key)
             for key in [
@@ -1199,6 +1305,8 @@ def api_portfolios() -> Dict[str, Any]:
     return {
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "git_sha": _git_sha(),
+        "git_branch": _git_branch(),
+        "git_main_divergence": _git_main_divergence(),
         "portfolios": [item["summary"] for item in snapshots],
     }
 

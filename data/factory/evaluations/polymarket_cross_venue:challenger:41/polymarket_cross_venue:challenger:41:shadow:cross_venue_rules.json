@@ -1,0 +1,69 @@
+{
+  "evaluation_id": "polymarket_cross_venue:challenger:41:shadow:cross_venue_rules",
+  "lineage_id": "polymarket_cross_venue:challenger:41",
+  "family_id": "polymarket_cross_venue",
+  "stage": "shadow",
+  "source": "factory_candidate_signal_artifact",
+  "generated_at": "2026-03-10T18:46:26.619919+00:00",
+  "windows": [
+    {
+      "label": "2026-03-05",
+      "settled_count": 3,
+      "monthly_roi_pct": -1.573,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": 0.146925,
+      "drawdown_pct": 1.7303,
+      "slippage_headroom_pct": -3.373,
+      "failure_rate": 0.5,
+      "regime_robustness": 0.2044
+    },
+    {
+      "label": "2026-03-06",
+      "settled_count": 4,
+      "monthly_roi_pct": -2.1743,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": 0.126133,
+      "drawdown_pct": 2.3917,
+      "slippage_headroom_pct": -3.9743,
+      "failure_rate": 0.5266,
+      "regime_robustness": 0.182
+    },
+    {
+      "label": "2026-03-07",
+      "settled_count": 5,
+      "monthly_roi_pct": -1.802,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": 0.146925,
+      "drawdown_pct": 1.9822,
+      "slippage_headroom_pct": -3.602,
+      "failure_rate": 0.5,
+      "regime_robustness": 0.1891
+    }
+  ],
+  "monthly_roi_pct": -1.7573,
+  "max_drawdown_pct": 2.3917,
+  "slippage_headroom_pct": -4.9743,
+  "calibration_lift_abs": 0.139994,
+  "turnover": 0.001,
+  "capacity_score": 0.3505,
+  "failure_rate": 0.5089,
+  "regime_robustness": 0.1918,
+  "baseline_beaten_windows": 0,
+  "stress_positive": false,
+  "trade_count": 60,
+  "settled_count": 12,
+  "paper_days": 3,
+  "net_pnl": -1.10986,
+  "hard_vetoes": [
+    "failure_rate_above_15pct",
+    "negative_slippage_stress",
+    "regime_robustness_below_minimum"
+  ],
+  "notes": [
+    "package_path=/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/polymarket_cross_venue/runs/polymarket_cross_venue__challenger__41/20260310T184626618253Z/package.json",
+    "resolved_model_engine=cross_venue_rules",
+    "source_mode=candidate_logs_recent"
+  ],
+  "pareto_rank": 1,
+  "fitness_score": -91.94565
+}

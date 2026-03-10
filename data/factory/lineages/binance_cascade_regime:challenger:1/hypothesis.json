@@ -1,0 +1,32 @@
+{
+  "hypothesis_id": "binance_cascade_regime:challenger:1:hypothesis",
+  "family_id": "binance_cascade_regime",
+  "title": "Binance Cascade/Regime Challenger 1",
+  "thesis": "Detect fragile market states and liquidation cascades early enough to survive and exploit dislocations. Mutated challenger 1 probes bounded changes to horizon, features, model class, and execution thresholds.",
+  "scientific_domains": [
+    "econometrics",
+    "microstructure",
+    "bayesian_causal",
+    "statistical_physics",
+    "network_epidemiology",
+    "ecology_evolution",
+    "information_theory",
+    "control_rl",
+    "game_theory_behavioral",
+    "signal_processing_neuroscience"
+  ],
+  "lead_agent_role": "Genome Mutator",
+  "success_metric": "paper_monthly_roi_pct",
+  "guardrails": [
+    "Mutation remains inside declared bounds.",
+    "No live promotion without human approval.",
+    "No credentials or hard caps may be mutated."
+  ],
+  "collaborating_agent_roles": [],
+  "origin": "seeded_family",
+  "agent_notes": [
+    "tweak_1: failure_rate_above_15pct",
+    "tweak_2: failure_rate_above_15pct"
+  ],
+  "created_at": "2026-03-10T17:21:01.385227+00:00"
+}

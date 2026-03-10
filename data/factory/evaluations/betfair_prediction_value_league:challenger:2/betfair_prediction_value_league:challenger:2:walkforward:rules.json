@@ -1,0 +1,68 @@
+{
+  "evaluation_id": "betfair_prediction_value_league:challenger:2:walkforward:rules",
+  "lineage_id": "betfair_prediction_value_league:challenger:2",
+  "family_id": "betfair_prediction_value_league",
+  "stage": "walkforward",
+  "source": "factory_prediction_artifact",
+  "generated_at": "2026-03-10T17:35:15.793287+00:00",
+  "windows": [
+    {
+      "label": "segment_28",
+      "settled_count": 70,
+      "monthly_roi_pct": 0.0,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": -0.000327,
+      "drawdown_pct": 0.0,
+      "slippage_headroom_pct": -2.75,
+      "failure_rate": 1.0,
+      "regime_robustness": 0.0
+    },
+    {
+      "label": "segment_29",
+      "settled_count": 70,
+      "monthly_roi_pct": 0.0,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": 0.002068,
+      "drawdown_pct": 0.0,
+      "slippage_headroom_pct": -2.75,
+      "failure_rate": 1.0,
+      "regime_robustness": 0.0
+    },
+    {
+      "label": "segment_30",
+      "settled_count": 70,
+      "monthly_roi_pct": 0.0,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": -0.005846,
+      "drawdown_pct": 0.0,
+      "slippage_headroom_pct": -2.75,
+      "failure_rate": 1.0,
+      "regime_robustness": 0.0
+    }
+  ],
+  "monthly_roi_pct": 0.0,
+  "max_drawdown_pct": 0.0,
+  "slippage_headroom_pct": -2.75,
+  "calibration_lift_abs": -0.001368,
+  "turnover": 0.0,
+  "capacity_score": 1.0,
+  "failure_rate": 1.0,
+  "regime_robustness": 0.0,
+  "baseline_beaten_windows": 0,
+  "stress_positive": false,
+  "trade_count": 0,
+  "settled_count": 0,
+  "paper_days": 5,
+  "net_pnl": 0.0,
+  "hard_vetoes": [
+    "failure_rate_above_15pct",
+    "negative_slippage_stress",
+    "regime_robustness_below_minimum"
+  ],
+  "notes": [
+    "package_path=/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_prediction_value_league/runs/betfair_prediction_value_league__challenger__2/20260310T173515774858Z/package.json",
+    "resolved_model_engine=rules"
+  ],
+  "pareto_rank": 1,
+  "fitness_score": -155.2736
+}

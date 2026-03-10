@@ -1,0 +1,23 @@
+{
+  "generated_at": "2026-03-10T17:58:09.477224+00:00",
+  "lineage_id": "binance_cascade_regime:challenger:1",
+  "family_id": "binance_cascade_regime",
+  "artifact_summary": {
+    "run_id": "20260310T175808814608Z",
+    "mode": "cascade_regime",
+    "package_path": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_cascade_regime/runs/binance_cascade_regime__challenger__1/20260310T175808814608Z/package.json",
+    "run_root": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_cascade_regime/runs/binance_cascade_regime__challenger__1/20260310T175808814608Z",
+    "requested_model_class": "transformer",
+    "resolved_model_engine": "cascade_transformer",
+    "source_mode": "cascade_features",
+    "dataset_rows": 8760,
+    "symbol_count": 6
+  },
+  "files": {
+    "dataset": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_cascade_regime/runs/binance_cascade_regime__challenger__1/20260310T175808814608Z/dataset.json",
+    "features": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_cascade_regime/runs/binance_cascade_regime__challenger__1/20260310T175808814608Z/features.json",
+    "train": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_cascade_regime/runs/binance_cascade_regime__challenger__1/20260310T175808814608Z/train.json",
+    "walkforward": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_cascade_regime/runs/binance_cascade_regime__challenger__1/20260310T175808814608Z/walkforward.json",
+    "stress": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_cascade_regime/runs/binance_cascade_regime__challenger__1/20260310T175808814608Z/stress.json"
+  }
+}

@@ -56,6 +56,10 @@ class ContrarianLegacyPortfolioRunner(PortfolioRunnerBase):
 
     def build_config_snapshot(self) -> Dict[str, object]:
         snapshot = super().build_config_snapshot()
+        funding_contexts = [
+            item for item in snapshot.get("factory_live_contexts", [])
+            if item.get("family_id") == "binance_funding_contrarian"
+        ]
         snapshot.update(
             {
                 "max_positions": int(config.CONTRARIAN_MAX_POSITIONS),
@@ -63,6 +67,15 @@ class ContrarianLegacyPortfolioRunner(PortfolioRunnerBase):
                 "max_hold_hours": int(config.CONTRARIAN_MAX_HOLD_HOURS),
                 "capital_per_trade_pct": float(config.CONTRARIAN_CAPITAL_PER_TRADE_PCT),
                 "daily_loss_limit_pct": float(config.CONTRARIAN_DAILY_LOSS_LIMIT_PCT),
+                "factory_funding_strategy_contexts": funding_contexts,
+                "factory_funding_model_meta_path": next(
+                    (
+                        str((item.get("artifact_refs") or {}).get("model_meta"))
+                        for item in funding_contexts
+                        if (item.get("artifact_refs") or {}).get("model_meta")
+                    ),
+                    None,
+                ),
             }
         )
         return snapshot

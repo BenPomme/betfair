@@ -1,0 +1,6 @@
+{
+  "generated_at": "2026-03-10T17:32:36.502898+00:00",
+  "requested_model_class": "rules",
+  "resolved_model_engine": "information_lag_rules",
+  "min_edge": 0.03
+}

@@ -49,6 +49,10 @@ class CascadeAlphaPortfolioRunner(PortfolioRunnerBase):
 
     def build_config_snapshot(self) -> Dict[str, object]:
         snapshot = super().build_config_snapshot()
+        cascade_contexts = [
+            item for item in snapshot.get("factory_live_contexts", [])
+            if item.get("family_id") == "binance_cascade_regime"
+        ]
         snapshot.update(
             {
                 "max_open_positions": 3,
@@ -56,6 +60,7 @@ class CascadeAlphaPortfolioRunner(PortfolioRunnerBase):
                 "max_gross_exposure_usd": 30000,
                 "max_hold_seconds": 900,
                 "daily_loss_limit_pct": 0.03,
+                "factory_cascade_strategy_contexts": cascade_contexts,
             }
         )
         return snapshot

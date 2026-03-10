@@ -1,0 +1,6 @@
+{"symbol": "BTCUSDT", "reason": "invalid_mark_price", "details": {"invalid_rows": 4198}}
+{"symbol": "ETHUSDT", "reason": "invalid_mark_price", "details": {"invalid_rows": 4198}}
+{"symbol": "SOLUSDT", "reason": "invalid_mark_price", "details": {"invalid_rows": 3503}}
+{"symbol": "XRPUSDT", "reason": "invalid_mark_price", "details": {"invalid_rows": 4182}}
+{"symbol": "BNBUSDT", "reason": "invalid_mark_price", "details": {"invalid_rows": 4077}}
+{"symbol": "DOGEUSDT", "reason": "invalid_mark_price", "details": {"invalid_rows": 3624}}

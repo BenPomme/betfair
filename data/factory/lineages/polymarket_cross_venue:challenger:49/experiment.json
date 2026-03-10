@@ -1,0 +1,43 @@
+{
+  "experiment_id": "polymarket_cross_venue:challenger:49:experiment",
+  "lineage_id": "polymarket_cross_venue:challenger:49",
+  "family_id": "polymarket_cross_venue",
+  "hypothesis_id": "polymarket_cross_venue:challenger:49:hypothesis",
+  "genome_id": "polymarket_cross_venue:challenger:49:genome",
+  "goldfish_workspace": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/polymarket_cross_venue",
+  "pipeline_stages": [
+    "dataset",
+    "features",
+    "train",
+    "walkforward",
+    "stress",
+    "package"
+  ],
+  "backend_mode": "goldfish_sidecar",
+  "resource_profile": "local-first-hybrid",
+  "inputs": {
+    "parent_lineage_id": "polymarket_cross_venue:challenger:1",
+    "mutation_index": 49,
+    "budget_bucket": "moonshot",
+    "proposal_id": "polymarket_cross_venue:proposal:49",
+    "lead_agent_role": "Information Theory Researcher",
+    "collaborating_agent_roles": [
+      "Signal Processing/Neuroscience Researcher",
+      "Network/Epidemiology Researcher"
+    ]
+  },
+  "expected_outputs": {
+    "latest_run": {
+      "run_id": "20260310T185203873009Z",
+      "mode": "cross_venue",
+      "package_path": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/polymarket_cross_venue/runs/polymarket_cross_venue__challenger__49/20260310T185203873009Z/package.json",
+      "run_root": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/polymarket_cross_venue/runs/polymarket_cross_venue__challenger__49/20260310T185203873009Z",
+      "requested_model_class": "gbdt",
+      "resolved_model_engine": "cross_venue_gbdt",
+      "source_mode": "candidate_logs_recent",
+      "dataset_rows": 60000,
+      "market_count": 3
+    }
+  },
+  "created_at": "2026-03-10T18:51:58.377700+00:00"
+}

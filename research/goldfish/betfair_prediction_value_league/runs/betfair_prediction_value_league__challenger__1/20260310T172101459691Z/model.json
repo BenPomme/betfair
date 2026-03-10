@@ -1,0 +1,29 @@
+{
+  "model_type": "hybrid_logit_v1",
+  "feature_names": [
+    "depth_total_eur",
+    "imbalance",
+    "lay_back_ratio",
+    "price_velocity",
+    "selection_count",
+    "short_volatility",
+    "spread_mean",
+    "time_to_start_sec",
+    "top_of_book_concentration",
+    "weighted_spread"
+  ],
+  "bias": -0.06946832390415728,
+  "market_weight": 1.2057324115150732,
+  "weights": {
+    "depth_total_eur": 0.3387116321391128,
+    "imbalance": -1.0132374252492573,
+    "lay_back_ratio": 0.6174565103741387,
+    "price_velocity": -0.26977922741970517,
+    "selection_count": 0.2619294480700021,
+    "short_volatility": -0.3631694744799843,
+    "spread_mean": 0.7359411651322119,
+    "time_to_start_sec": -0.01841744887893316,
+    "top_of_book_concentration": -0.46413140816429854,
+    "weighted_spread": -0.17897934208179417
+  }
+}

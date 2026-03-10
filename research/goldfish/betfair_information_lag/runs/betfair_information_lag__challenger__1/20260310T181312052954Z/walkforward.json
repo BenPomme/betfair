@@ -1,0 +1,68 @@
+{
+  "source_mode": "candidate_logs_recent",
+  "resolved_model_engine": "information_lag_transformer",
+  "segments": [
+    {
+      "label": "2026-03-05",
+      "settled_count": 3,
+      "trade_count": 20,
+      "monthly_roi_pct": -6.8981,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": -0.103074,
+      "drawdown_pct": 7.5879,
+      "slippage_headroom_pct": -8.1981,
+      "failure_rate": 0.5,
+      "regime_robustness": 0.25,
+      "total_pnl": -1.37962
+    },
+    {
+      "label": "2026-03-06",
+      "settled_count": 4,
+      "trade_count": 20,
+      "monthly_roi_pct": -7.235,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": -0.109737,
+      "drawdown_pct": 7.9585,
+      "slippage_headroom_pct": -8.535,
+      "failure_rate": 0.5266,
+      "regime_robustness": 0.2377,
+      "total_pnl": -1.447
+    },
+    {
+      "label": "2026-03-07",
+      "settled_count": 5,
+      "trade_count": 20,
+      "monthly_roi_pct": -6.8946,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": -0.103074,
+      "drawdown_pct": 7.5841,
+      "slippage_headroom_pct": -8.1946,
+      "failure_rate": 0.5,
+      "regime_robustness": 0.25,
+      "total_pnl": -1.37892
+    }
+  ],
+  "summary": {
+    "resolved_model_engine": "information_lag_transformer",
+    "source_mode": "candidate_logs_recent",
+    "windows": [
+      "EvaluationWindow(label='2026-03-05', settled_count=3, monthly_roi_pct=-6.8981, baseline_roi_pct=0.0, brier_lift_abs=-0.103074, drawdown_pct=7.5879, slippage_headroom_pct=-8.1981, failure_rate=0.5, regime_robustness=0.25)",
+      "EvaluationWindow(label='2026-03-06', settled_count=4, monthly_roi_pct=-7.235, baseline_roi_pct=0.0, brier_lift_abs=-0.109737, drawdown_pct=7.9585, slippage_headroom_pct=-8.535, failure_rate=0.5266, regime_robustness=0.2377)",
+      "EvaluationWindow(label='2026-03-07', settled_count=5, monthly_roi_pct=-6.8946, baseline_roi_pct=0.0, brier_lift_abs=-0.103074, drawdown_pct=7.5841, slippage_headroom_pct=-8.1946, failure_rate=0.5, regime_robustness=0.25)"
+    ],
+    "monthly_roi_pct": -7.0092,
+    "max_drawdown_pct": 7.9585,
+    "slippage_headroom_pct": -8.535,
+    "calibration_lift_abs": -0.105295,
+    "turnover": 0.001,
+    "capacity_score": 0.3505,
+    "failure_rate": 0.5089,
+    "regime_robustness": 0.2459,
+    "baseline_beaten_windows": 0,
+    "trade_count": 60,
+    "settled_count": 12,
+    "paper_days": 3,
+    "net_pnl": -4.20554,
+    "stress_positive": false
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "lineage_id": "betfair_information_lag:challenger:36",
+  "family_id": "betfair_information_lag",
+  "label": "Betfair Information-Lag Books Scientific Collaboration 36",
+  "role": "paper_challenger",
+  "current_stage": "paper",
+  "target_portfolios": [
+    "betfair_execution_book",
+    "betfair_suspension_lag",
+    "betfair_crossbook_consensus",
+    "betfair_timezone_decay"
+  ],
+  "target_venues": [
+    "betfair",
+    "polymarket"
+  ],
+  "hypothesis_id": "betfair_information_lag:challenger:36:hypothesis",
+  "genome_id": "betfair_information_lag:challenger:36:genome",
+  "experiment_id": "betfair_information_lag:challenger:36:experiment",
+  "budget_bucket": "moonshot",
+  "budget_weight_pct": 2.44,
+  "connector_ids": [
+    "betfair_core",
+    "polymarket_core"
+  ],
+  "goldfish_workspace": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_information_lag",
+  "revision": 3,
+  "created_at": "2026-03-10T18:38:55.778673+00:00",
+  "updated_at": "2026-03-10T18:41:03.649136+00:00",
+  "last_decision": {
+    "lineage_id": "betfair_information_lag:challenger:36",
+    "current_stage": "paper",
+    "next_stage": "paper",
+    "allowed": false,
+    "requires_human_signoff": false,
+    "blockers": [
+      "walkforward_window_coverage_insufficient",
+      "stress_eval_negative",
+      "baseline_not_beaten_on_3_windows",
+      "insufficient_paper_days",
+      "monthly_roi_below_5pct",
+      "slippage_stress_non_positive",
+      "failure_rate_above_15pct",
+      "negative_slippage_stress",
+      "regime_robustness_below_minimum"
+    ],
+    "reasons": [
+      "target_stage=paper"
+    ],
+    "evidence_ids": [],
+    "decided_at": "2026-03-10T18:41:03.649053+00:00"
+  },
+  "last_evaluation_id": "betfair_information_lag:challenger:36:stress:information_lag_gbdt",
+  "last_manifest_id": null,
+  "blockers": [
+    "walkforward_window_coverage_insufficient",
+    "stress_eval_negative",
+    "baseline_not_beaten_on_3_windows",
+    "insufficient_paper_days",
+    "monthly_roi_below_5pct",
+    "slippage_stress_non_positive",
+    "failure_rate_above_15pct",
+    "negative_slippage_stress",
+    "regime_robustness_below_minimum",
+    "max_tweaks_exhausted_underperforming"
+  ],
+  "active": false,
+  "loss_streak": 3,
+  "tweak_count": 2,
+  "max_tweaks": 2,
+  "iteration_status": "retired",
+  "parent_lineage_id": "betfair_information_lag:challenger:1",
+  "retired_at": "2026-03-10T18:41:07.362110+00:00",
+  "retirement_reason": "max_tweaks_exhausted_underperforming",
+  "last_memory_id": "betfair_information_lag:challenger:36:memory:2"
+}

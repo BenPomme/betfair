@@ -1,0 +1,83 @@
+{
+  "genome_id": "betfair_prediction_value_league:challenger:1:genome",
+  "lineage_id": "betfair_prediction_value_league:challenger:1",
+  "family_id": "betfair_prediction_value_league",
+  "parent_genome_id": "betfair_prediction_value_league:genome:champion",
+  "role": "shadow_challenger",
+  "parameters": {
+    "resource_profile": "local-first-hybrid",
+    "budget_mix": {
+      "incumbent": 70.0,
+      "adjacent": 20.0,
+      "moonshot": 10.0
+    },
+    "max_shadow_challengers": 5,
+    "max_paper_challengers": 2,
+    "mutation_index": 1,
+    "mutation_source": "deterministic_factory_mutation",
+    "selected_horizon_seconds": 600,
+    "selected_feature_subset": "cross_science",
+    "selected_model_class": "transformer",
+    "selected_min_edge": 0.0325,
+    "selected_stake_fraction": 0.055,
+    "selected_learning_rate": 0.07525,
+    "selected_lookback_hours": 114.0
+  },
+  "mutation_bounds": {
+    "horizons_seconds": [
+      120,
+      600,
+      1800,
+      14400
+    ],
+    "feature_subsets": [
+      "baseline",
+      "microstructure",
+      "cross_science",
+      "regime"
+    ],
+    "model_classes": [
+      "logit",
+      "gbdt",
+      "tft",
+      "transformer",
+      "rules"
+    ],
+    "execution_thresholds": {
+      "min_edge": [
+        0.01,
+        0.1
+      ],
+      "stake_fraction": [
+        0.01,
+        0.1
+      ]
+    },
+    "hyperparameter_ranges": {
+      "learning_rate": [
+        0.001,
+        0.1
+      ],
+      "lookback_hours": [
+        6,
+        168
+      ]
+    }
+  },
+  "scientific_domains": [
+    "econometrics",
+    "microstructure",
+    "bayesian_causal",
+    "statistical_physics",
+    "network_epidemiology",
+    "ecology_evolution",
+    "information_theory",
+    "control_rl",
+    "game_theory_behavioral",
+    "signal_processing_neuroscience"
+  ],
+  "budget_bucket": "incumbent",
+  "resource_profile": "local-first-hybrid",
+  "budget_weight_pct": 5.33,
+  "created_at": "2026-03-10T17:21:01.383271+00:00"
+}

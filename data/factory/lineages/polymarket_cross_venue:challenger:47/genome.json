@@ -1,0 +1,76 @@
+{
+  "genome_id": "polymarket_cross_venue:challenger:47:genome",
+  "lineage_id": "polymarket_cross_venue:challenger:47",
+  "family_id": "polymarket_cross_venue",
+  "parent_genome_id": "polymarket_cross_venue:challenger:1:genome",
+  "role": "shadow_challenger",
+  "parameters": {
+    "resource_profile": "local-first-hybrid",
+    "budget_mix": {
+      "incumbent": 70.0,
+      "adjacent": 20.0,
+      "moonshot": 10.0
+    },
+    "max_shadow_challengers": 5,
+    "max_paper_challengers": 2,
+    "mutation_index": 47,
+    "mutation_source": "scientific_agent_collective",
+    "selected_horizon_seconds": 600,
+    "selected_feature_subset": "cross_science",
+    "selected_model_class": "gbdt",
+    "selected_min_edge": 0.055,
+    "selected_stake_fraction": 0.012,
+    "selected_learning_rate": 0.04,
+    "selected_lookback_hours": 84.0
+  },
+  "mutation_bounds": {
+    "horizons_seconds": [
+      120,
+      600,
+      1800,
+      14400
+    ],
+    "feature_subsets": [
+      "baseline",
+      "microstructure",
+      "cross_science",
+      "regime"
+    ],
+    "model_classes": [
+      "logit",
+      "gbdt",
+      "tft",
+      "transformer",
+      "rules"
+    ],
+    "execution_thresholds": {
+      "min_edge": [
+        0.01,
+        0.1
+      ],
+      "stake_fraction": [
+        0.01,
+        0.1
+      ]
+    },
+    "hyperparameter_ranges": {
+      "learning_rate": [
+        0.001,
+        0.1
+      ],
+      "lookback_hours": [
+        6,
+        168
+      ]
+    }
+  },
+  "scientific_domains": [
+    "bayesian_causal",
+    "information_theory",
+    "econometrics"
+  ],
+  "budget_bucket": "adjacent",
+  "resource_profile": "local-first-hybrid",
+  "budget_weight_pct": 3.33,
+  "created_at": "2026-03-10T18:49:55.023337+00:00"
+}

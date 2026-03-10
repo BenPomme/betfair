@@ -4,6 +4,7 @@ import importlib
 from typing import Dict, List
 
 import config
+from factory.runtime_mode import research_factory_start_blocker
 from portfolio.types import PortfolioRunnerSpec
 
 
@@ -19,6 +20,19 @@ _REGISTRY: Dict[str, PortfolioRunnerSpec] = {
         autostart=False,
         description="Primary Betfair arbitrage portfolio.",
         ui_group="Betfair",
+    ),
+    "research_factory": PortfolioRunnerSpec(
+        portfolio_id="research_factory",
+        label="Research Factory",
+        category="research_factory",
+        control_mode="local_managed",
+        currency="USD",
+        initial_balance=float(getattr(config, "RESEARCH_FACTORY_INITIAL_BALANCE_USD", 100000.0)),
+        runner_path="portfolio.runners.research_factory_runner:ResearchFactoryPortfolioRunner",
+        autostart=False,
+        enabled=bool(getattr(config, "RESEARCH_FACTORY_ENABLED", True)),
+        description="Agentic strategy factory control plane with Goldfish sidecar workspaces and approval-gated manifest promotion.",
+        ui_group="Research Factory",
     ),
     "hedge_validation": PortfolioRunnerSpec(
         portfolio_id="hedge_validation",
@@ -112,8 +126,11 @@ def get_portfolio_spec(portfolio_id: str) -> PortfolioRunnerSpec:
 
 def create_runner(portfolio_id: str):
     spec = get_portfolio_spec(portfolio_id)
-    if spec.control_mode == "disabled" or not spec.runner_path:
+    if spec.control_mode == "disabled" or not spec.enabled or not spec.runner_path:
         raise ValueError(f"Portfolio {portfolio_id} is disabled")
+    start_blocker = research_factory_start_blocker(portfolio_id)
+    if start_blocker is not None:
+        raise ValueError(f"Portfolio {portfolio_id} is blocked: {start_blocker}")
     module_name, class_name = spec.runner_path.split(":", 1)
     module = importlib.import_module(module_name)
     runner_cls = getattr(module, class_name)

@@ -1,0 +1,6 @@
+{
+  "generated_at": "2026-03-10T18:50:02.286108+00:00",
+  "requested_model_class": "transformer",
+  "resolved_model_engine": "cross_venue_transformer",
+  "min_edge": 0.0325
+}

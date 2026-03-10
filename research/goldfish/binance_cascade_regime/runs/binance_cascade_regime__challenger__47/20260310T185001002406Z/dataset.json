@@ -1,0 +1,11 @@
+{
+  "generated_at": "2026-03-10T18:50:02.103237+00:00",
+  "family_id": "binance_cascade_regime",
+  "lineage_id": "binance_cascade_regime:challenger:47",
+  "source_mode": "cascade_features",
+  "source_paths": [
+    "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/data/funding_history"
+  ],
+  "dataset_rows": 8760,
+  "symbol_count": 6
+}

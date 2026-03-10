@@ -1,0 +1,73 @@
+{
+  "lineage_id": "polymarket_cross_venue:challenger:1",
+  "family_id": "polymarket_cross_venue",
+  "label": "Polymarket Cross-Venue Signals Challenger 1",
+  "role": "champion",
+  "current_stage": "paper",
+  "target_portfolios": [
+    "polymarket_quantum_fold",
+    "polymarket_binary_research"
+  ],
+  "target_venues": [
+    "polymarket",
+    "betfair"
+  ],
+  "hypothesis_id": "polymarket_cross_venue:challenger:1:hypothesis",
+  "genome_id": "polymarket_cross_venue:challenger:1:genome",
+  "experiment_id": "polymarket_cross_venue:challenger:1:experiment",
+  "budget_bucket": "incumbent",
+  "budget_weight_pct": 10.0,
+  "connector_ids": [
+    "polymarket_core",
+    "betfair_core"
+  ],
+  "goldfish_workspace": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/polymarket_cross_venue",
+  "revision": 51,
+  "created_at": "2026-03-10T17:21:01.393431+00:00",
+  "updated_at": "2026-03-10T18:52:03.768768+00:00",
+  "last_decision": {
+    "lineage_id": "polymarket_cross_venue:challenger:1",
+    "current_stage": "paper",
+    "next_stage": "paper",
+    "allowed": false,
+    "requires_human_signoff": false,
+    "blockers": [
+      "walkforward_window_coverage_insufficient",
+      "stress_eval_negative",
+      "baseline_not_beaten_on_3_windows",
+      "insufficient_paper_days",
+      "monthly_roi_below_5pct",
+      "slippage_stress_non_positive",
+      "failure_rate_above_15pct",
+      "negative_slippage_stress",
+      "regime_robustness_below_minimum"
+    ],
+    "reasons": [
+      "target_stage=paper"
+    ],
+    "evidence_ids": [],
+    "decided_at": "2026-03-10T18:52:03.768662+00:00"
+  },
+  "last_evaluation_id": "polymarket_cross_venue:challenger:1:stress:cross_venue_transformer",
+  "last_manifest_id": null,
+  "blockers": [
+    "walkforward_window_coverage_insufficient",
+    "stress_eval_negative",
+    "baseline_not_beaten_on_3_windows",
+    "insufficient_paper_days",
+    "monthly_roi_below_5pct",
+    "slippage_stress_non_positive",
+    "failure_rate_above_15pct",
+    "negative_slippage_stress",
+    "regime_robustness_below_minimum"
+  ],
+  "active": true,
+  "loss_streak": 0,
+  "tweak_count": 0,
+  "max_tweaks": 2,
+  "iteration_status": "champion",
+  "parent_lineage_id": "polymarket_cross_venue:champion",
+  "retired_at": null,
+  "retirement_reason": null,
+  "last_memory_id": null
+}

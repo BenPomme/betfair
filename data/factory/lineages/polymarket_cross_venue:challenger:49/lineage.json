@@ -1,0 +1,74 @@
+{
+  "lineage_id": "polymarket_cross_venue:challenger:49",
+  "family_id": "polymarket_cross_venue",
+  "label": "Polymarket Cross-Venue Signals Scientific Collaboration 49",
+  "role": "shadow_challenger",
+  "current_stage": "paper",
+  "target_portfolios": [
+    "polymarket_quantum_fold",
+    "polymarket_binary_research"
+  ],
+  "target_venues": [
+    "polymarket",
+    "betfair"
+  ],
+  "hypothesis_id": "polymarket_cross_venue:challenger:49:hypothesis",
+  "genome_id": "polymarket_cross_venue:challenger:49:genome",
+  "experiment_id": "polymarket_cross_venue:challenger:49:experiment",
+  "budget_bucket": "moonshot",
+  "budget_weight_pct": 3.33,
+  "connector_ids": [
+    "polymarket_core",
+    "betfair_core"
+  ],
+  "goldfish_workspace": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/polymarket_cross_venue",
+  "revision": 1,
+  "created_at": "2026-03-10T18:51:58.377708+00:00",
+  "updated_at": "2026-03-10T18:52:03.878891+00:00",
+  "last_decision": {
+    "lineage_id": "polymarket_cross_venue:challenger:49",
+    "current_stage": "idea",
+    "next_stage": "paper",
+    "allowed": true,
+    "requires_human_signoff": false,
+    "blockers": [
+      "walkforward_window_coverage_insufficient",
+      "stress_eval_negative",
+      "baseline_not_beaten_on_3_windows",
+      "insufficient_paper_days",
+      "monthly_roi_below_5pct",
+      "slippage_stress_non_positive",
+      "failure_rate_above_15pct",
+      "negative_slippage_stress",
+      "regime_robustness_below_minimum"
+    ],
+    "reasons": [
+      "target_stage=paper"
+    ],
+    "evidence_ids": [],
+    "decided_at": "2026-03-10T18:52:03.878800+00:00"
+  },
+  "last_evaluation_id": "polymarket_cross_venue:challenger:49:stress:cross_venue_gbdt",
+  "last_manifest_id": null,
+  "blockers": [
+    "walkforward_window_coverage_insufficient",
+    "stress_eval_negative",
+    "baseline_not_beaten_on_3_windows",
+    "insufficient_paper_days",
+    "monthly_roi_below_5pct",
+    "slippage_stress_non_positive",
+    "failure_rate_above_15pct",
+    "negative_slippage_stress",
+    "regime_robustness_below_minimum",
+    "awaiting_execution_validation"
+  ],
+  "active": true,
+  "loss_streak": 0,
+  "tweak_count": 0,
+  "max_tweaks": 2,
+  "iteration_status": "awaiting_execution_validation",
+  "parent_lineage_id": "polymarket_cross_venue:challenger:1",
+  "retired_at": null,
+  "retirement_reason": null,
+  "last_memory_id": null
+}

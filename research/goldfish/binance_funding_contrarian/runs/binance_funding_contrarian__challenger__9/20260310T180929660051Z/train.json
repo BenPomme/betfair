@@ -1,0 +1,8 @@
+{
+  "generated_at": "2026-03-10T18:09:29.660995+00:00",
+  "requested_model_class": "gbdt",
+  "resolved_model_engine": "naive_contrarian_backtest",
+  "stake_fraction": 0.025,
+  "horizon_seconds": 600,
+  "min_edge": 0.028333
+}

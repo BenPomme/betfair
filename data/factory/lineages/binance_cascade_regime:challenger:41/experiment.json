@@ -1,0 +1,45 @@
+{
+  "experiment_id": "binance_cascade_regime:challenger:41:experiment",
+  "lineage_id": "binance_cascade_regime:challenger:41",
+  "family_id": "binance_cascade_regime",
+  "hypothesis_id": "binance_cascade_regime:challenger:41:hypothesis",
+  "genome_id": "binance_cascade_regime:challenger:41:genome",
+  "goldfish_workspace": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_cascade_regime",
+  "pipeline_stages": [
+    "dataset",
+    "features",
+    "train",
+    "walkforward",
+    "stress",
+    "package"
+  ],
+  "backend_mode": "goldfish_sidecar",
+  "resource_profile": "local-first-hybrid",
+  "inputs": {
+    "parent_lineage_id": "binance_cascade_regime:challenger:4",
+    "mutation_index": 41,
+    "budget_bucket": "moonshot",
+    "proposal_id": "binance_cascade_regime:proposal:41",
+    "lead_agent_role": "Statistical Physics Researcher",
+    "collaborating_agent_roles": [
+      "Network/Epidemiology Researcher",
+      "Signal Processing/Neuroscience Researcher"
+    ],
+    "tweak_count": 2,
+    "last_tweak_reason": "failure_rate_above_15pct"
+  },
+  "expected_outputs": {
+    "latest_run": {
+      "run_id": "20260310T184626468129Z",
+      "mode": "cascade_regime",
+      "package_path": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_cascade_regime/runs/binance_cascade_regime__challenger__41/20260310T184626468129Z/package.json",
+      "run_root": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_cascade_regime/runs/binance_cascade_regime__challenger__41/20260310T184626468129Z",
+      "requested_model_class": "gbdt",
+      "resolved_model_engine": "cascade_gbdt",
+      "source_mode": "cascade_features",
+      "dataset_rows": 8760,
+      "symbol_count": 6
+    }
+  },
+  "created_at": "2026-03-10T18:44:15.447203+00:00"
+}

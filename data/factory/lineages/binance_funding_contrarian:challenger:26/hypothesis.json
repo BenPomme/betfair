@@ -1,0 +1,31 @@
+{
+  "hypothesis_id": "binance_funding_contrarian:challenger:26:hypothesis",
+  "family_id": "binance_funding_contrarian",
+  "title": "Binance Funding Contrarian Scientific Collaboration 26",
+  "thesis": "Exploit funding extremes, regime shifts, and cross-science features to improve directional funding trades. This variant fuses econometrics researcher guidance with microstructure researcher, ecology/evolution researcher to test stability-aware factor combinations and regime-conditioned edge persistence; order-book stress, queue pressure, and execution-quality asymmetry; survival pressure, niche competition, and adaptive response to decaying edges.",
+  "scientific_domains": [
+    "econometrics",
+    "microstructure",
+    "ecology_evolution"
+  ],
+  "lead_agent_role": "Econometrics Researcher",
+  "success_metric": "paper_monthly_roi_pct",
+  "guardrails": [
+    "Mutation remains inside declared bounds.",
+    "No live promotion without human approval.",
+    "No credentials or hard caps may be mutated."
+  ],
+  "collaborating_agent_roles": [
+    "Microstructure Researcher",
+    "Ecology/Evolution Researcher"
+  ],
+  "origin": "scientific_agent_collective",
+  "agent_notes": [
+    "lead_agent=Econometrics Researcher",
+    "collaborators=Microstructure Researcher,Ecology/Evolution Researcher",
+    "memory_hint=avoid veto pattern negative_slippage_stress",
+    "tweak_1: negative_slippage_stress",
+    "tweak_2: negative_slippage_stress"
+  ],
+  "created_at": "2026-03-10T18:25:53.164491+00:00"
+}

@@ -1,0 +1,90 @@
+{
+  "requested_model_class": "gbdt",
+  "resolved_model_engine": "hybrid_logit",
+  "edge_threshold": 0.045,
+  "epochs": 5,
+  "learning_rate": 0.03,
+  "segments": [
+    {
+      "label": "segment_1",
+      "settled_count": 55,
+      "bets": 0,
+      "model_roi_pct": 0.0,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.267266,
+      "baseline_brier": 0.245556,
+      "calibration_lift_abs": -0.021709,
+      "pnl_units": 0.0
+    },
+    {
+      "label": "segment_2",
+      "settled_count": 55,
+      "bets": 1,
+      "model_roi_pct": -100.0,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.246816,
+      "baseline_brier": 0.236437,
+      "calibration_lift_abs": -0.01038,
+      "pnl_units": -1.0
+    },
+    {
+      "label": "segment_3",
+      "settled_count": 55,
+      "bets": 18,
+      "model_roi_pct": -46.6667,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.206261,
+      "baseline_brier": 0.198498,
+      "calibration_lift_abs": -0.007763,
+      "pnl_units": -8.4
+    },
+    {
+      "label": "segment_4",
+      "settled_count": 55,
+      "bets": 4,
+      "model_roi_pct": 11.75,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.257367,
+      "baseline_brier": 0.271982,
+      "calibration_lift_abs": 0.014615,
+      "pnl_units": 0.47
+    },
+    {
+      "label": "segment_5",
+      "settled_count": 55,
+      "bets": 12,
+      "model_roi_pct": 23.5,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.152949,
+      "baseline_brier": 0.11975,
+      "calibration_lift_abs": -0.033198,
+      "pnl_units": 2.82
+    },
+    {
+      "label": "segment_6",
+      "settled_count": 55,
+      "bets": 21,
+      "model_roi_pct": -13.5714,
+      "baseline_roi_pct": 0.0,
+      "model_brier": 0.203752,
+      "baseline_brier": 0.183262,
+      "calibration_lift_abs": -0.02049,
+      "pnl_units": -2.85
+    }
+  ],
+  "summary": {
+    "monthly_roi_pct": 7.2262,
+    "max_drawdown_pct": 16.7857,
+    "slippage_headroom_pct": 4.9762,
+    "calibration_lift_abs": -0.013024,
+    "turnover": 0.1697,
+    "capacity_score": 0.5992,
+    "failure_rate": 0.6667,
+    "regime_robustness": 0.3333,
+    "baseline_beaten_windows": 1,
+    "trade_count": 56,
+    "settled_count": 56,
+    "paper_days": 1,
+    "net_pnl": -8.96
+  }
+}

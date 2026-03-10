@@ -1,0 +1,7 @@
+{
+  "model_type": "hybrid_logit_v1",
+  "feature_names": [],
+  "bias": -0.07079398848794383,
+  "market_weight": 0.9329608928015056,
+  "weights": {}
+}

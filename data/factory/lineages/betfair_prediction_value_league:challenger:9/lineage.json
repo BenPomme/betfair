@@ -1,0 +1,61 @@
+{
+  "lineage_id": "betfair_prediction_value_league:challenger:9",
+  "family_id": "betfair_prediction_value_league",
+  "label": "Betfair Prediction/Value League Scientific Collaboration 9",
+  "role": "paper_challenger",
+  "current_stage": "paper",
+  "target_portfolios": [
+    "betfair_core"
+  ],
+  "target_venues": [
+    "betfair"
+  ],
+  "hypothesis_id": "betfair_prediction_value_league:challenger:9:hypothesis",
+  "genome_id": "betfair_prediction_value_league:challenger:9:genome",
+  "experiment_id": "betfair_prediction_value_league:challenger:9:experiment",
+  "budget_bucket": "adjacent",
+  "budget_weight_pct": 2.0,
+  "connector_ids": [
+    "betfair_core"
+  ],
+  "goldfish_workspace": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_prediction_value_league",
+  "revision": 3,
+  "created_at": "2026-03-10T18:09:27.341089+00:00",
+  "updated_at": "2026-03-10T18:11:25.862112+00:00",
+  "last_decision": {
+    "lineage_id": "betfair_prediction_value_league:challenger:9",
+    "current_stage": "paper",
+    "next_stage": "paper",
+    "allowed": false,
+    "requires_human_signoff": false,
+    "blockers": [
+      "monthly_roi_below_5pct",
+      "slippage_stress_non_positive",
+      "failure_rate_above_15pct",
+      "negative_slippage_stress"
+    ],
+    "reasons": [
+      "target_stage=paper"
+    ],
+    "evidence_ids": [],
+    "decided_at": "2026-03-10T18:11:25.862031+00:00"
+  },
+  "last_evaluation_id": "betfair_prediction_value_league:challenger:9:prediction:182:paper:artifact",
+  "last_manifest_id": null,
+  "blockers": [
+    "monthly_roi_below_5pct",
+    "slippage_stress_non_positive",
+    "failure_rate_above_15pct",
+    "negative_slippage_stress",
+    "max_tweaks_exhausted_underperforming"
+  ],
+  "active": false,
+  "loss_streak": 3,
+  "tweak_count": 2,
+  "max_tweaks": 2,
+  "iteration_status": "retired",
+  "parent_lineage_id": "betfair_prediction_value_league:challenger:5",
+  "retired_at": "2026-03-10T18:11:26.725014+00:00",
+  "retirement_reason": "max_tweaks_exhausted_underperforming",
+  "last_memory_id": "betfair_prediction_value_league:challenger:9:memory:2"
+}

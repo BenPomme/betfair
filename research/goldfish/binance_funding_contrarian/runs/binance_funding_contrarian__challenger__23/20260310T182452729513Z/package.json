@@ -1,0 +1,23 @@
+{
+  "generated_at": "2026-03-10T18:24:52.731401+00:00",
+  "lineage_id": "binance_funding_contrarian:challenger:23",
+  "family_id": "binance_funding_contrarian",
+  "artifact_summary": {
+    "run_id": "20260310T182452729513Z",
+    "mode": "funding_contrarian",
+    "package_path": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_funding_contrarian/runs/binance_funding_contrarian__challenger__23/20260310T182452729513Z/package.json",
+    "run_root": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_funding_contrarian/runs/binance_funding_contrarian__challenger__23/20260310T182452729513Z",
+    "requested_model_class": "rules",
+    "resolved_model_engine": "rules_contrarian",
+    "source_mode": "log_fallback",
+    "dataset_rows": 301,
+    "symbol_count": 2
+  },
+  "files": {
+    "dataset": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_funding_contrarian/runs/binance_funding_contrarian__challenger__23/20260310T182452729513Z/dataset.json",
+    "features": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_funding_contrarian/runs/binance_funding_contrarian__challenger__23/20260310T182452729513Z/features.json",
+    "train": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_funding_contrarian/runs/binance_funding_contrarian__challenger__23/20260310T182452729513Z/train.json",
+    "walkforward": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_funding_contrarian/runs/binance_funding_contrarian__challenger__23/20260310T182452729513Z/walkforward.json",
+    "stress": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_funding_contrarian/runs/binance_funding_contrarian__challenger__23/20260310T182452729513Z/stress.json"
+  }
+}

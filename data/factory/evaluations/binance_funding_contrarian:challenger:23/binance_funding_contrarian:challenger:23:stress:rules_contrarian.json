@@ -1,0 +1,69 @@
+{
+  "evaluation_id": "binance_funding_contrarian:challenger:23:stress:rules_contrarian",
+  "lineage_id": "binance_funding_contrarian:challenger:23",
+  "family_id": "binance_funding_contrarian",
+  "stage": "stress",
+  "source": "factory_funding_artifact",
+  "generated_at": "2026-03-10T18:24:52.731560+00:00",
+  "windows": [
+    {
+      "label": "rolling_50_stress",
+      "settled_count": 20,
+      "monthly_roi_pct": -1.1009,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": 0.094225,
+      "drawdown_pct": 11.2449,
+      "slippage_headroom_pct": -2.8509,
+      "failure_rate": 0.83,
+      "regime_robustness": 0.15
+    },
+    {
+      "label": "rolling_100_stress",
+      "settled_count": 20,
+      "monthly_roi_pct": -1.1009,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": 0.094225,
+      "drawdown_pct": 11.2449,
+      "slippage_headroom_pct": -2.8509,
+      "failure_rate": 0.83,
+      "regime_robustness": 0.15
+    },
+    {
+      "label": "rolling_200_stress",
+      "settled_count": 20,
+      "monthly_roi_pct": -1.1009,
+      "baseline_roi_pct": 0.0,
+      "brier_lift_abs": 0.094225,
+      "drawdown_pct": 11.2449,
+      "slippage_headroom_pct": -2.8509,
+      "failure_rate": 0.83,
+      "regime_robustness": 0.15
+    }
+  ],
+  "monthly_roi_pct": -1.1009,
+  "max_drawdown_pct": 11.2449,
+  "slippage_headroom_pct": -2.8509,
+  "calibration_lift_abs": 0.094225,
+  "turnover": 0.0664,
+  "capacity_score": 0.3832,
+  "failure_rate": 0.83,
+  "regime_robustness": 0.15,
+  "baseline_beaten_windows": 0,
+  "stress_positive": false,
+  "trade_count": 20,
+  "settled_count": 20,
+  "paper_days": 1,
+  "net_pnl": -0.053052,
+  "hard_vetoes": [
+    "failure_rate_above_15pct",
+    "negative_slippage_stress",
+    "regime_robustness_below_minimum"
+  ],
+  "notes": [
+    "package_path=/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/binance_funding_contrarian/runs/binance_funding_contrarian__challenger__23/20260310T182452729513Z/package.json",
+    "resolved_model_engine=rules_contrarian",
+    "source_mode=log_fallback"
+  ],
+  "pareto_rank": 3,
+  "fitness_score": -146.91105
+}

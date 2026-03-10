@@ -1,0 +1,21 @@
+{
+  "model_type": "hybrid_logit_v1",
+  "feature_names": [
+    "depth_total_eur",
+    "imbalance",
+    "lay_back_ratio",
+    "spread_mean",
+    "top_of_book_concentration",
+    "weighted_spread"
+  ],
+  "bias": -0.08161044725266717,
+  "market_weight": 1.379250725981487,
+  "weights": {
+    "depth_total_eur": 0.5801717303946898,
+    "imbalance": -0.6795661839980414,
+    "lay_back_ratio": -0.06871568075595251,
+    "spread_mean": 0.2734847028452174,
+    "top_of_book_concentration": -0.20930264020734193,
+    "weighted_spread": -0.17517360869156498
+  }
+}

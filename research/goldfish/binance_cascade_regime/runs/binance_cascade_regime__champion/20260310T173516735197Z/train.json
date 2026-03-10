@@ -1,0 +1,7 @@
+{
+  "generated_at": "2026-03-10T17:35:17.409927+00:00",
+  "requested_model_class": "gbdt",
+  "resolved_model_engine": "cascade_gbdt",
+  "horizon_seconds": 1800,
+  "min_edge": 0.03
+}

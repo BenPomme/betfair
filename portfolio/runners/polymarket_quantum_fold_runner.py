@@ -23,6 +23,10 @@ class PolymarketQuantumFoldPortfolioRunner(PortfolioRunnerBase):
 
     def build_config_snapshot(self) -> Dict[str, object]:
         snapshot = super().build_config_snapshot()
+        polymarket_contexts = [
+            item for item in snapshot.get("factory_live_contexts", [])
+            if item.get("family_id") == "polymarket_cross_venue"
+        ]
         snapshot.update(
             {
                 "sports_filter": str(config.POLYMARKET_QF_SPORTS_FILTER),
@@ -33,6 +37,7 @@ class PolymarketQuantumFoldPortfolioRunner(PortfolioRunnerBase):
                 "max_notional_per_trade_usd": float(config.POLYMARKET_QF_MAX_NOTIONAL_PER_TRADE_USD),
                 "stale_quote_seconds": int(config.POLYMARKET_QF_STALE_QUOTE_SECONDS),
                 "clob_ws_enabled": bool(config.POLYMARKET_QF_CLOB_WS_ENABLED),
+                "factory_polymarket_strategy_contexts": polymarket_contexts,
             }
         )
         return snapshot

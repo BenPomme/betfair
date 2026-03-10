@@ -1,0 +1,13 @@
+{
+  "generated_at": "2026-03-10T18:20:37.639706+00:00",
+  "feature_subset": "microstructure",
+  "feature_names": [
+    "depth_total_eur",
+    "imbalance",
+    "lay_back_ratio",
+    "spread_mean",
+    "top_of_book_concentration",
+    "weighted_spread"
+  ],
+  "feature_count": 6
+}

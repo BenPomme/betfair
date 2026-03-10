@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 from typing import Dict, Optional
 
+from factory.runtime_mode import research_factory_start_blocker
 from monitoring.portfolio_registry import get_portfolio_spec
 from portfolio.state_store import PortfolioStateStore
 
@@ -55,8 +56,11 @@ class PortfolioProcessManager:
 
     def start(self, portfolio_id: str) -> Dict[str, object]:
         spec = get_portfolio_spec(portfolio_id)
-        if spec.control_mode == "disabled":
+        if spec.control_mode == "disabled" or not spec.enabled:
             return {"ok": False, "error": "portfolio_disabled"}
+        start_blocker = research_factory_start_blocker(portfolio_id)
+        if start_blocker is not None:
+            return {"ok": False, "error": start_blocker}
         store = PortfolioStateStore(portfolio_id)
         pid = store.read_pid()
         if self._pid_running(pid):

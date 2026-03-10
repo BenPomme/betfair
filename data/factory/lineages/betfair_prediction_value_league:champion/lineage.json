@@ -1,0 +1,64 @@
+{
+  "lineage_id": "betfair_prediction_value_league:champion",
+  "family_id": "betfair_prediction_value_league",
+  "label": "Betfair Prediction/Value League Champion",
+  "role": "champion",
+  "current_stage": "paper",
+  "target_portfolios": [
+    "betfair_core"
+  ],
+  "target_venues": [
+    "betfair"
+  ],
+  "hypothesis_id": "betfair_prediction_value_league:hypothesis",
+  "genome_id": "betfair_prediction_value_league:genome:champion",
+  "experiment_id": "betfair_prediction_value_league:experiment:champion",
+  "budget_bucket": "incumbent",
+  "budget_weight_pct": 16.0,
+  "connector_ids": [
+    "betfair_core"
+  ],
+  "goldfish_workspace": "/Users/benjaminpommeraud/Desktop/Coding/Arbitrage/research/goldfish/betfair_prediction_value_league",
+  "revision": 2,
+  "created_at": "2026-03-10T17:21:01.369229+00:00",
+  "updated_at": "2026-03-10T17:21:59.938054+00:00",
+  "last_decision": {
+    "lineage_id": "betfair_prediction_value_league:champion",
+    "current_stage": "paper",
+    "next_stage": "paper",
+    "allowed": false,
+    "requires_human_signoff": false,
+    "blockers": [
+      "stress_eval_negative",
+      "monthly_roi_below_5pct",
+      "drawdown_above_8pct",
+      "slippage_stress_non_positive",
+      "failure_rate_above_15pct",
+      "drawdown_above_12pct",
+      "negative_slippage_stress",
+      "regime_robustness_below_minimum"
+    ],
+    "reasons": [
+      "target_stage=paper"
+    ],
+    "evidence_ids": [],
+    "decided_at": "2026-03-10T17:21:59.937954+00:00"
+  },
+  "last_evaluation_id": "betfair_prediction_value_league:champion:prediction:182:paper:artifact",
+  "last_manifest_id": null,
+  "blockers": [
+    "stress_eval_negative",
+    "monthly_roi_below_5pct",
+    "drawdown_above_8pct",
+    "slippage_stress_non_positive",
+    "failure_rate_above_15pct",
+    "drawdown_above_12pct",
+    "negative_slippage_stress",
+    "regime_robustness_below_minimum"
+  ],
+  "active": false,
+  "loss_streak": 1,
+  "parent_lineage_id": null,
+  "retired_at": "2026-03-10T17:21:59.971287+00:00",
+  "retirement_reason": "failure_rate_above_15pct"
+}
