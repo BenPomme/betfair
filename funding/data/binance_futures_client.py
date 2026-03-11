@@ -3,6 +3,7 @@ Binance USDT-Margined Futures REST client.
 Wraps binance-futures-connector UMFutures with Decimal conversion and async support.
 """
 import asyncio
+import json
 import logging
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -25,6 +26,26 @@ def _ms_to_datetime(ms: int) -> datetime:
     return datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
 
 
+def _normalize_rows(payload: Any) -> List[dict]:
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except Exception:
+            return []
+    if isinstance(payload, dict):
+        payload = [payload]
+    rows: List[dict] = []
+    for item in payload or []:
+        if isinstance(item, str):
+            try:
+                item = json.loads(item)
+            except Exception:
+                continue
+        if isinstance(item, dict):
+            rows.append(item)
+    return rows
+
+
 class BinanceFuturesClient:
     """Wrapper around UMFutures SDK for funding rate arbitrage."""
 
@@ -40,6 +61,7 @@ class BinanceFuturesClient:
         if api_secret:
             kwargs["secret"] = api_secret
         self._client = UMFutures(**kwargs)
+        self._exchange_info_cache: Dict[str, dict] | None = None
 
     async def get_premium_index(self, symbol: Optional[str] = None) -> List[FundingSnapshot]:
         """Fetch mark price + funding rate for one or all symbols."""
@@ -149,6 +171,9 @@ class BinanceFuturesClient:
 
     async def get_exchange_info(self) -> List[dict]:
         """Fetch exchange info: tradeable perpetual symbols with filters."""
+        if self._exchange_info_cache is not None:
+            return list(self._exchange_info_cache.values())
+
         def _call():
             return self._client.exchange_info()
 
@@ -168,7 +193,14 @@ class BinanceFuturesClient:
                     "quantity_precision": int(s.get("quantityPrecision", 8)),
                     "filters": filters,
                 })
+        self._exchange_info_cache = {item["symbol"]: item for item in symbols}
         return symbols
+
+    async def get_symbol_info(self, symbol: str) -> Optional[dict]:
+        """Fetch cached exchange metadata for one symbol."""
+        if self._exchange_info_cache is None:
+            await self.get_exchange_info()
+        return (self._exchange_info_cache or {}).get(symbol)
 
     async def get_klines(
         self, symbol: str, interval: str = "1h", limit: int = 100
@@ -252,6 +284,13 @@ class BinanceFuturesClient:
 
         return await asyncio.to_thread(_call)
 
+    async def set_margin_type(self, symbol: str, margin_type: str) -> dict:
+        """Set margin type for a symbol."""
+        def _call():
+            return self._client.change_margin_type(symbol=symbol, marginType=margin_type)
+
+        return await asyncio.to_thread(_call)
+
     async def get_order_book(self, symbol: str, limit: int = 20) -> dict:
         """Fetch order book (bids and asks) for a symbol.
 
@@ -282,7 +321,8 @@ class BinanceFuturesClient:
             return self._client.long_short_account_ratio(
                 symbol=symbol, period=period, limit=limit
             )
-        return await asyncio.to_thread(_call)
+        result = await asyncio.to_thread(_call)
+        return _normalize_rows(result)
 
     async def get_top_long_short_position_ratio(
         self, symbol: str, period: str = "5m", limit: int = 30
@@ -292,4 +332,5 @@ class BinanceFuturesClient:
             return self._client.top_long_short_position_ratio(
                 symbol=symbol, period=period, limit=limit
             )
-        return await asyncio.to_thread(_call)
+        result = await asyncio.to_thread(_call)
+        return _normalize_rows(result)

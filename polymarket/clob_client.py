@@ -14,6 +14,7 @@ import config
 from polymarket.utils import as_millis_iso, clamp, parse_ts, to_float, utc_now_iso
 
 logger = logging.getLogger(__name__)
+_BOOK_BATCH_SIZE = 20
 
 
 def _normalize_levels(levels: Iterable[Dict[str, Any]], *, reverse: bool) -> List[Dict[str, float]]:
@@ -186,16 +187,44 @@ class PolymarketClobClient:
             book_map[token_id] = current
         return book_map
 
+    def _fetch_book(self, token_id: str) -> Dict[str, Dict[str, Any]]:
+        with httpx.Client(timeout=self.timeout_seconds, follow_redirects=True) as client:
+            response = client.get(f"{self.base_url}/book", params={"token_id": token_id})
+            response.raise_for_status()
+            payload = response.json()
+        return self.parse_order_books(payload)
+
+    def _fetch_books_batch(self, tokens: List[str]) -> Dict[str, Dict[str, Any]]:
+        body = [{"token_id": token} for token in tokens]
+        with httpx.Client(timeout=self.timeout_seconds, follow_redirects=True) as client:
+            response = client.post(f"{self.base_url}/books", json=body)
+            response.raise_for_status()
+            payload = response.json()
+        return self.parse_order_books(payload)
+
     def fetch_books(self, token_ids: Iterable[str]) -> Dict[str, Dict[str, Any]]:
         tokens = [str(item).strip() for item in token_ids if str(item).strip()]
         if not tokens:
             return {}
-        params = {"token_ids": ",".join(tokens)}
-        with httpx.Client(timeout=self.timeout_seconds, follow_redirects=True) as client:
-            response = client.get(f"{self.base_url}/books", params=params)
-            response.raise_for_status()
-            payload = response.json()
-        return self.parse_order_books(payload)
+        if len(tokens) == 1:
+            return self._fetch_book(tokens[0])
+        if len(tokens) <= _BOOK_BATCH_SIZE:
+            try:
+                return self._fetch_books_batch(tokens)
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code != 400 or len(tokens) == 1:
+                    raise
+                midpoint = max(1, len(tokens) // 2)
+                left = self.fetch_books(tokens[:midpoint])
+                right = self.fetch_books(tokens[midpoint:])
+                return {**left, **right}
+
+        books: Dict[str, Dict[str, Any]] = {}
+        for start in range(0, len(tokens), _BOOK_BATCH_SIZE):
+            batch = tokens[start : start + _BOOK_BATCH_SIZE]
+            batch_books = self.fetch_books(batch)
+            books.update(batch_books)
+        return books
 
     def fetch_price_history(
         self,

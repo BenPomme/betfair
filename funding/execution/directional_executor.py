@@ -12,7 +12,7 @@ losing position, resulting in uncapped loss.
 import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
 from typing import Dict, List, Optional
 
 import config
@@ -40,6 +40,12 @@ def _opposite_side(side: DirectionalSide) -> str:
 def _entry_side(side: DirectionalSide) -> str:
     """Return the Binance order side string to open a directional position."""
     return "BUY" if side is DirectionalSide.LONG else "SELL"
+
+
+def _round_down_to_step(value: Decimal, step_size: Decimal) -> Decimal:
+    if step_size <= Decimal("0"):
+        return value
+    return (value / step_size).to_integral_value(rounding=ROUND_DOWN) * step_size
 
 
 # ---------------------------------------------------------------------------
@@ -142,6 +148,10 @@ class DirectionalExecutor:
             mark = Decimal(str(params.get("entry_price", signal.mark_price or "0")))
             if mark > Decimal("0") and notional > Decimal("0"):
                 quantity = (notional / mark).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        quantity = await self._normalize_quantity(symbol, quantity)
+        if quantity <= Decimal("0"):
+            logger.warning("Aborting %s directional order because normalized quantity is zero", symbol)
+            return None
         if self._simulated_fills_only:
             return self._open_position_simulated(signal, params, quantity, stop_loss, take_profit)
 
@@ -584,6 +594,26 @@ class DirectionalExecutor:
     def _should_fallback_to_sim(exc: Exception) -> bool:
         msg = str(exc).lower()
         return ("-2015" in msg) or ("invalid api-key" in msg) or ("permissions for action" in msg)
+
+    async def _normalize_quantity(self, symbol: str, quantity: Decimal) -> Decimal:
+        try:
+            symbol_info = await self._futures.get_symbol_info(symbol)
+        except Exception as exc:
+            logger.debug("Could not load symbol metadata for %s: %s", symbol, exc)
+            return quantity
+        if not symbol_info:
+            return quantity
+        filters = dict(symbol_info.get("filters") or {})
+        lot_filter = filters.get("MARKET_LOT_SIZE") or filters.get("LOT_SIZE") or {}
+        step_size = Decimal(str(lot_filter.get("stepSize", "0")))
+        min_qty = Decimal(str(lot_filter.get("minQty", "0")))
+        max_qty = Decimal(str(lot_filter.get("maxQty", "0")))
+        normalized = _round_down_to_step(quantity, step_size)
+        if max_qty > Decimal("0") and normalized > max_qty:
+            normalized = max_qty
+        if min_qty > Decimal("0") and normalized < min_qty:
+            return Decimal("0")
+        return normalized
 
     # ------------------------------------------------------------------
     # Properties

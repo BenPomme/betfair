@@ -9,8 +9,8 @@ import time
 from pathlib import Path
 from typing import Dict, Optional
 
-from factory.runtime_mode import research_factory_start_blocker
 from monitoring.portfolio_registry import get_portfolio_spec
+from portfolio.factory_client import research_factory_start_blocker
 from portfolio.state_store import PortfolioStateStore
 
 

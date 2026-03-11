@@ -1,7 +1,7 @@
 {
   "positions": [],
-  "last_updated": "2026-03-10T19:10:31.138209+00:00",
-  "validation_run_id": "20260310T191031Z_1a963548",
-  "fresh_book_started_at": "2026-03-10T19:10:31.138086+00:00",
-  "archived_state_path": "data/state/archive/funding_validation_runs/20260310T191031Z_20260310T191031Z_1a963548/funding_positions.json"
+  "last_updated": "2026-03-11T05:21:54.750253+00:00",
+  "validation_run_id": "20260311T052154Z_8f44f933",
+  "fresh_book_started_at": "2026-03-11T05:21:54.750058+00:00",
+  "archived_state_path": "data/state/archive/funding_validation_runs/20260311T052154Z_20260311T052154Z_8f44f933/funding_positions.json"
 }

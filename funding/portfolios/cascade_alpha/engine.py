@@ -85,13 +85,33 @@ class CascadeAlphaEngine:
         if strict_gate_pass:
             policy["mode"] = "validated"
             return policy
-        disabled_setups = []
+        disable_min_settled = max(
+            int(getattr(config, "CASCADE_ALPHA_POLICY_ACTIVATION_SETTLED", 5)),
+            int(getattr(config, "CASCADE_ALPHA_POLICY_DISABLE_SETUP_MIN_SETTLED", 10)),
+        )
+        disable_max_avg_net = float(
+            getattr(config, "CASCADE_ALPHA_POLICY_DISABLE_SETUP_MAX_AVG_NET_PNL_USD", -0.25)
+        )
+        disabled_candidates = []
         for setup_name, stats in (self._learner.get("setup_stats") or {}).items():
             try:
-                if int(stats.get("settled", 0) or 0) >= 2 and float(stats.get("avg_net_pnl_usd", 0.0) or 0.0) < 0.0:
-                    disabled_setups.append(str(setup_name).upper())
+                if (
+                    int(stats.get("settled", 0) or 0) >= disable_min_settled
+                    and float(stats.get("avg_net_pnl_usd", 0.0) or 0.0) <= disable_max_avg_net
+                ):
+                    disabled_candidates.append(str(setup_name).upper())
             except Exception:
                 continue
+        setup_keys = {
+            str(setup_name).upper()
+            for setup_name, stats in (self._learner.get("setup_stats") or {}).items()
+            if int((stats or {}).get("settled", 0) or 0) > 0
+        }
+        disabled_setups = (
+            disabled_candidates
+            if disabled_candidates and len(disabled_candidates) < len(setup_keys)
+            else []
+        )
         policy.update(
             {
                 "mode": "tightened",

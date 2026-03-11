@@ -6,13 +6,13 @@ import os
 import signal
 import threading
 from abc import ABC, abstractmethod
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 import config
-from factory.manifests import candidate_context_refs_for_portfolio, live_manifest_refs_for_portfolio
-from factory.runtime_mode import current_agentic_factory_runtime_mode
 from portfolio.accounting import utc_now_iso
+from portfolio.factory_client import candidate_context_refs_for_portfolio, current_runtime_mode, live_manifest_refs_for_portfolio
 from portfolio.ledger import PortfolioLedger
 from portfolio.state_store import PortfolioStateStore
 from portfolio.types import ModelShadowAccount, PortfolioRunnerSpec, StrategyAccount
@@ -144,6 +144,29 @@ class PortfolioRunnerBase(ABC):
         contexts.sort(key=self._factory_context_sort_key)
         return dict(contexts[0])
 
+    def _coerce_factory_override_value(self, attr: str, value: Any) -> Any:
+        current = getattr(config, attr)
+        if value is None:
+            return current
+        current_type = type(current)
+        try:
+            if isinstance(current, Decimal):
+                return Decimal(str(value))
+            if isinstance(current, bool):
+                if isinstance(value, str):
+                    return value.strip().lower() in {"1", "true", "yes", "on"}
+                return bool(value)
+            if isinstance(current, int) and not isinstance(current, bool):
+                return int(value)
+            if isinstance(current, float):
+                return float(value)
+            if isinstance(current, str):
+                return str(value)
+        except Exception:
+            logger.warning("Failed to coerce factory override %s=%r to %s", attr, value, current_type.__name__)
+            return current
+        return value
+
     def apply_factory_config_overrides(
         self,
         overrides: Dict[str, Any],
@@ -156,8 +179,9 @@ class PortfolioRunnerBase(ABC):
                 continue
             if attr not in self._factory_original_config_values:
                 self._factory_original_config_values[attr] = getattr(config, attr)
-            setattr(config, attr, value)
-            applied[attr] = value
+            coerced_value = self._coerce_factory_override_value(attr, value)
+            setattr(config, attr, coerced_value)
+            applied[attr] = coerced_value
         self._factory_applied_overrides = dict(applied)
         if source_context is not None:
             self._factory_applied_context = {
@@ -189,7 +213,7 @@ class PortfolioRunnerBase(ABC):
         }
 
     def factory_runtime_context(self) -> Dict[str, Any]:
-        factory_mode = current_agentic_factory_runtime_mode()
+        factory_mode = current_runtime_mode()
         manifest_refs = live_manifest_refs_for_portfolio(self.spec.portfolio_id)
         candidate_refs = candidate_context_refs_for_portfolio(self.spec.portfolio_id)
         contexts: List[Dict[str, Any]] = []

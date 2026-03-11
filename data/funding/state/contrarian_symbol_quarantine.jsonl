@@ -56,3 +56,7 @@
 {"symbol": "APTUSDT", "reason": "invalid_mark_price", "details": {"invalid_rows": 1133}}
 {"symbol": "ADAUSDT", "reason": "invalid_mark_price", "details": {"invalid_rows": 4142}}
 {"symbol": "ADAUSDT", "reason": "invalid_mark_price", "details": {"invalid_rows": 4142}}
+{"symbol": "AIAUSDT", "reason": "invalid_mark_price", "details": {"invalid_rows": 1}}
+{"symbol": "AIAUSDT", "reason": "invalid_mark_price", "details": {"invalid_rows": 1}}
+{"symbol": "JCTUSDT", "reason": "invalid_mark_price", "details": {"invalid_rows": 1}}
+{"symbol": "JCTUSDT", "reason": "invalid_mark_price", "details": {"invalid_rows": 1}}

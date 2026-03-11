@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Tuple
 
+import config
 from polymarket.utils import clamp, parse_ts, to_float, utc_now_iso
 
 
@@ -114,6 +115,8 @@ class PolymarketPaperExecutor:
             return False, "drawdown_halt"
         if len(self.open_positions) >= self.max_open_positions:
             return False, "max_open_positions"
+        if bool(feature_row.get("resolved") or feature_row.get("closed")):
+            return False, "market_closed"
         event_slug = str(feature_row.get("event_slug") or "")
         same_event = sum(1 for item in self.open_positions if str(item.get("event_slug") or "") == event_slug)
         if same_event >= self.max_positions_per_event:
@@ -124,6 +127,15 @@ class PolymarketPaperExecutor:
         best_ask = clamp(to_float(feature_row.get("best_ask"), 0.0))
         if best_ask <= 0:
             return False, "missing_best_ask"
+        spread_bps = max(0.0, to_float(feature_row.get("spread_bps"), 0.0))
+        if spread_bps > float(getattr(config, "POLYMARKET_QF_MAX_SPREAD_BPS", 250.0)):
+            return False, "spread_too_wide"
+        ask_depth = max(0.0, to_float(feature_row.get("ask_depth"), 0.0))
+        min_depth = self.max_notional_per_trade * float(
+            getattr(config, "POLYMARKET_QF_MIN_ASK_DEPTH_MULTIPLE", 1.25)
+        )
+        if ask_depth < min_depth:
+            return False, "insufficient_ask_depth"
         return True, "ok"
 
     def open_trade(self, feature_row: Dict[str, Any], *, score_probability: float, notional_usd: float) -> Dict[str, Any]:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import httpx
+
 from portfolio.types import ModelShadowAccount
 from polymarket.clob_client import PolymarketClobClient
 from polymarket.features import build_feature_rows
@@ -78,6 +80,78 @@ def test_clob_client_parses_books_and_applies_best_bid_ask_updates():
     assert books["tok-rm"]["best_bid"] == 0.625
     assert books["tok-rm"]["midpoint"] == 0.63
     assert books["tok-rm"]["source"] == "clob_ws"
+
+
+def test_clob_client_fetch_books_splits_on_400(monkeypatch):
+    client = PolymarketClobClient(base_url="https://example.invalid")
+    calls = []
+
+    def fake_fetch(tokens):
+        calls.append(list(tokens))
+        if len(tokens) > 2:
+            request = httpx.Request("GET", "https://example.invalid/books")
+            response = httpx.Response(400, request=request)
+            raise httpx.HTTPStatusError("bad request", request=request, response=response)
+        return {
+            token: {
+                "token_id": token,
+                "midpoint": 0.5,
+                "best_bid": 0.49,
+                "best_ask": 0.51,
+            }
+            for token in tokens
+        }
+
+    monkeypatch.setattr(client, "_fetch_books_batch", fake_fetch)
+    books = client.fetch_books(["a", "b", "c", "d"])
+
+    assert sorted(books) == ["a", "b", "c", "d"]
+    assert calls[0] == ["a", "b", "c", "d"]
+    assert calls[1] == ["a", "b"]
+    assert calls[2] == ["c", "d"]
+
+
+def test_paper_executor_rejects_resolved_or_shallow_market(monkeypatch):
+    monkeypatch.setattr("config.POLYMARKET_QF_MAX_SPREAD_BPS", 250.0)
+    monkeypatch.setattr("config.POLYMARKET_QF_MIN_ASK_DEPTH_MULTIPLE", 1.25)
+    executor = PolymarketPaperExecutor(
+        starting_balance=1000.0,
+        fee_bps=20.0,
+        queue_penalty_bps=8.0,
+        max_open_positions=2,
+        max_notional_per_trade=100.0,
+        max_positions_per_event=1,
+        drawdown_halt_pct=20.0,
+    )
+
+    blocked, reason = executor.can_open(
+        {
+            "event_slug": "resolved-match",
+            "token_id": "tok-1",
+            "best_ask": 0.55,
+            "spread_bps": 12.0,
+            "ask_depth": 300.0,
+            "resolved": True,
+        },
+        {},
+    )
+    assert blocked is False
+    assert reason == "market_closed"
+
+    blocked, reason = executor.can_open(
+        {
+            "event_slug": "thin-match",
+            "token_id": "tok-2",
+            "best_ask": 0.55,
+            "spread_bps": 12.0,
+            "ask_depth": 40.0,
+            "resolved": False,
+            "closed": False,
+        },
+        {},
+    )
+    assert blocked is False
+    assert reason == "insufficient_ask_depth"
 
 
 def test_feature_label_and_model_flow(tmp_path):
